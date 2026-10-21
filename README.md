@@ -17,3 +17,5 @@ One paragraph: what the project is.
 
 `.github/workflows/ci.yml` runs on every pull request. It starts empty and always passes: add
 the steps that build and test the project as soon as there is something to test.
+
+test
