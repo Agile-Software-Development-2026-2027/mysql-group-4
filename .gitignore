@@ -1,0 +1,119 @@
+# ==========================================
+# Root & Operating System
+# ==========================================
+.DS_Store
+Thumbs.db
+*.tmp
+*.bak
+*.swp
+*~
+
+# ==========================================
+# IDE & Editors
+# ==========================================
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# ==========================================
+# Environment Variables & Secrets
+# ==========================================
+*.env
+*.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+
+# ==========================================
+# Backend: Python & FastAPI
+# ==========================================
+# Byte-compiled / optimized files
+backend/**/__pycache__/
+backend/**/*.py[cod]
+backend/*$py.class
+
+# C extensions
+backend/**/*.so
+
+# Virtual Environments
+backend/.venv/
+backend/venv/
+backend/ENV/
+backend/env/
+
+# Packaging & Distribution
+backend/build/
+backend/develop-eggs/
+backend/dist/
+backend/downloads/
+backend/eggs/
+backend/.eggs/
+backend/lib/
+backend/lib64/
+backend/parts/
+backend/sdist/
+backend/var/
+backend/wheels/
+backend/share/python-wheels/
+backend/*.egg-info/
+backend/.installed.cfg
+backend/*.egg
+
+# Testing & Type Checking
+backend/.pytest_cache/
+backend/.coverage
+backend/htmlcov/
+backend/.tox/
+backend/.nox/
+backend/.mypy_cache/
+backend/.dmypy.json
+backend/dmypy.json
+backend/.ruff_cache/
+
+# Local databases (SQLite)
+backend/*.db
+backend/*.sqlite3
+
+# ==========================================
+# Frontend: Angular & Node.js
+# ==========================================
+# Dependencies
+frontend/node_modules/
+frontend/.pnp
+frontend/.pnp.js
+
+# Build outputs
+frontend/dist/
+frontend/bazel-out/
+
+# Angular cache
+frontend/.angular/cache/
+
+# Logs
+frontend/logs/
+frontend/*.log
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+frontend/lerna-debug.log*
+
+# Testing & Coverage
+frontend/coverage/
+frontend/.nyc_output/
+
+# Temporary / Misc
+frontend/.sass-cache/
+frontend/connect.lock/
+
+# ==========================================
+# Containers & Local Services (Opzionale)
+# ==========================================
+.docker/
+docker-compose.override.yml
