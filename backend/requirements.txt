@@ -30,3 +30,4 @@ uvicorn==0.54.0
 fastapi-users-db-sqlalchemy==7.0.0
 asyncpg==0.32.0
 pydantic-settings==2.16.1
+fastapi-mail
