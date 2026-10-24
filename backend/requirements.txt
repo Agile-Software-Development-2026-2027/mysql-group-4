@@ -33,3 +33,5 @@ pydantic-settings==2.16.1
 fastapi-mail
 pytest==9.1.1
 pytest-asyncio==1.4.0
+httpx
+aiosqlite
