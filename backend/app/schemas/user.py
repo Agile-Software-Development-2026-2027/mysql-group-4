@@ -3,12 +3,16 @@ from pydantic import ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 from fastapi_users import schemas
 
+from app.core.enums import EmploymentLevel
+
 FISCAL_CODE_REGEX = r"^[A-Za-z]{6}[0-9]{2}[A-Za-z][0-9]{2}[A-Za-z][0-9]{3}[A-Za-z]$"
 
 class UserRead(schemas.BaseUser[uuid.UUID]):
     name: str
     surname: str
     fiscal_code: str
+    department: str
+    employment_level: EmploymentLevel
 
     model_config = ConfigDict(
         alias_generator=to_camel,
@@ -21,6 +25,8 @@ class UserCreate(schemas.BaseUserCreate):
     name: str = Field(...,min_length=2, max_length=50,description="",)
     surname: str = Field(..., min_length=2, max_length=50,description="Cognome dell'utente (tra 2 e 50 caratteri)",)
     fiscal_code: str = Field( ..., min_length=16, max_length=16, pattern=FISCAL_CODE_REGEX, description="Codice Fiscale italiano (esattamente 16 caratteri alfanumerici)")
+    department: str = Field(..., min_length=2, max_length=50,description="Dipartimento dell'utente (tra 2 e 50 caratteri)",)
+    employment_level: EmploymentLevel = Field(..., description="Livello di impiego dell'utente")
     model_config = ConfigDict(
         alias_generator=to_camel,
         populate_by_name=True,
