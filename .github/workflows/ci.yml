@@ -17,6 +17,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
     env:
       DATABASE_URL: "sqlite+aiosqlite:///:memory:"
       SECRET_KEY: test-secret-key-only-for-automated-tests
