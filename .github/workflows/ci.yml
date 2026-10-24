@@ -17,6 +17,19 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+      SECRET_KEY: test-secret-key-only-for-automated-tests
+      MAIL_USERNAME: test
+      MAIL_PASSWORD: test
+      MAIL_FROM: test@example.com
+      MAIL_PORT: "587"
+      MAIL_SERVER: localhost
+      MAIL_STARTTLS: "False"
+      MAIL_SSL_TLS: "False"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -24,26 +37,12 @@ jobs:
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-            python-version: "3.12"
-            cache: "pip"
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r backend/requirements.txt
-          pip install pytest pytest-asyncio httpx aiosqlite
-      - name: Run Pytest
-        working-directory: backend
-        env:
-            DATABASE_URL: "sqlite+aiosqlite:///:memory:"
-            SECRET_KEY: test-secret-key-only-for-automated-tests
-            MAIL_USERNAME: test
-            MAIL_PASSWORD: test
-            MAIL_FROM: test@example.com
-            MAIL_PORT: "587"
-            MAIL_SERVER: localhost
-            MAIL_STARTTLS: "False"
-            MAIL_SSL_TLS: "False"
-        run: |
-            pytest -v --tb=short
-      # Add here the steps that build and test your project.
-      # Until then this job does nothing and always passes.
+        run: make install
+
+      - name: Run tests
+        run: make check
