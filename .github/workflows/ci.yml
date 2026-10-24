@@ -14,10 +14,42 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  unit-tests:
+    name: Unit tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13', '3.14']
+    env:
+      DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/test
+      SECRET_KEY: unit-tests-only-not-a-production-secret
     steps:
-      - uses: actions/checkout@v4
-      # Add here the steps that build and test your project.
-      # Until then this job does nothing and always passes.
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: make install
+
+      - name: Run unit tests
+        run: make check
+
+  # Keep a stable required check, independent of the matrix versions.
+  test:
+    needs: unit-tests
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Require all Python versions to pass
+        env:
+          TEST_RESULT: ${{ needs.unit-tests.result }}
+        run: test "$TEST_RESULT" = "success"
