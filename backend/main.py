@@ -5,8 +5,10 @@ from contextlib import asynccontextmanager
 from app.db.session import create_db_and_tables
 from app.api.user_endpoints import user_router
 from app.api.admin_endpoints import admin_router
+from app.api.mission_endpoints import mission_router
 from app.security import fastapi_users, auth_backend
 from app.schemas.user import UserRead, UserCreate
+from app.core.exception_handler import register_exception_handlers
 
 
 @asynccontextmanager
@@ -19,6 +21,8 @@ app = FastAPI(
     title="MySOL Backend",
     lifespan=lifespan,
 )
+
+register_exception_handlers(app)
 
 app.add_middleware(
     CORSMiddleware,
@@ -47,5 +51,10 @@ app.include_router(
 
 app.include_router(
     admin_router,
+    prefix="/api/v1",
+)
+
+app.include_router(
+    mission_router,
     prefix="/api/v1",
 )
