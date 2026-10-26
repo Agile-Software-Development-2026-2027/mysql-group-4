@@ -1,11 +1,8 @@
 """Isolated configuration, loaded before application imports in unit tests."""
 import os
 
-# Never use local database or mail credentials for the unit test process.
-# Mail placeholders only allow importing Mission authentication dependencies;
-# these tests do not call the mail service or send email.
+os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.update({
-    "DATABASE_URL": "postgresql+asyncpg://test:test@localhost:5432/test",
     "SECRET_KEY": "unit-tests-only-not-a-production-secret",
     "MAIL_USERNAME": "test",
     "MAIL_PASSWORD": "test",
