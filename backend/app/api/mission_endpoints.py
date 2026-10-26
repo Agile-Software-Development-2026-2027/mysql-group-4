@@ -12,7 +12,7 @@ from app.schemas.mission import (
 )
 from app.schemas.page import Page, PageRequest
 from app.security import current_active_user
-from app.services.dependencies import get_mission_service
+from app.api.deps import get_mission_service
 from app.services.mission_service import MissionService
 
 mission_router = APIRouter(prefix="/missions", tags=["missions"])
