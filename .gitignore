@@ -40,6 +40,8 @@ backend/**/*.so
 # Virtual Environments
 backend/.venv/
 backend/venv/
+backend/.venv
+backend/venv
 backend/ENV/
 backend/env/
 
