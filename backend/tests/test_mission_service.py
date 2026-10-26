@@ -26,7 +26,18 @@ class TestMissionService:
         self.users = create_autospec(UserValidator, instance=True)
         self.users.get_active_user_or_throw.side_effect = lambda user_id: {self.user.id: self.user, self.manager.id: self.manager}[user_id]
         self.validator.get_mission_or_throw.return_value = self.mission
-        self.repository.save.side_effect = lambda mission: mission
+        def fake_save(m):
+            if m.id is None:
+                m.id = self.mission.id
+            if m.requester_id is None and m.requester:
+                m.requester_id = m.requester.id
+            if getattr(m, 'created_at', None) is None:
+                m.created_at = self.mission.created_at
+            if getattr(m, 'updated_at', None) is None:
+                m.updated_at = self.mission.updated_at
+            return m
+
+        self.repository.save.side_effect = fake_save
         self.dto = MissionDTO.model_validate(self.mission)
         self.service = MissionService(self.session, self.repository, self.validator, self.users)
 

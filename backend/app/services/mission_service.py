@@ -87,7 +87,9 @@ class MissionService:
             manager = await self._user_validator.get_active_user_or_throw(data.fund_manager_id)
             self._mission_validator.validate_period(data.starts_at, data.ends_at)
             mission = Mission(**data.model_dump())
+            mission.requester_id = user.id
             mission.requester = user
+            mission.fund_manager_id = manager.id
             mission.fund_manager = manager
             mission.status = MissionStatus.PENDING
             mission.created_by = user.id
@@ -109,6 +111,7 @@ class MissionService:
             self._mission_validator.validate_period(data.starts_at, data.ends_at)
             for field, value in data.model_dump(exclude_unset=True).items():
                 setattr(mission, field, value)
+            mission.fund_manager_id = manager.id
             mission.fund_manager = manager
             mission.updated_by = user.id
             saved = await self._repository.save(mission)
