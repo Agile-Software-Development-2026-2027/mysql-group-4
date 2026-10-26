@@ -45,5 +45,20 @@ jobs:
             MAIL_SSL_TLS: "False"
         run: |
             pytest -v --tb=short
-      # Add here the steps that build and test your project.
-      # Until then this job does nothing and always passes.
+
+      #check frontend
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Run unit tests
+        working-directory: frontend
+        run: npm test -- --watch=false
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
