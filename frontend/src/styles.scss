@@ -1,1 +1,304 @@
-/* You can add global styles to this file, and also import other style files */
+@use 'sass:color';
+
+$primary:        #be0e01;
+$accent:         #c0262d;
+$success:        #1e7e4f;
+
+$text:           #17324d;
+$text-muted:     #5b6f82;
+$border:         #c5d0db;
+$bg:             #f5f8fb;
+$white:          #ffffff;
+
+$font:           'Titillium Web', 'Segoe UI', Roboto, Arial, sans-serif;
+$radius:         4px;
+$topbar-height:  64px;
+$menu-width:     300px;
+$shadow:         0 2px 8px rgba(0, 48, 90, 0.15);
+$transition:     0.2s ease;
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: $font;
+  font-size: 16px;
+  line-height: 1.5;
+  color: $text;
+  background: $bg;
+}
+
+h1, h2, h3, h4 {
+  margin: 0 0 0.6em;
+  color: $primary;
+  font-weight: 700;
+  line-height: 1.2;
+}
+h1 { font-size: 2.2rem; }
+h2 { font-size: 1.7rem; }
+h3 { font-size: 1.3rem; }
+
+a {
+  color: $primary;
+  text-decoration: none;
+  &:hover { text-decoration: underline; opacity: 0.85; }
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  padding-top: $topbar-height + 24px;
+}
+
+.topbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: $topbar-height;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: $primary;
+  color: $white;
+  box-shadow: $shadow;
+  z-index: 100;
+
+    &__brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 100%;
+    color: $white;
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    &:hover { color: $white; text-decoration: none; opacity: 0.9; }
+  }
+
+  &_logo {
+    display: flex;
+    align-items: center;
+    height: 36px;
+    padding-left: 12px;
+    border-left: 2px solid white;
+
+    img {
+      height: 100%;
+      width: auto;
+      display: block;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
+.icon-btn {
+  width: 42px; height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: $white;
+  cursor: pointer;
+  transition: background $transition;
+  &:hover { background: rgba($white, 0.18); }
+  &:focus-visible { outline: 2px solid $white; outline-offset: 2px; }
+}
+
+.hamburger {
+  @extend .icon-btn;
+  flex-direction: column;
+  gap: 5px;
+
+  span {
+    display: block;
+    width: 22px; height: 2px;
+    background: $white;
+    border-radius: 2px;
+    transition: transform $transition, opacity $transition;
+  }
+
+  &.is-open {
+    span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    span:nth-child(2) { opacity: 0; }
+    span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+  }
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 20, 40, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity $transition;
+  z-index: 110;
+  &.is-open { opacity: 1; pointer-events: auto; }
+}
+
+.side-menu {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: $menu-width;
+  max-width: 85vw;
+  padding: $topbar-height + 16px 0 16px;
+  background: $white;
+  box-shadow: -4px 0 16px rgba(0, 48, 90, 0.2);
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+  overflow-y: auto;
+  z-index: 120;
+
+  &.is-open { transform: translateX(0); }
+
+  a {
+    display: block;
+    padding: 14px 24px;
+    color: $text;
+    font-weight: 600;
+    border-left: 4px solid transparent;
+    transition: background $transition, border-color $transition;
+
+    &:hover {
+      background: rgba($primary, 0.08);
+      border-left-color: $primary;
+      color: $primary;
+      text-decoration: none;
+    }
+
+    &.is-active {
+      background: rgba($primary,1);
+      border-left-color: $primary;
+      color: $white;
+      font-weight: 700;
+    }
+  }
+}
+
+.btn {
+  display: inline-block;
+  padding: 10px 24px;
+  font-family: $font;
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: center;
+  border: 2px solid $primary;
+  border-radius: $radius;
+  background: $primary;
+  color: $white;
+  cursor: pointer;
+  transition: background $transition, color $transition, border-color $transition;
+
+  &:hover { opacity: 0.9; text-decoration: none; }
+  &:focus-visible { outline: 3px solid rgba($primary, 0.4); outline-offset: 2px; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  &--outline {
+    background: transparent;
+    color: $primary;
+    &:hover { background: rgba($primary, 0.08); }
+  }
+
+  &--danger {
+    background: $accent;
+    border-color: $accent;
+    &:hover { background: color.adjust($accent, $lightness: -8%); border-color: color.adjust($accent, $lightness: -8%); }
+  }
+
+  &--block { display: block; width: 100%; }
+}
+
+.form-group {
+  margin-bottom: 18px;
+
+  label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 600;
+    color: $primary;
+    font-size: 0.95rem;
+  }
+}
+
+.form-control,
+input[type='text'],
+input[type='email'],
+input[type='password'],
+input[type='number'],
+textarea,
+select {
+  width: 100%;
+  padding: 10px 12px;
+  font-family: $font;
+  font-size: 1rem;
+  color: $text;
+  background: $white;
+  border: 1px solid $border;
+  border-bottom: 2px solid $text-muted;
+  border-radius: $radius $radius 0 0;
+  transition: border-color $transition, box-shadow $transition;
+
+  &::placeholder { color: $text-muted; opacity: 0.8; }
+
+  &:focus {
+    outline: none;
+    border-color: $primary;
+    border-bottom-color: $primary;
+    box-shadow: 0 2px 0 0 $primary;
+  }
+
+  &:disabled { background: $bg; cursor: not-allowed; }
+
+  &.is-invalid { border-color: $accent; border-bottom-color: $accent; }
+  &.is-valid   { border-color: $success; border-bottom-color: $success; }
+}
+
+textarea { min-height: 110px; resize: vertical; }
+
+.form-error {
+  margin-top: 4px;
+  font-size: 0.85rem;
+  color: $accent;
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: $primary;
+  width: 18px; height: 18px;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+
+.card {
+  background: $white;
+  border: 1px solid $border;
+  border-top: 4px solid $primary;
+  border-radius: $radius;
+  padding: 20px;
+  box-shadow: $shadow;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: $white;
+
+  th {
+    background: $primary;
+    color: $white;
+    text-align: left;
+    padding: 10px 12px;
+  }
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid $border;
+  }
+  tr:hover td { background: $bg; }
+}
