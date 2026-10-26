@@ -10,7 +10,12 @@ describe('Homepage', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [Homepage],
-      providers: [provideRouter([])],
+      providers: [
+        provideRouter([
+          { path: 'home', component: Homepage },
+          { path: '**', component: Homepage }
+        ])
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(Homepage);
