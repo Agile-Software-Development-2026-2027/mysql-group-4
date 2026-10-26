@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from app.db import Mission, User
 from app.db.enumerated import MissionStatus, MissionType
-from app.schemas.mission.frontend2backend import MissionCreateDTO
+from app.schemas.mission import MissionCreateDTO
 
 
 def make_user(**overrides):

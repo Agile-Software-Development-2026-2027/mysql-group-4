@@ -1,6 +1,6 @@
 from app.db.mission import Mission
-from app.schemas.mission.backend2frontend import MissionDTO
-from app.schemas.mission.frontend2backend import MissionCreateDTO, MissionUpdateDTO
+from app.schemas.mission import MissionCreateDTO, MissionDTO, MissionUpdateDTO
+
 
 
 class MissionMapperService:

@@ -4,7 +4,7 @@ from datetime import timedelta, timezone
 from decimal import Decimal
 from uuid import uuid4
 from pydantic import ValidationError
-from app.schemas.mission.frontend2backend import MissionCreateDTO, MissionFilterDTO, MissionUpdateDTO
+from app.schemas.mission import MissionCreateDTO, MissionFilterDTO, MissionUpdateDTO
 from app.schemas.page import Page
 from app.services.mission_mapper_service import MissionMapperService
 from tests.factories import make_create_data, make_mission

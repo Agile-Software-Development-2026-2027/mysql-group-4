@@ -9,9 +9,9 @@ from app.crud.mission_repository import MissionRepository
 from app.crud.specifications import MissionSpecifications
 from app.db.enumerated import MissionStatus
 from app.db.models import User
-from app.schemas.mission.backend2frontend import MissionDTO
-from app.schemas.mission.frontend2backend import (
+from app.schemas.mission import (
     MissionCreateDTO,
+    MissionDTO,
     MissionFilterDTO,
     MissionUpdateDTO,
 )

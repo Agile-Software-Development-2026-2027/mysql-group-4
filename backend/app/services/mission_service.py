@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 from uuid import UUID
 
-from app.schemas.mission.backend2frontend import MissionDTO
-from app.schemas.mission.frontend2backend import (
+from app.schemas.mission import (
     MissionCreateDTO,
+    MissionDTO,
     MissionFilterDTO,
     MissionUpdateDTO,
 )

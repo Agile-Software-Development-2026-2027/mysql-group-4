@@ -4,9 +4,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Response, status
 
 from app.db.models import User
-from app.schemas.mission.backend2frontend import MissionDTO
-from app.schemas.mission.frontend2backend import (
+from app.schemas.mission import (
     MissionCreateDTO,
+    MissionDTO,
     MissionFilterDTO,
     MissionUpdateDTO,
 )

@@ -3,7 +3,7 @@ from unittest.mock import create_autospec
 from pydantic import ValidationError
 from app.api import mission_endpoints as controller
 from app.core.exceptions import AccessDeniedError
-from app.schemas.mission.frontend2backend import MissionFilterDTO, MissionUpdateDTO
+from app.schemas.mission import MissionFilterDTO, MissionUpdateDTO
 from app.schemas.page import PageRequest
 from app.services.mission_service import MissionService
 from tests.factories import make_create_data, make_mission, make_user

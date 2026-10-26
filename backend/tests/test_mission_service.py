@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import AccessDeniedError, InvalidMissionPeriodError, InvalidMissionStateError
 from app.crud.mission_repository import MissionRepository
 from app.db.enumerated import MissionStatus
-from app.schemas.mission.frontend2backend import MissionFilterDTO, MissionUpdateDTO
+from app.schemas.mission import MissionFilterDTO, MissionUpdateDTO
 from app.schemas.page import Page, PageRequest
 from app.services.mission_mapper_service import MissionMapperService
 from app.services.mission_service_impl import MissionServiceImpl

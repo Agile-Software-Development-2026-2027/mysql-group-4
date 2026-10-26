@@ -4,7 +4,7 @@ from sqlalchemy import and_, or_, true
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.db.mission import Mission
-from app.schemas.mission.frontend2backend import MissionFilterDTO
+from app.schemas.mission import MissionFilterDTO
 
 
 class MissionSpecifications:
