@@ -23,7 +23,7 @@ class TestMissionDTO:
         assert dto.estimated_cost == Decimal('120.50')
 
     def test_invalid_create_fields_are_rejected(self):
-        cases = ({'subject': '   '}, {'subject': 'x' * 256}, {'destination': ''}, {'estimated_cost': '-0.01'}, {'estimated_cost': '1.001'}, {'estimated_cost': '10000000000.00'}, {'fund_manager_id': 'invalid'}, {'starts_at': self.values['starts_at'].replace(tzinfo=timezone.utc)})
+        cases = ({'subject': '   '}, {'subject': 'x' * 256}, {'destination': ''}, {'estimated_cost': '-0.01'}, {'estimated_cost': '1.001'}, {'estimated_cost': '10000000000.00'}, {'fund_manager_id': 'invalid'}, {'starts_at': self.values['starts_at'].replace(tzinfo=timezone.utc)}, {'ends_at': self.values['starts_at']})
         for changes in cases:
             with pytest.raises(ValidationError):
                 MissionCreateDTO(**self.values | changes)

@@ -38,6 +38,12 @@ class MissionCreateDTO(CamelModel):
     ends_at: NaiveDatetime
     fund_manager_id: UUID
 
+    @model_validator(mode="after")
+    def validate_period(self) -> Self:
+        if self.ends_at <= self.starts_at:
+            raise ValueError("Mission end must be after its start")
+        return self
+
 
 class MissionUpdateDTO(MissionCreateDTO):
     pass
