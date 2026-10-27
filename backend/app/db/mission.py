@@ -7,8 +7,8 @@ from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Numeric, Str
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.db.enumerated.mission_type import MissionType
-from app.db.enumerated.mission_status import MissionStatus
+from app.core.enums import MissionStatus, MissionType
+
 
 
 if TYPE_CHECKING:

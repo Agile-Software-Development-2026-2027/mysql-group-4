@@ -3,7 +3,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 from app.db import Mission, User
-from app.db.enumerated import MissionStatus, MissionType
+from app.core.enums import MissionStatus, MissionType
 from app.schemas.mission import MissionCreateDTO
 
 
