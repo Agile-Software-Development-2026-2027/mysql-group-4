@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<svg width="35" height="24" xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg" data-name="Livello 1" version="1.1">
+ <metadata id="metadata125">image/svg+xmlmarchi per web</metadata>
+ <defs id="defs4">
+  <style id="style2">.cls-1{fill:#b71918;}.cls-2{fill:#fff;}</style>
+ </defs>
+ <title id="title6">marchi per web</title>
+ <g class="layer">
+  <title>Layer 1</title>
+  <rect class="cls-2" height="3.6" id="rect10" width="21.6" x="0" y="18.17"/>
+  <rect class="cls-2" height="3.6" id="rect12" width="21.6" x="0" y="13.67"/>
+  <rect class="cls-2" height="3.6" id="rect14" width="21.6" x="0" y="9.17"/>
+  <rect class="cls-2" height="3.6" id="rect16" width="21.6" x="0" y="4.67"/>
+  <rect class="cls-2" height="3.6" id="rect18" width="21.6" x="0" y="0.17"/>
+  <path class="cls-2" d="m22.28,22.17l0,-8.7l8.7,0l-8.7,8.7zm0.35,-8.34l0,7.49l7.5,-7.49l-7.5,0z" id="path20"/>
+  <path class="cls-2" d="m33.44,12.95l-11.16,0l0,-4l11.16,0l0,4zm-10.77,-0.36l10.42,0l0,-3.24l-10.42,0l0,3.24z" id="path22"/>
+  <path class="cls-2" d="m33.44,8.44l-11.16,0l0,-4l11.16,0l0,4zm-10.77,-0.35l10.42,0l0,-3.24l-10.42,0l0,3.24z" id="path24"/>
+ </g>
+</svg>
