@@ -1,3 +1,18 @@
+"""Isolated configuration, loaded before application imports in unit tests."""
+import os
+
+os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+os.environ.update({
+    "SECRET_KEY": "unit-tests-only-not-a-production-secret",
+    "MAIL_USERNAME": "test",
+    "MAIL_PASSWORD": "test",
+    "MAIL_FROM": "test@example.com",
+    "MAIL_PORT": "587",
+    "MAIL_SERVER": "localhost",
+    "MAIL_STARTTLS": "False",
+    "MAIL_SSL_TLS": "False",
+})
+
 import pytest
 from collections.abc import AsyncGenerator
 from httpx import AsyncClient, ASGITransport
@@ -12,7 +27,7 @@ test_engine = create_async_engine(TEST_DB_URL)
 TestSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
 
 #Crea tutte le tabelle all'inizio dei test e le cancella alla fine
-@pytest.fixture(autouse=True)
+@pytest.fixture
 async def prepare_database():
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -22,7 +37,7 @@ async def prepare_database():
 
 #crea la sessione del database locale dei test
 @pytest.fixture
-async def db_session() -> AsyncGenerator[AsyncSession, None]:
+async def db_session(prepare_database) -> AsyncGenerator[AsyncSession, None]:
     async with TestSessionLocal() as session:
         yield session
 

@@ -115,3 +115,7 @@ frontend/connect.lock/
 # ==========================================
 .docker/
 docker-compose.override.yml
+tests/**/__pycache__/
+tests/**/*.py[cod]
+
+.pytest_cache/
