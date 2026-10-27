@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     MAIL_STARTTLS: bool = True
     MAIL_SSL_TLS: bool = False
 
+    FRONTEND_URL: str = "http://localhost:4200"
+    RESET_PASSWORD_TOKEN_LIFETIME_SECONDS: int = 1800
+
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),
         env_file_encoding="utf-8",
