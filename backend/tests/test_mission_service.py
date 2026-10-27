@@ -70,19 +70,24 @@ class TestMissionService:
         request = PageRequest(page=2, size=5)
         filters = MissionFilterDTO(destination="Rome")
         self.repository.find_all.return_value = Page(content=[self.mission], total_elements=12, number=2, size=5)
-        with patch("app.services.mission_service.MissionSpecifications.filter_missions") as specification:
-            page = await self.service.get_missions(self.user.id, filters, request)
-            specification.assert_called_once_with(filters, self.user.id)
-            self.repository.find_all.assert_awaited_once_with(specification.return_value, request)
+        page = await self.service.get_missions(self.user.id, filters, request)
+        self.repository.find_all.assert_awaited_once_with(
+            filters=filters,
+            user_id=self.user.id,
+            page_request=request,
+        )
         assert page.content == [self.dto]
         assert (page.total_elements, page.number, page.size, page.total_pages) == (12, 2, 5, 3)
 
     async def test_admin_listing_has_no_user_visibility_scope(self):
         self.user.is_superuser = True
         self.repository.find_all.return_value = Page(content=[], total_elements=0, number=0, size=20)
-        with patch("app.services.mission_service.MissionSpecifications.filter_missions") as specification:
-            await self.service.get_missions(self.user.id)
-            specification.assert_called_once_with(None, None)
+        await self.service.get_missions(self.user.id)
+        self.repository.find_all.assert_awaited_once_with(
+            filters=None,
+            user_id=None,
+            page_request=None,
+        )
 
     async def test_specialized_lists_enforce_their_filter_without_mutating_input(self):
         self.repository.find_all.return_value = Page(content=[], total_elements=0, number=0, size=20)
@@ -93,12 +98,14 @@ class TestMissionService:
             (self.service.get_rejected_missions, "status", MissionStatus.REJECTED),
         )
         for method, field, expected in cases:
-            with patch("app.services.mission_service.MissionSpecifications.filter_missions") as specification:
-                await method(self.user.id, original)
-                selected, user_id = specification.call_args.args
-                assert getattr(selected, field) == expected
-                assert selected.destination == "Rome"
-                assert user_id == self.user.id
+            self.repository.find_all.reset_mock()
+            await method(self.user.id, original)
+            self.repository.find_all.assert_awaited_once()
+            called_filters = self.repository.find_all.call_args.kwargs["filters"]
+            called_user_id = self.repository.find_all.call_args.kwargs["user_id"]
+            assert getattr(called_filters, field) == expected
+            assert called_filters.destination == "Rome"
+            assert called_user_id == self.user.id
         assert original.requester_id == self.manager.id
         assert original.status == MissionStatus.ACCEPTED
 
