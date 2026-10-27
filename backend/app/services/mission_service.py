@@ -12,7 +12,6 @@ from app.core.exceptions import (
     UserNotFoundError,
 )
 from app.crud.mission_repository import MissionRepository
-from app.crud.specifications import MissionSpecifications
 from app.crud.user_repository import UserRepository
 from app.core.enums import MissionStatus
 from app.db.mission import Mission
@@ -200,8 +199,11 @@ class MissionService:
         page_request: PageRequest | None,
     ) -> Page[MissionDTO]:
         visible_to = None if user.is_superuser else user.id
-        specification = MissionSpecifications.filter_missions(filters, visible_to)
-        missions = await self._repository.find_all(specification, page_request)
+        missions = await self._repository.find_all(
+            filters=filters,
+            user_id=visible_to,
+            page_request=page_request,
+        )
         logger.debug("Found %s missions for user %s", missions.total_elements, user.id)
         return missions.map(MissionDTO.model_validate)
 

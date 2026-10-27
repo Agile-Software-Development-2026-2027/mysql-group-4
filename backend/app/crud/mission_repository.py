@@ -1,11 +1,11 @@
 from uuid import UUID
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql.elements import ColumnElement
 
 from app.crud.pagination import paginate
 from app.db.mission import Mission
+from app.schemas.mission import MissionFilterDTO
 from app.schemas.page import Page, PageRequest
 
 
@@ -27,17 +27,44 @@ class MissionRepository:
 
     async def find_all(
         self,
-        specification: ColumnElement[bool] | None = None,
+        filters: MissionFilterDTO | None = None,
+        user_id: UUID | None = None,
         page_request: PageRequest | None = None,
     ) -> Page[Mission]:
         request = page_request if page_request is not None else PageRequest()
-        query = self._query(specification).order_by(Mission.starts_at, Mission.id)
-        return await paginate(self._session, query, request.page, request.size)
+        query = select(Mission)
 
-    async def count(self, specification: ColumnElement[bool] | None = None) -> int:
-        query = select(func.count()).select_from(self._query(specification).subquery())
-        result = await self._session.scalar(query)
-        return result if result is not None else 0
+        if user_id is not None:
+            query = query.where(
+                or_(Mission.requester_id == user_id, Mission.fund_manager_id == user_id)
+            )
+
+        if filters is not None:
+            if filters.requester_id is not None:
+                query = query.where(Mission.requester_id == filters.requester_id)
+            if filters.fund_manager_id is not None:
+                query = query.where(Mission.fund_manager_id == filters.fund_manager_id)
+            if filters.status is not None:
+                query = query.where(Mission.status == filters.status)
+            if filters.mission_type is not None:
+                query = query.where(Mission.mission_type == filters.mission_type)
+            if filters.estimated_cost_min is not None:
+                query = query.where(Mission.estimated_cost >= filters.estimated_cost_min)
+            if filters.estimated_cost_max is not None:
+                query = query.where(Mission.estimated_cost <= filters.estimated_cost_max)
+            if filters.starts_at_from is not None:
+                query = query.where(Mission.starts_at >= filters.starts_at_from)
+            if filters.starts_at_to is not None:
+                query = query.where(Mission.starts_at <= filters.starts_at_to)
+            if filters.ends_at_from is not None:
+                query = query.where(Mission.ends_at >= filters.ends_at_from)
+            if filters.ends_at_to is not None:
+                query = query.where(Mission.ends_at <= filters.ends_at_to)
+            if filters.destination is not None:
+                query = query.where(Mission.destination.icontains(filters.destination, autoescape=True))
+
+        query = query.order_by(Mission.starts_at, Mission.id)
+        return await paginate(self._session, query, request.page, request.size)
 
     async def save(self, mission: Mission) -> Mission:
         self._session.add(mission)
@@ -48,10 +75,3 @@ class MissionRepository:
     async def delete(self, mission: Mission) -> None:
         await self._session.delete(mission)
         await self._session.flush()
-
-    @staticmethod
-    def _query(specification: ColumnElement[bool] | None) -> Select[tuple[Mission]]:
-        query = select(Mission)
-        if specification is not None:
-            query = query.where(specification)
-        return query
