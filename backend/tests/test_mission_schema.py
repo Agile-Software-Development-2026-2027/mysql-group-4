@@ -4,9 +4,9 @@ from datetime import timedelta, timezone
 from decimal import Decimal
 from uuid import uuid4
 from pydantic import ValidationError
-from app.schemas.mission import MissionCreateDTO, MissionFilterDTO, MissionUpdateDTO
+from app.db.mission import Mission
+from app.schemas.mission import MissionCreateDTO, MissionDTO, MissionFilterDTO, MissionUpdateDTO
 from app.schemas.page import Page
-from app.services.mission_mapper_service import MissionMapperService
 from tests.factories import make_create_data, make_mission
 
 class TestMissionDTO:
@@ -50,11 +50,11 @@ class TestMissionDTO:
         assert MissionFilterDTO(estimated_cost_min=10, estimated_cost_max=10).estimated_cost_min == 10
         assert MissionFilterDTO(estimated_cost_max=0).estimated_cost_max == 0
 
-class TestMissionMapper:
+class TestMissionModelIntegration:
 
     def test_entity_to_dto_uses_relationship_ids_and_camel_case(self):
         mission = make_mission()
-        dto = MissionMapperService.convert_to_dto(mission)
+        dto = MissionDTO.model_validate(mission)
         payload = dto.model_dump(mode='json', by_alias=True)
         assert payload['requesterId'] == str(mission.requester_id)
         assert payload['fundManagerId'] == str(mission.fund_manager_id)
@@ -64,7 +64,7 @@ class TestMissionMapper:
 
     def test_creation_maps_editable_fields(self):
         data = make_create_data()
-        mission = MissionMapperService.convert_to_entity(data)
+        mission = Mission(**data.model_dump())
         for field, value in data.model_dump().items():
             assert getattr(mission, field) == value
         assert mission.id is None
@@ -74,7 +74,8 @@ class TestMissionMapper:
         mission = make_mission()
         protected = {field: getattr(mission, field) for field in ('id', 'requester_id', 'status', 'created_by', 'created_at', 'updated_by', 'updated_at')}
         data = MissionUpdateDTO(**make_create_data(subject='Updated', destination='Paris').model_dump())
-        MissionMapperService.update_entity(mission, data)
+        for field, value in data.model_dump(exclude_unset=True).items():
+            setattr(mission, field, value)
         for field, value in data.model_dump().items():
             assert getattr(mission, field) == value
         assert protected == {field: getattr(mission, field) for field in protected}
