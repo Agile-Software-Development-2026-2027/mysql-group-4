@@ -14,7 +14,7 @@ from app.core.exceptions import (
 from app.crud.mission_repository import MissionRepository
 from app.crud.specifications import MissionSpecifications
 from app.crud.user_repository import UserRepository
-from app.db.enumerated import MissionStatus
+from app.core.enums import MissionStatus
 from app.db.mission import Mission
 from app.db.models import User
 from app.schemas.mission import (

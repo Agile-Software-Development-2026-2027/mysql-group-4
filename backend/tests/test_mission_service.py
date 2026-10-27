@@ -9,7 +9,7 @@ from app.core.exceptions import (
 )
 from app.crud.mission_repository import MissionRepository
 from app.crud.user_repository import UserRepository
-from app.db.enumerated import MissionStatus
+from app.core.enums import MissionStatus
 from app.schemas.mission import MissionDTO, MissionFilterDTO, MissionUpdateDTO
 from app.schemas.page import Page, PageRequest
 from app.services.mission_service import MissionService

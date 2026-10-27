@@ -5,8 +5,8 @@ from uuid import UUID
 
 from pydantic import ConfigDict, Field, NaiveDatetime, model_validator
 
-from app.db.enumerated.mission_status import MissionStatus
-from app.db.enumerated.mission_type import MissionType
+from app.core.enums import MissionStatus, MissionType
+
 from app.schemas.base import CamelModel
 
 
