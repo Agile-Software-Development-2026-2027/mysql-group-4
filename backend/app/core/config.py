@@ -15,6 +15,7 @@ class Settings(BaseSettings):
 
     FRONTEND_URL: str = "http://localhost:4200"
     RESET_PASSWORD_TOKEN_LIFETIME_SECONDS: int = 1800
+    COOKIE_SECURE: bool = False
 
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),

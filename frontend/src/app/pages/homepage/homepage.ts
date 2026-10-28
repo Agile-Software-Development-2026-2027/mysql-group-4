@@ -1,5 +1,6 @@
 import { Component, ChangeDetectorRef, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
+import { AuthService } from '../../services/auth.service';
 
 interface MenuItem {
   label: string;
@@ -14,6 +15,7 @@ interface MenuItem {
 })
 export class Homepage {
   private cdr = inject(ChangeDetectorRef);
+  private authService = inject(AuthService);
 
   siteName = 'MYSOL';
   menuOpen = false;
@@ -34,5 +36,15 @@ export class Homepage {
   closeMenu(): void {
     this.menuOpen = false;
     this.cdr.markForCheck();
+  }
+
+  onMenuClick(item: MenuItem, event: Event): void {
+    if (item.link === '/logout') {
+      event.preventDefault();
+      this.closeMenu();
+      this.authService.logout().subscribe();
+      return;
+    }
+    this.closeMenu();
   }
 }

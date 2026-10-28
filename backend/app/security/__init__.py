@@ -1,4 +1,4 @@
-from app.security.auth import auth_backend, bearer_transport
+from app.security.auth import auth_backend, cookie_transport, bearer_transport
 from app.security.user_manager import (
     UserManager,
     get_user_manager,
@@ -9,6 +9,7 @@ from app.security.user_manager import (
 
 __all__ = [
     "auth_backend",
+    "cookie_transport",
     "bearer_transport",
     "UserManager",
     "get_user_manager",
