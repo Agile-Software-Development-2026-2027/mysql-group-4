@@ -124,8 +124,8 @@ async def test_password_reset_api_flow(client: AsyncClient):
         "/auth/jwt/login",
         data={"username": user_data["email"], "password": new_password},
     )
-    assert login_new.status_code == 200
-    assert "access_token" in login_new.json()
+    assert login_new.status_code == 204
+    assert "auth_token" in login_new.json()
 
 
 @pytest.mark.asyncio
