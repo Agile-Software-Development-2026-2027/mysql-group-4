@@ -125,7 +125,7 @@ async def test_password_reset_api_flow(client: AsyncClient):
         data={"username": user_data["email"], "password": new_password},
     )
     assert login_new.status_code == 204
-    assert "auth_token" in login_new.json()
+    assert "auth_token" in login_new.cookies
 
 
 @pytest.mark.asyncio
