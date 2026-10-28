@@ -20,5 +20,9 @@ async def search_locations(query: str)->List[Dict[str, Any]]:
         data=response.json()
     results=[]
     for d in data:
+        #display name: stringa contenente nome e indirizzo da mostrare a schermo
+        #lat e lon: latitudine e longitudine
+        #type (opzionale): la tipologia del luogo (university, city ecc...)
+        #address: opzionale, un dizionario con i dettagli di via, cap, città, nazione
         results.append({"display_name": d.get("display_name", ""), "lat": d.get("lat", ""), "lon": d.get("lon", ""), "type": d.get("type", ""), "address": d.get("address", {})})
     return results
