@@ -29,9 +29,9 @@
 <nav class="side-menu" [class.is-open]="menuOpen" aria-label="Main menu">
   @for (item of menuItems; track item.label) {
     <a
-      [routerLink]="item.link"
+      [routerLink]="item.link !== '/logout' ? item.link : null"
       routerLinkActive="is-active"
-      (click)="closeMenu()"
+      (click)="onMenuClick(item, $event)"
     >{{ item.label }}</a>
   }
 </nav>
