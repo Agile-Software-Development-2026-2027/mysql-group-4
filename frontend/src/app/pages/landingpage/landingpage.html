@@ -1,0 +1,23 @@
+<header class="topbar">
+  <a class="topbar__brand" routerLink="/">
+    <span class="topbar_name">{{ siteName }}</span>
+    <span class="topbar_logo">
+      <img src="assets/image/logo/SOLO_logo_unical_white.svg" alt="Logo">
+    </span>
+  </a>
+
+  <div class="topbar__actions">
+    <a routerLink="/login" class="btn btn--outline landing-topbar-btn">Sign In</a>
+  </div>
+</header>
+
+<main class="container landing-container">
+  <div class="landing-hero">
+    <h1>{{ siteName }}</h1>
+    <p class="landing-subtitle">University mission request and management portal.</p>
+    <p class="landing-text">Sign in with your institutional credentials to review your missions or submit a new request.</p>
+    <div class="landing-actions">
+      <a routerLink="/login" class="btn">Access Portal</a>
+    </div>
+  </div>
+</main>
