@@ -9,6 +9,7 @@ from app.api.mission_endpoints import mission_router
 from app.security import fastapi_users, auth_backend
 from app.schemas.user import UserRead, UserCreate
 from app.core.exception_handler import register_exception_handlers
+from app.api.location_endpoints import router as location_router
 
 
 @asynccontextmanager
@@ -62,5 +63,10 @@ app.include_router(
 
 app.include_router(
     mission_router,
+    prefix="/api/v1",
+)
+
+app.include_router(
+    location_router,
     prefix="/api/v1",
 )
