@@ -83,6 +83,18 @@ class MissionService:
         selected = self._with_filters(filters, status=MissionStatus.REJECTED)
         return await self._find_missions(user, selected, page_request)
 
+    async def get_missions_to_approve(
+            self,
+            user_id: UUID,
+            filters: MissionFilterDTO | None = None,
+            page_request: PageRequest | None = None,
+    ) -> Page[MissionDTO]:
+        user = await self._get_active_user_or_throw(user_id)
+        selected = self._with_filters(
+            filters, fund_manager_id=user.id, status=MissionStatus.PENDING
+        )
+        return await self._find_missions(user, selected, page_request)
+
     async def create_mission(self, data: MissionCreateDTO, user_id: UUID) -> MissionDTO:
         async with self._transaction():
             user = await self._get_active_user_or_throw(user_id)

@@ -70,6 +70,15 @@ async def get_rejected_missions(
 ) -> Page[MissionDTO]:
     return await service.get_rejected_missions(user.id, filters, page_request)
 
+@mission_router.post("/to-approve/filter", response_model=Page[MissionDTO])
+async def get_missions_to_approve(
+    user: CurrentUser,
+    service: MissionServiceDependency,
+    page_request: Pagination,
+    filters: MissionFilterDTO | None = None,
+) -> Page[MissionDTO]:
+    return await service.get_missions_to_approve(user.id, filters, page_request)
+
 
 @mission_router.get("/{mission_id}", response_model=MissionDTO)
 async def get_mission_by_id(

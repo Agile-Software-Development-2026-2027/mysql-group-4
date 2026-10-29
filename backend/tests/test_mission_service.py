@@ -109,6 +109,30 @@ class TestMissionService:
         assert original.requester_id == self.manager.id
         assert original.status == MissionStatus.ACCEPTED
 
+    async def test_missions_to_approve_enforce_fund_manager_and_pending(self):
+        self.repository.find_all.return_value = Page(content=[], total_elements=0, number=0, size=20)
+        original = MissionFilterDTO(
+            fund_manager_id=self.user.id, status=MissionStatus.ACCEPTED, destination="Rome")
+        await self.service.get_missions_to_approve(self.manager.id, original)
+        called_filters = self.repository.find_all.call_args.kwargs["filters"]
+        assert called_filters.fund_manager_id == self.manager.id
+        assert called_filters.status == MissionStatus.PENDING
+        assert called_filters.destination == "Rome"
+        assert self.repository.find_all.call_args.kwargs["user_id"] == self.manager.id
+        assert original.fund_manager_id == self.user.id
+        assert original.status == MissionStatus.ACCEPTED
+
+    async def test_missions_to_approve_returns_mapped_page(self):
+        self.repository.find_all.return_value = Page(content=[self.mission], total_elements=1, number=0, size=20)
+        page = await self.service.get_missions_to_approve(self.manager.id)
+        assert page.content == [self.dto]
+        assert page.total_elements == 1
+
+    async def test_missions_to_approve_unknown_user_raises_not_found(self):
+        with pytest.raises(UserNotFoundError):
+            await self.service.get_missions_to_approve(make_user().id)
+        self.repository.find_all.assert_not_awaited()
+
     async def test_create_sets_actor_relationships_status_and_audit(self):
         result = await self.service.create_mission(self.data, self.user.id)
         saved_mission = self.repository.save.call_args[0][0]
