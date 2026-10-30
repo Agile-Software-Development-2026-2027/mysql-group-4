@@ -1,5 +1,7 @@
 @use 'sass:color';
 
+$topbar-height: 64px;
+
 .auth-topbar-btn {
   color: #ffffff;
   border-color: #ffffff;
@@ -16,15 +18,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: calc(100vh - 64px);
-  padding: 32px 16px;
+  min-height: 100vh;
+  padding: ($topbar-height + 24px) 16px 32px;
   box-sizing: border-box;
 }
 
 .auth-card {
   width: 100%;
   max-width: 520px;
-  margin: 0 auto;
+  margin: auto;
   border-top: 4px solid #be0e01;
 }
 
