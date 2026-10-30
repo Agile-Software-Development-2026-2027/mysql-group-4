@@ -32,3 +32,62 @@
     align-self: flex-start;
   }
 }
+
+.bell {
+  position: relative;
+
+  .icon-btn {
+    position: relative;
+  }
+}
+
+.bell__badge {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #fff;
+  color: #c00000;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.bell__panel {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: -8px;
+  z-index: 20;
+  width: 280px;
+  padding: 16px;
+  border-radius: 6px;
+  background: #fff;
+  color: #1f2d3d;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    right: 18px;
+    width: 12px;
+    height: 12px;
+    background: #fff;
+    transform: rotate(45deg);
+  }
+
+  p {
+    margin: 0 0 10px;
+  }
+}
+.bell__link {
+  color: #c00000;
+  font-weight: 600;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
