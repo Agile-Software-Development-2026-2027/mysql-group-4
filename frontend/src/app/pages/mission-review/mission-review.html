@@ -1,0 +1,157 @@
+<main class="container">
+  @if (!isDetailView) {
+    <div class="dashboard-header">
+      <div class="header-text">
+        <h1>Gestione Fondi Missioni</h1>
+        <p>Clicca sulle categorie per espanderle e seleziona una richiesta per visualizzarne il referto.</p>
+      </div>
+    </div>
+
+    <div class="accordion-container">
+      <div class="accordion-section" [class.is-open]="activeSection === 'pending'">
+        <button class="accordion-header pending" (click)="toggleSection('pending')">
+          <div class="header-title">
+            <h2>Da Approvare (In Coda)</h2>
+            <span class="count-badge pending">{{ pendingMissions.length }}</span>
+          </div>
+          <span class="chevron"></span>
+        </button>
+
+        <div class="accordion-content">
+          <div class="list-container">
+            @for (mission of pendingMissions; track mission.id) {
+              <div class="list-card status-pending" (click)="openDetail(mission)">
+                <div class="card-info">
+                  <div class="title-row">
+                    <span class="badge pending">Da Valutare</span>
+                    <h3>{{ mission.subject }}</h3>
+                  </div>
+                  <p><strong>Richiedente ID:</strong> {{ mission.requesterId }} &nbsp;&bull;&nbsp; <strong>Data:</strong> {{ mission.startsAt | date:'dd/MM/yyyy' }} &nbsp;&bull;&nbsp; <strong>Costo stimato:</strong> € {{ mission.estimatedCost | number:'1.2-2' }}</p>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+
+      <div class="accordion-section" [class.is-open]="activeSection === 'approved'">
+        <button class="accordion-header approved" (click)="toggleSection('approved')">
+          <div class="header-title">
+            <h2>Missioni Approvate</h2>
+            <span class="count-badge approved">{{ approvedMissions.length }}</span>
+          </div>
+          <span class="chevron"></span>
+        </button>
+
+        <div class="accordion-content">
+          <div class="list-container">
+            @for (mission of approvedMissions; track mission.id) {
+              <div class="list-card status-approved" (click)="openDetail(mission)">
+                <div class="card-info">
+                  <div class="title-row">
+                    <span class="badge approved">Approvata</span>
+                    <h3>{{ mission.subject }}</h3>
+                  </div>
+                  <p><strong>Richiedente ID:</strong> {{ mission.requesterId }} &nbsp;&bull;&nbsp; <strong>Data:</strong> {{ mission.startsAt | date:'dd/MM/yyyy' }} &nbsp;&bull;&nbsp; <strong>Costo stimato:</strong> € {{ mission.estimatedCost | number:'1.2-2' }}</p>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+
+      <div class="accordion-section" [class.is-open]="activeSection === 'rejected'">
+        <button class="accordion-header rejected" (click)="toggleSection('rejected')">
+          <div class="header-title">
+            <h2>Missioni Rifiutate</h2>
+            <span class="count-badge rejected">{{ rejectedMissions.length }}</span>
+          </div>
+          <span class="chevron"></span>
+        </button>
+
+        <div class="accordion-content">
+          <div class="list-container">
+            @for (mission of rejectedMissions; track mission.id) {
+              <div class="list-card status-rejected" (click)="openDetail(mission)">
+                <div class="card-info">
+                  <div class="title-row">
+                    <span class="badge rejected">Rifiutata</span>
+                    <h3>{{ mission.subject }}</h3>
+                  </div>
+                  <p><strong>Richiedente ID:</strong> {{ mission.requesterId }} &nbsp;&bull;&nbsp; <strong>Data:</strong> {{ mission.startsAt | date:'dd/MM/yyyy' }} &nbsp;&bull;&nbsp; <strong>Costo stimato:</strong> € {{ mission.estimatedCost | number:'1.2-2' }}</p>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  } @else {
+    @if (selectedMission) {
+      <div class="detail-wrapper">
+        <section class="card detail-card">
+          <div class="detail-main-header">
+            <h1>Referto Missione</h1>
+            <p class="subtitle">Analisi dettagliata della richiesta e modulo di delibera</p>
+          </div>
+
+          <div class="detail-box">
+            <div class="detail-grid">
+              <div class="detail-item full-width">
+                <span class="label">Oggetto della Trasferta</span>
+                <span class="value">{{ selectedMission.subject }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="label">Richiedente ID</span>
+                <span class="value">{{ selectedMission.requesterId }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="label">Destinazione</span>
+                <span class="value">{{ selectedMission.destination }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="label">Data Inizio</span>
+                <span class="value">{{ selectedMission.startsAt | date:'dd/MM/yyyy' }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="label">Data Fine</span>
+                <span class="value">{{ selectedMission.endsAt | date:'dd/MM/yyyy' }}</span>
+              </div>
+              <div class="detail-item highlight-cost">
+                <span class="label">Costo Stimato</span>
+                <span class="value">€ {{ selectedMission.estimatedCost | number:'1.2-2' }}</span>
+              </div>
+            </div>
+          </div>
+
+          <hr class="divider">
+
+          <div class="decision-form">
+            <div class="form-header">
+              <h3>Decisione del Responsabile</h3>
+              <p>Utilizza il campo sottostante per inserire eventuali note, raccomandazioni o motivare un rifiuto.</p>
+            </div>
+
+            <label for="managerNotes">Note e motivazioni:</label>
+            <textarea #managerNotes id="managerNotes" rows="5"
+                      placeholder="Es. 'Budget esaurito' oppure 'Procedi pure ma scegli un hotel più economico...'"
+                      [value]="selectedMission.response || ''"
+                      [readonly]="selectedMission.status !== 'PENDING'">
+            </textarea>
+
+            <div class="action-buttons">
+              <button class="btn btn-secondary" (click)="closeDetail()">&larr; Torna indietro</button>
+
+              @if (selectedMission.status === 'PENDING') {
+                <div class="primary-actions">
+                  <button class="btn btn-danger" type="button" (click)="reject(selectedMission.id, managerNotes.value)">Rifiuta Missione</button>
+                  <button class="btn btn-success" type="button" (click)="accept(selectedMission.id, managerNotes.value)">Approva Missione</button>
+                </div>
+              }
+            </div>
+          </div>
+        </section>
+      </div>
+    }
+  }
+</main>
