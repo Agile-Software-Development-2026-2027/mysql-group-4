@@ -1,0 +1,265 @@
+<header class="topbar">
+  <a class="topbar__brand" routerLink="/">
+    <span class="topbar_name">{{ siteName }}</span>
+    <span class="topbar_logo">
+      <img src="assets/image/logo/SOLO_logo_unical_white.svg" alt="Logo">
+    </span>
+  </a>
+
+  <div class="topbar__actions">
+    <a routerLink="/" class="btn btn--outline auth-topbar-btn">Back to Home</a>
+  </div>
+</header>
+
+<main class="auth-wrapper">
+  <div class="card auth-card">
+    <div class="auth-header">
+      <h2>{{ isLoginMode() ? 'Sign In' : 'Create an Account' }}</h2>
+      <p class="auth-subtitle">
+        {{
+          isLoginMode()
+            ? 'Access your MySOL account to manage your missions.'
+            : 'Fill in your academic details to request an account.'
+        }}
+      </p>
+    </div>
+
+    <!-- Error Alert Banner -->
+    @if (errorMessage()) {
+      <div class="alert alert--danger" role="alert">
+        {{ errorMessage() }}
+      </div>
+    }
+
+    <!-- Success Alert Banner -->
+    @if (successMessage()) {
+      <div class="alert alert--success" role="alert">
+        {{ successMessage() }}
+      </div>
+    }
+
+    <!-- ==================== LOGIN FORM ==================== -->
+    @if (isLoginMode()) {
+      <form [formGroup]="loginForm" (ngSubmit)="onLoginSubmit()" novalidate>
+        <div class="form-group">
+          <label for="login-email">Institutional Email</label>
+          <input
+            id="login-email"
+            type="email"
+            formControlName="email"
+            class="form-control"
+            [class.is-invalid]="isFieldInvalid('login', 'email')"
+            placeholder="e.g., name.surname@unical.it"
+            autocomplete="email"
+          />
+          @if (isFieldInvalid('login', 'email')) {
+            <div class="form-error">
+              @if (loginForm.get('email')?.hasError('required')) {
+                Email is required.
+              } @else if (loginForm.get('email')?.hasError('email')) {
+                Please enter a valid email address.
+              }
+            </div>
+          }
+        </div>
+
+        <div class="form-group">
+          <label for="login-password">Password</label>
+          <input
+            id="login-password"
+            type="password"
+            formControlName="password"
+            class="form-control"
+            [class.is-invalid]="isFieldInvalid('login', 'password')"
+            placeholder="Enter your password"
+            autocomplete="current-password"
+          />
+          @if (isFieldInvalid('login', 'password')) {
+            <div class="form-error">Password is required.</div>
+          }
+        </div>
+
+        <button type="submit" class="btn btn--block" [disabled]="isSubmitting()">
+          {{ isSubmitting() ? 'Signing in...' : 'Sign In' }}
+        </button>
+
+        <div class="auth-switch">
+          <span>Don't have an account yet? </span>
+          <button type="button" class="link-btn" (click)="switchMode(false)">
+            Register here
+          </button>
+        </div>
+      </form>
+    }
+
+    <!-- ==================== REGISTRATION FORM ==================== -->
+    @if (!isLoginMode()) {
+      <form [formGroup]="registerForm" (ngSubmit)="onRegisterSubmit()" novalidate>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="reg-name">First Name</label>
+            <input
+              id="reg-name"
+              type="text"
+              formControlName="name"
+              class="form-control"
+              [class.is-invalid]="isFieldInvalid('register', 'name')"
+              placeholder="First name"
+            />
+            @if (isFieldInvalid('register', 'name')) {
+              <div class="form-error">
+                @if (registerForm.get('name')?.hasError('required')) {
+                  First name is required.
+                } @else if (registerForm.get('name')?.hasError('minlength')) {
+                  Must be at least 2 characters.
+                } @else if (registerForm.get('name')?.hasError('maxlength')) {
+                  Cannot exceed 50 characters.
+                }
+              </div>
+            }
+          </div>
+
+          <div class="form-group">
+            <label for="reg-surname">Last Name</label>
+            <input
+              id="reg-surname"
+              type="text"
+              formControlName="surname"
+              class="form-control"
+              [class.is-invalid]="isFieldInvalid('register', 'surname')"
+              placeholder="Last name"
+            />
+            @if (isFieldInvalid('register', 'surname')) {
+              <div class="form-error">
+                @if (registerForm.get('surname')?.hasError('required')) {
+                  Last name is required.
+                } @else if (registerForm.get('surname')?.hasError('minlength')) {
+                  Must be at least 2 characters.
+                } @else if (registerForm.get('surname')?.hasError('maxlength')) {
+                  Cannot exceed 50 characters.
+                }
+              </div>
+            }
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="reg-email">Institutional Email</label>
+          <input
+            id="reg-email"
+            type="email"
+            formControlName="email"
+            class="form-control"
+            [class.is-invalid]="isFieldInvalid('register', 'email')"
+            placeholder="e.g., name.surname@unical.it"
+            autocomplete="email"
+          />
+          @if (isFieldInvalid('register', 'email')) {
+            <div class="form-error">
+              @if (registerForm.get('email')?.hasError('required')) {
+                Email is required.
+              } @else if (registerForm.get('email')?.hasError('email')) {
+                Please enter a valid email address.
+              }
+            </div>
+          }
+        </div>
+
+        <div class="form-group">
+          <label for="reg-password">Password</label>
+          <input
+            id="reg-password"
+            type="password"
+            formControlName="password"
+            class="form-control"
+            [class.is-invalid]="isFieldInvalid('register', 'password')"
+            placeholder="Minimum 8 characters"
+            autocomplete="new-password"
+          />
+          @if (isFieldInvalid('register', 'password')) {
+            <div class="form-error">
+              @if (registerForm.get('password')?.hasError('required')) {
+                Password is required.
+              } @else if (registerForm.get('password')?.hasError('minlength')) {
+                Password must be at least 8 characters.
+              }
+            </div>
+          }
+        </div>
+
+        <div class="form-group">
+          <label for="reg-fiscal-code">Italian Fiscal Code (Codice Fiscale)</label>
+          <input
+            id="reg-fiscal-code"
+            type="text"
+            formControlName="fiscalCode"
+            class="form-control uppercase-input"
+            [class.is-invalid]="isFieldInvalid('register', 'fiscalCode')"
+            placeholder="e.g., RSSMRA85M01H501Z"
+            maxlength="16"
+          />
+          @if (isFieldInvalid('register', 'fiscalCode')) {
+            <div class="form-error">
+              @if (registerForm.get('fiscalCode')?.hasError('required')) {
+                Fiscal code is required.
+              } @else if (registerForm.get('fiscalCode')?.hasError('pattern')) {
+                Invalid fiscal code format (must be 16 alphanumeric characters).
+              }
+            </div>
+          }
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="reg-department">Department</label>
+            <input
+              id="reg-department"
+              type="text"
+              formControlName="department"
+              class="form-control"
+              [class.is-invalid]="isFieldInvalid('register', 'department')"
+              placeholder="e.g., DEMACS, DIMEG"
+            />
+            @if (isFieldInvalid('register', 'department')) {
+              <div class="form-error">
+                @if (registerForm.get('department')?.hasError('required')) {
+                  Department is required.
+                } @else if (registerForm.get('department')?.hasError('minlength')) {
+                  Must be at least 2 characters.
+                }
+              </div>
+            }
+          </div>
+
+          <div class="form-group">
+            <label for="reg-employment-level">Employment Level</label>
+            <select
+              id="reg-employment-level"
+              formControlName="employmentLevel"
+              class="form-control"
+              [class.is-invalid]="isFieldInvalid('register', 'employmentLevel')"
+            >
+              @for (level of employmentLevels; track level.value) {
+                <option [value]="level.value">{{ level.label }}</option>
+              }
+            </select>
+            @if (isFieldInvalid('register', 'employmentLevel')) {
+              <div class="form-error">Please select an employment level.</div>
+            }
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn--block" [disabled]="isSubmitting()">
+          {{ isSubmitting() ? 'Creating account...' : 'Create Account' }}
+        </button>
+
+        <div class="auth-switch">
+          <span>Already have an account? </span>
+          <button type="button" class="link-btn" (click)="switchMode(true)">
+            Sign in
+          </button>
+        </div>
+      </form>
+    }
+  </div>
+</main>
