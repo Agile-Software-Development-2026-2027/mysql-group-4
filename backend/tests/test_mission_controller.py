@@ -16,7 +16,7 @@ class TestMissionController:
         self.mission_id = make_mission().id
         self.service = create_autospec(MissionService, instance=True)
 
-    @pytest.mark.parametrize('name', ('get_missions', 'get_sent_missions', 'get_pending_missions', 'get_rejected_missions'))
+    @pytest.mark.parametrize('name', ('get_missions', 'get_sent_missions', 'get_pending_missions', 'get_rejected_missions', 'get_missions_to_approve'))
     async def test_all_listing_actions_forward_actor_filters_and_pagination(self, name):
         filters = MissionFilterDTO(destination='Rome')
         page = PageRequest(page=2, size=5)

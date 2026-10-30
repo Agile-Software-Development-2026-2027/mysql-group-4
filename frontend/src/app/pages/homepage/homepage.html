@@ -5,6 +5,27 @@
   </a>
 
   <div class="topbar__actions">
+    <div class="bell">
+      <button class="icon-btn" type="button" aria-label="Missions to approve" (click)="toggleBell()">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22zm7-6v-5a7 7 0 0 0-5.5-6.84V3a1.5 1.5 0 0 0-3 0v1.16A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2z" />
+        </svg>
+        @if (missionsToApprove() > 0) {
+          <span class="bell__badge">{{ missionsToApprove() > 9 ? '9+' : missionsToApprove() }}</span>
+        }
+      </button>
+
+      @if (bellOpen()) {
+        <div class="bell__panel">
+          @if (missionsToApprove() > 0) {
+            <p>You have <strong>{{ missionsToApprove() }}</strong> {{ missionsToApprove() === 1 ? 'mission' : 'missions' }} to approve.</p>
+            <a class="bell__link" routerLink="/mission/approve">Go to approvals →</a>
+          } @else {
+            <p>No missions to approve.</p>
+          }
+        </div>
+      }
+    </div>
     <button class="icon-btn user-btn" type="button" aria-label="User area">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
         <path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-4.4 0-8 2.2-8 5v2h16v-2c0-2.8-3.6-5-8-5z" />
@@ -39,7 +60,7 @@
 <main class="container">
   <h1>Welcome to {{ siteName }}</h1>
   <p>DA METTERE QUALCOSA DI DESCRIZIONE GENERALE O IMMAGINI</p>
-  
+
   <div class="cards-grid">
     <section class="card">
       <h3>New Mission</h3>
