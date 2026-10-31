@@ -1,6 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
+import { ToastService } from '../../core/services/toast.service';
 
 export enum MissionType {
   RESEARCH = 'RESEARCH',
@@ -18,10 +19,10 @@ export enum MissionType {
 export class NewMissionComponent {
   private fb = inject(FormBuilder);
   private router = inject(Router);
+  private toastService = inject(ToastService);
 
   siteName = 'MYSOL';
   isSubmitted = signal(false);
-  successMessage = signal<string | null>(null);
 
   missionTypes = [
     { value: MissionType.RESEARCH, label: 'Research (Ricerca)' },
@@ -116,11 +117,14 @@ export class NewMissionComponent {
 
     console.log('[NewMission] Form submitted successfully (Mock Frontend Mode):', mockMissionPayload);
 
-    this.successMessage.set(
-      'Mission request created successfully! (Frontend simulated submission)'
+    this.toastService.showSuccess(
+      'Mission request created successfully!',
+      'Mission Submitted'
     );
 
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Reset del form e chiusura del pannello mappa
+    this.resetForm();
+    this.closeMapPanel();
   }
 
   resetForm(): void {
@@ -136,7 +140,6 @@ export class NewMissionComponent {
       fundManagerInput: '',
     });
     this.isSubmitted.set(false);
-    this.successMessage.set(null);
     this.fundSource.set('self');
   }
 }

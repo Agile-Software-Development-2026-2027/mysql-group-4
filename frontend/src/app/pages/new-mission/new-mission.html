@@ -55,18 +55,6 @@
       </p>
     </div>
 
-    @if (successMessage()) {
-      <div class="alert alert--success" role="alert">
-        <div class="alert-content">
-          <strong>Success!</strong> {{ successMessage() }}
-        </div>
-        <div class="alert-actions">
-          <button type="button" class="btn btn--small" (click)="resetForm()">Create Another</button>
-          <a routerLink="/home" class="btn btn--outline btn--small">Return to Home</a>
-        </div>
-      </div>
-    }
-
     <form [formGroup]="missionForm" (ngSubmit)="onSubmit()" novalidate>
       <div class="form-group">
         <label for="missionType">Mission Type *</label>
