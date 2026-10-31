@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Body, Depends, Query, Response, status
 
 from app.db.models import User
 from app.schemas.mission import (
@@ -70,6 +70,7 @@ async def get_rejected_missions(
 ) -> Page[MissionDTO]:
     return await service.get_rejected_missions(user.id, filters, page_request)
 
+
 @mission_router.post("/to-approve/filter", response_model=Page[MissionDTO])
 async def get_missions_to_approve(
     user: CurrentUser,
@@ -123,8 +124,9 @@ async def accept_mission(
     mission_id: UUID,
     user: CurrentUser,
     service: MissionServiceDependency,
+    response: Annotated[str | None, Body(max_length=255, embed=True)] = None,
 ) -> MissionDTO:
-    return await service.accept_mission(mission_id, user.id)
+    return await service.accept_mission(mission_id, user.id, response)
 
 
 @mission_router.patch("/{mission_id}/reject", response_model=MissionDTO)
@@ -132,5 +134,6 @@ async def reject_mission(
     mission_id: UUID,
     user: CurrentUser,
     service: MissionServiceDependency,
+    response: Annotated[str | None, Body(max_length=255, embed=True)] = None,
 ) -> MissionDTO:
-    return await service.reject_mission(mission_id, user.id)
+    return await service.reject_mission(mission_id, user.id, response)
