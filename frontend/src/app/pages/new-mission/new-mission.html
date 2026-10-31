@@ -11,11 +11,11 @@
   </div>
 </header>
 
-<main class="page-container">
+<main class="container page-container">
   <div class="mission-layout" [class.has-map]="showMapPanel()">
 
     @if (showMapPanel()) {
-      <aside class="map-sidebar">
+      <aside class="card map-sidebar">
         <div class="map-sidebar__header">
           <div class="map-sidebar__title">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -90,7 +90,7 @@
         <textarea
           id="subject"
           formControlName="subject"
-          class="form-control multiline-subject"
+          class="form-control"
           [class.is-invalid]="isFieldInvalid('subject')"
           rows="4"
           maxlength="250"
@@ -192,7 +192,7 @@
       </div>
 
       @if (missionForm.hasError('invalidPeriod') && (missionForm.get('endDate')?.touched || isSubmitted())) {
-        <div class="form-error period-error">
+        <div class="form-error" style="margin-bottom: 16px;">
           {{ missionForm.getError('invalidPeriod') }}
         </div>
       }
