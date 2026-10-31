@@ -24,6 +24,9 @@ export class NewMissionComponent {
   siteName = 'MYSOL';
   isSubmitted = signal(false);
   isSubmitting = signal(false);
+  showSummaryModal = signal(false);
+
+  currentUser = this.authService.currentUser;
 
   missionTypes = [
     { value: MissionType.RESEARCH, label: 'Research (Ricerca)' },
@@ -98,6 +101,22 @@ export class NewMissionComponent {
     return !!(field && field.invalid && (field.touched || this.isSubmitted()));
   }
 
+  formatEmploymentLevel(level?: string | null): string {
+    if (!level) return 'Not specified';
+    const map: Record<string, string> = {
+      ricercatore: 'Researcher (Ricercatore)',
+      professore_associato: 'Associate Professor (Professore Associato)',
+      professore_ordinario: 'Full Professor (Professore Ordinario)',
+    };
+    return map[level] || level;
+  }
+
+  getMissionTypeLabel(): string {
+    const val = this.missionForm.get('missionType')?.value;
+    const found = this.missionTypes.find((t) => t.value === val);
+    return found ? found.label : val;
+  }
+
   onSubmit(): void {
     this.isSubmitted.set(true);
 
@@ -106,6 +125,24 @@ export class NewMissionComponent {
       return;
     }
 
+    const user = this.authService.getUser();
+    if (!user) {
+      this.toastService.showError(
+        'You must be logged in to create a mission.',
+        'Authentication Required'
+      );
+      return;
+    }
+
+    // Apre il riepilogo in rilievo prima dell'invio definitivo
+    this.showSummaryModal.set(true);
+  }
+
+  closeSummary(): void {
+    this.showSummaryModal.set(false);
+  }
+
+  confirmSubmit(): void {
     const currentUser = this.authService.getUser();
     if (!currentUser) {
       this.toastService.showError(
@@ -122,11 +159,11 @@ export class NewMissionComponent {
     const startsAt = `${formValues.startDate}T${this.normalizeTime(startTime)}`;
     const endsAt = `${formValues.endDate}T${this.normalizeTime(endTime)}`;
 
+    // Distinzione gestore fondi: 'self' (utente corrente) vs 'other' (placeholder)
     let fundManagerId: string;
     if (this.fundSource() === 'self') {
       fundManagerId = currentUser.id;
     } else {
-      // Placeholder per selezione altro gestore
       const inputVal = formValues.fundManagerInput?.trim();
       fundManagerId = inputVal || '00000000-0000-0000-0000-000000000002';
     }
@@ -146,6 +183,7 @@ export class NewMissionComponent {
     this.missionService.createMission(payload).subscribe({
       next: (_mission) => {
         this.isSubmitting.set(false);
+        this.showSummaryModal.set(false);
         this.toastService.showSuccess(
           'Mission request created successfully!',
           'Mission Submitted'

@@ -274,12 +274,8 @@
       }
 
       <div class="form-actions">
-        <button type="submit" class="btn btn--primary" [disabled]="isSubmitting()">
-          @if (isSubmitting()) {
-            Submitting...
-          } @else {
-            Submit Mission Request
-          }
+        <button type="submit" class="btn btn--primary">
+          Submit Mission Request
         </button>
         <a routerLink="/home" class="btn btn--outline">
           Cancel
@@ -288,4 +284,100 @@
     </form>
     </div>
   </div>
+
+  @if (showSummaryModal()) {
+    <div class="summary-overlay" (click)="closeSummary()">
+      <div class="summary-modal card" (click)="$event.stopPropagation()">
+        <div class="summary-modal__header">
+          <div class="summary-modal__title">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            <h3>Mission Request Summary</h3>
+          </div>
+          <button type="button" class="close-btn" (click)="closeSummary()" aria-label="Close summary">
+            ✕
+          </button>
+        </div>
+
+        <div class="summary-modal__body">
+          <div class="formal-declaration">
+            <div class="declaration-item">
+              <span class="label">I, the undersigned:</span>
+              <strong class="value">{{ currentUser()?.name }} {{ currentUser()?.surname }}</strong>
+            </div>
+            <div class="declaration-item">
+              <span class="label">Fiscal Code:</span>
+              <strong class="value">{{ currentUser()?.fiscalCode || 'N/A' }}</strong>
+            </div>
+            <div class="declaration-item">
+              <span class="label">Department:</span>
+              <strong class="value">{{ currentUser()?.department || 'N/A' }}</strong>
+            </div>
+            <div class="declaration-item">
+              <span class="label">Position / Role:</span>
+              <strong class="value">{{ formatEmploymentLevel(currentUser()?.employmentLevel) }}</strong>
+            </div>
+          </div>
+
+          <div class="formal-request-heading">
+            <h4>REQUESTS</h4>
+            <p>authorization to carry out the mission to:</p>
+            <div class="destination-highlight">
+               {{ missionForm.get('destination')?.value }}
+            </div>
+          </div>
+
+          <div class="mission-summary-list">
+            <div class="summary-row">
+              <span class="summary-label">Mission Type:</span>
+              <span class="summary-value">{{ getMissionTypeLabel() }}</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">Subject / Purpose:</span>
+              <span class="summary-value">{{ missionForm.get('subject')?.value }}</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">Schedule / Period:</span>
+              <span class="summary-value">
+                From <strong>{{ missionForm.get('startDate')?.value }}</strong> ({{ missionForm.get('startTime')?.value || '08:00' }})
+                to <strong>{{ missionForm.get('endDate')?.value }}</strong> ({{ missionForm.get('endTime')?.value || '20:00' }})
+              </span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">Estimated Cost:</span>
+              <span class="summary-value cost-highlight">€ {{ missionForm.get('estimatedCost')?.value }}</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">Funding Source:</span>
+              <span class="summary-value">
+                @if (fundSource() === 'self') {
+                  <span class="fund-status fund-status--self">Personal Academic Fund (Self)</span>
+                } @else {
+                  <span class="fund-status fund-status--other">External Manager {{ missionForm.get('fundManagerInput')?.value ? '(' + missionForm.get('fundManagerInput')?.value + ')' : '' }}</span>
+                }
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="summary-modal__footer">
+          <button type="button" class="btn btn--outline" (click)="closeSummary()" [disabled]="isSubmitting()">
+            Edit Details
+          </button>
+          <button type="button" class="btn btn--primary" (click)="confirmSubmit()" [disabled]="isSubmitting()">
+            @if (isSubmitting()) {
+              Submitting...
+            } @else {
+              Confirm & Submit
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  }
 </main>
