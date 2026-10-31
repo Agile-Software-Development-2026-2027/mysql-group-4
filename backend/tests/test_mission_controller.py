@@ -57,7 +57,8 @@ class TestMissionController:
         operation = getattr(self.service, name)
         result = await getattr(controller, name)(self.mission_id, self.user, self.service)
         assert result is operation.return_value
-        operation.assert_awaited_once_with(self.mission_id, self.user.id)
+        # Aggiunto None come terzo parametro atteso
+        operation.assert_awaited_once_with(self.mission_id, self.user.id, None)
 
     async def test_service_exception_propagates_to_global_handler(self):
         self.service.get_mission_by_id.side_effect = AccessDeniedError('Denied')
