@@ -13,7 +13,12 @@ describe('Topbar', () => {
       imports: [Topbar],
       providers: [
         provideHttpClient(),
-        provideRouter([])
+        provideRouter([
+          { path: 'home', component: Topbar },
+          { path: 'mission/new', component: Topbar },
+          { path: 'mission', component: Topbar },
+          { path: 'mission/approve', component: Topbar },
+        ])
       ],
     }).compileComponents();
 
