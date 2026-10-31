@@ -1,15 +1,4 @@
-<header class="topbar">
-  <a class="topbar__brand" routerLink="/home">
-    <span class="topbar_name">{{ siteName }}</span>
-    <span class="topbar_logo">
-      <img src="assets/image/logo/SOLO_logo_unical_white.svg" alt="Logo" />
-    </span>
-  </a>
-
-  <div class="topbar__actions">
-    <a routerLink="/home" class="btn btn--outline topbar-btn">Back to Home</a>
-  </div>
-</header>
+<app-topbar></app-topbar>
 
 <main class="container page-container">
   <div class="mission-layout" [class.has-map]="showMapPanel()">
