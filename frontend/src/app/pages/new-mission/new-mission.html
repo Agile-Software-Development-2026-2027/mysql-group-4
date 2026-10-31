@@ -1,0 +1,299 @@
+<header class="topbar">
+  <a class="topbar__brand" routerLink="/home">
+    <span class="topbar_name">{{ siteName }}</span>
+    <span class="topbar_logo">
+      <img src="assets/image/logo/SOLO_logo_unical_white.svg" alt="Logo" />
+    </span>
+  </a>
+
+  <div class="topbar__actions">
+    <a routerLink="/home" class="btn btn--outline topbar-btn">Back to Home</a>
+  </div>
+</header>
+
+<main class="page-container">
+  <div class="mission-layout" [class.has-map]="showMapPanel()">
+
+    @if (showMapPanel()) {
+      <aside class="map-sidebar">
+        <div class="map-sidebar__header">
+          <div class="map-sidebar__title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
+              <line x1="8" y1="2" x2="8" y2="18"></line>
+              <line x1="16" y1="6" x2="16" y2="22"></line>
+            </svg>
+            <h3>Location & Map</h3>
+          </div>
+          <button type="button" class="close-sidebar-btn" (click)="closeMapPanel()" aria-label="Close map panel">
+            ✕
+          </button>
+        </div>
+
+        <div class="map-sidebar__content">
+          <div class="map-placeholder-box">
+            <div class="map-placeholder-box__icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="10" r="3"></circle>
+                <path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z"></path>
+              </svg>
+            </div>
+            <h4>Interactive Map View</h4>
+            <p>
+              [Placeholder] la mappa la piazziamo qui :)
+            </p>
+          </div>
+        </div>
+      </aside>
+    }
+
+    <div class="card mission-card">
+    <div class="card-header">
+      <h2>Create New Mission</h2>
+      <p class="subtitle">
+        Fill out the details below to request a new mission for academic, research, or training purposes.
+      </p>
+    </div>
+
+    @if (successMessage()) {
+      <div class="alert alert--success" role="alert">
+        <div class="alert-content">
+          <strong>Success!</strong> {{ successMessage() }}
+        </div>
+        <div class="alert-actions">
+          <button type="button" class="btn btn--small" (click)="resetForm()">Create Another</button>
+          <a routerLink="/home" class="btn btn--outline btn--small">Return to Home</a>
+        </div>
+      </div>
+    }
+
+    <form [formGroup]="missionForm" (ngSubmit)="onSubmit()" novalidate>
+      <div class="form-group">
+        <label for="missionType">Mission Type *</label>
+        <select
+          id="missionType"
+          formControlName="missionType"
+          class="form-control"
+          [class.is-invalid]="isFieldInvalid('missionType')"
+        >
+          @for (type of missionTypes; track type.value) {
+            <option [value]="type.value">{{ type.label }}</option>
+          }
+        </select>
+        @if (isFieldInvalid('missionType')) {
+          <div class="form-error">Mission type is required.</div>
+        }
+      </div>
+
+      <div class="form-group">
+        <label for="subject">Subject / Purpose Details *</label>
+        <textarea
+          id="subject"
+          formControlName="subject"
+          class="form-control multiline-subject"
+          [class.is-invalid]="isFieldInvalid('subject')"
+          rows="4"
+          maxlength="250"
+          placeholder="Describe the purpose, topic, or agenda of the mission (up to 250 characters)..."
+        ></textarea>
+        <div class="char-counter">
+          <span>{{ missionForm.get('subject')?.value?.length || 0 }} / 250 characters</span>
+        </div>
+        @if (isFieldInvalid('subject')) {
+          <div class="form-error">
+            @if (missionForm.get('subject')?.hasError('required')) {
+              Subject is required.
+            } @else if (missionForm.get('subject')?.hasError('minlength')) {
+              Subject must be at least 3 characters.
+            } @else if (missionForm.get('subject')?.hasError('maxlength')) {
+              Subject cannot exceed 250 characters.
+            }
+          </div>
+        }
+      </div>
+
+      <div class="section-divider">
+        <h4>Schedule & Location</h4>
+      </div>
+
+      <div class="form-group">
+        <div class="label-with-action">
+          <label for="destination">Destination / Location *</label>
+          <button
+            type="button"
+            class="text-link-action"
+            (click)="showMapPanel() ? closeMapPanel() : openMapPanel()"
+          >
+            {{ showMapPanel() ? 'Hide Map' : 'Open Map Panel' }}
+          </button>
+        </div>
+        <input
+          id="destination"
+          type="text"
+          formControlName="destination"
+          class="form-control"
+          [class.is-invalid]="isFieldInvalid('destination')"
+          placeholder="e.g. Aula Magna, University of Calabria (click to open map)"
+          (focus)="openMapPanel()"
+        />
+        @if (isFieldInvalid('destination')) {
+          <div class="form-error">Destination is required.</div>
+        }
+      </div>
+
+      <div class="schedule-row">
+        <div class="form-group date-col">
+          <label for="startDate">Departure Date *</label>
+          <input
+            id="startDate"
+            type="date"
+            formControlName="startDate"
+            class="form-control"
+            [class.is-invalid]="isFieldInvalid('startDate')"
+          />
+          @if (isFieldInvalid('startDate')) {
+            <div class="form-error">Departure date is required.</div>
+          }
+        </div>
+        <div class="form-group time-col">
+          <label for="startTime">Departure Time <span class="optional-label">(optional)</span></label>
+          <input
+            id="startTime"
+            type="time"
+            formControlName="startTime"
+            class="form-control"
+          />
+        </div>
+      </div>
+
+      <div class="schedule-row">
+        <div class="form-group date-col">
+          <label for="endDate">Return Date *</label>
+          <input
+            id="endDate"
+            type="date"
+            formControlName="endDate"
+            class="form-control"
+            [class.is-invalid]="isFieldInvalid('endDate') || missionForm.hasError('invalidPeriod')"
+          />
+          @if (isFieldInvalid('endDate')) {
+            <div class="form-error">Return date is required.</div>
+          }
+        </div>
+        <div class="form-group time-col">
+          <label for="endTime">Return Time <span class="optional-label">(optional)</span></label>
+          <input
+            id="endTime"
+            type="time"
+            formControlName="endTime"
+            class="form-control"
+          />
+        </div>
+      </div>
+
+      @if (missionForm.hasError('invalidPeriod') && (missionForm.get('endDate')?.touched || isSubmitted())) {
+        <div class="form-error period-error">
+          {{ missionForm.getError('invalidPeriod') }}
+        </div>
+      }
+
+      <div class="section-divider">
+        <h4>Funding & Budget</h4>
+      </div>
+
+      <div class="form-group">
+        <label for="estimatedCost">Estimated Cost (€) *</label>
+        <input
+          id="estimatedCost"
+          type="number"
+          step="0.01"
+          min="0"
+          formControlName="estimatedCost"
+          class="form-control"
+          [class.is-invalid]="isFieldInvalid('estimatedCost')"
+          placeholder="e.g. 250.00"
+        />
+        @if (isFieldInvalid('estimatedCost')) {
+          <div class="form-error">
+            @if (missionForm.get('estimatedCost')?.hasError('required')) {
+              Estimated cost is required.
+            } @else if (missionForm.get('estimatedCost')?.hasError('min')) {
+              Estimated cost must be greater than or equal to 0.
+            }
+          </div>
+        }
+      </div>
+
+      <div class="fund-source-selector">
+        <label class="selector-title">Who manages the funds for this mission?</label>
+        <div class="button-toggle-group">
+          <button
+            type="button"
+            class="toggle-btn"
+            [class.active]="fundSource() === 'self'"
+            (click)="setFundSource('self')"
+          >
+            <svg class="toggle-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            <span>My Own Fund</span>
+          </button>
+          <button
+            type="button"
+            class="toggle-btn"
+            [class.active]="fundSource() === 'other'"
+            (click)="setFundSource('other')"
+          >
+            <svg class="toggle-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+            <span>Request Another Manager</span>
+          </button>
+        </div>
+      </div>
+
+      @if (fundSource() === 'self') {
+        <div class="fund-placeholder-box">
+          <div class="badge">Own Fund Selected</div>
+          <p>
+            You have selected your personal academic fund.
+          </p>
+          <div class="mock-component-notice">
+            <em>[Placeholder] Gestione fondo personale configurato qui :)</em>
+          </div>
+        </div>
+      } @else {
+        <div class="fund-placeholder-box">
+          <div class="badge">External Fund Manager</div>
+          <div class="form-group" style="margin-top: 12px; margin-bottom: 8px;">
+            <label for="fundManagerInput">Account Manager</label>
+            <input
+              id="fundManagerInput"
+              type="text"
+              formControlName="fundManagerInput"
+              class="form-control"
+              placeholder="Search or select user..."
+            />
+          </div>
+          <div class="mock-component-notice">
+            <em>[Placeholder] Selezione e gestione fondo altrui configurato qui :)</em>
+          </div>
+        </div>
+      }
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn--primary">
+          Submit Mission Request
+        </button>
+        <a routerLink="/home" class="btn btn--outline">
+          Cancel
+        </a>
+      </div>
+    </form>
+    </div>
+  </div>
+</main>

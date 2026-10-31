@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { Homepage } from './pages/homepage/homepage';
 import { Landingpage } from './pages/landingpage/landingpage';
 import { AuthComponent } from './pages/auth/auth';
+import { NewMissionComponent } from './pages/new-mission/new-mission';
 import { authGuard, guestGuard } from './core/guards';
 
 export const routes: Routes = [
@@ -9,5 +10,6 @@ export const routes: Routes = [
   { path: 'login', component: AuthComponent, canActivate: [guestGuard] },
   { path: 'register', component: AuthComponent, canActivate: [guestGuard] },
   { path: 'home', component: Homepage, canActivate: [authGuard] },
+  { path: 'mission/new', component: NewMissionComponent, canActivate: [authGuard] },
   { path: '**', redirectTo: '' },
 ];
