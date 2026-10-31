@@ -1,10 +1,6 @@
 $primary: #be0e01;
 $text-muted: #5b6f82;
 
-.page-container {
-  max-width: 1440px;
-}
-
 .mission-layout {
   display: flex;
   justify-content: center;
@@ -25,19 +21,14 @@ $text-muted: #5b6f82;
   margin: 0 auto;
   padding: 36px;
 
-  @media (max-width: 900px) {
-    max-width: 100%;
-  }
-  @media (max-width: 600px) {
-    padding: 20px 16px;
-  }
+  @media (max-width: 900px) { max-width: 100%; }
+  @media (max-width: 600px) { padding: 20px 16px; }
 }
 
 .card-header {
   margin-bottom: 24px;
   padding-bottom: 16px;
   border-bottom: 1px solid #edf2f7;
-
   h2 { margin: 0 0 6px; }
   .subtitle { margin: 0; color: $text-muted; font-size: 0.95rem; }
 }
@@ -46,20 +37,15 @@ $text-muted: #5b6f82;
   margin: 28px 0 16px;
   padding-bottom: 6px;
   border-bottom: 2px solid #edf2f7;
-
-  h4 {
-    margin: 0;
-    font-size: 1.15rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
+  h4 { margin: 0; font-size: 1.15rem; text-transform: uppercase; letter-spacing: 0.5px; }
 }
 
-/* Sidebar Mappa a destra */
 .map-sidebar {
   order: 2;
   flex: 1 1 560px;
   max-width: 640px;
+  height: fit-content;
+  align-self: flex-start;
   padding: 16px 20px;
   position: sticky;
   top: 88px;
@@ -161,7 +147,6 @@ $text-muted: #5b6f82;
   }
 }
 
-/* Funding selection toggle */
 .fund-source-selector {
   margin-bottom: 16px;
 
@@ -175,9 +160,7 @@ $text-muted: #5b6f82;
     display: flex;
     gap: 12px;
 
-    @media (max-width: 500px) {
-      flex-direction: column;
-    }
+    @media (max-width: 500px) { flex-direction: column; }
 
     .toggle-btn {
       flex: 1;
@@ -223,7 +206,6 @@ $text-muted: #5b6f82;
     color: $primary;
     border-radius: 12px;
     margin-bottom: 8px;
-    letter-spacing: 0.5px;
   }
 
   p { margin: 4px 0 8px; font-size: 0.9rem; color: $text-muted; }
@@ -234,8 +216,6 @@ $text-muted: #5b6f82;
     background: #edf2f7;
     padding: 8px 12px;
     border-radius: 4px;
-    display: inline-block;
-    width: 100%;
   }
 }
 

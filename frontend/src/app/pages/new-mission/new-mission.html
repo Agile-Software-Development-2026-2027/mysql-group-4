@@ -274,8 +274,12 @@
       }
 
       <div class="form-actions">
-        <button type="submit" class="btn btn--primary">
-          Submit Mission Request
+        <button type="submit" class="btn btn--primary" [disabled]="isSubmitting()">
+          @if (isSubmitting()) {
+            Submitting...
+          } @else {
+            Submit Mission Request
+          }
         </button>
         <a routerLink="/home" class="btn btn--outline">
           Cancel
