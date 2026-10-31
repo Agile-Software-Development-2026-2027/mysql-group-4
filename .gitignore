@@ -78,6 +78,10 @@ backend/.ruff_cache/
 backend/*.db
 backend/*.sqlite3
 
+# Database Migrations (Alembic)
+backend/app/alembic/
+backend/alembic.ini
+
 # ==========================================
 # Frontend: Angular & Node.js
 # ==========================================

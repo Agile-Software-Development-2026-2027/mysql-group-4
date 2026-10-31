@@ -10,7 +10,6 @@ from app.db.base import Base
 from app.core.enums import MissionStatus, MissionType
 
 
-
 if TYPE_CHECKING:
     from app.db.models import User
 
@@ -21,6 +20,7 @@ class Mission(Base):
         CheckConstraint("estimated_cost >= 0", name="ck_missions_estimated_cost_nonnegative"),
         CheckConstraint("length(subject) BETWEEN 1 AND 255", name="ck_missions_subject_length"),
         CheckConstraint("length(destination) >= 1", name="ck_missions_destination_nonempty"),
+        CheckConstraint("response IS NULL OR length(response) <= 255", name="ck_missions_response_length"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -41,6 +41,8 @@ class Mission(Base):
     estimated_cost: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False)
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False)
+
+    response: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     requester_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", name="missions_requester", ondelete="RESTRICT"),
