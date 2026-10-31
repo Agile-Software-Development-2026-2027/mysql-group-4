@@ -122,12 +122,11 @@ export class NewMissionComponent {
     const startsAt = `${formValues.startDate}T${this.normalizeTime(startTime)}`;
     const endsAt = `${formValues.endDate}T${this.normalizeTime(endTime)}`;
 
-    // Distinzione gestore fondi: 'self' (utente corrente) vs 'other' (placeholder)
     let fundManagerId: string;
     if (this.fundSource() === 'self') {
       fundManagerId = currentUser.id;
     } else {
-      // Placeholder per selezione altro gestore (sviluppato successivamente dai colleghi)
+      // Placeholder per selezione altro gestore
       const inputVal = formValues.fundManagerInput?.trim();
       fundManagerId = inputVal || '00000000-0000-0000-0000-000000000002';
     }

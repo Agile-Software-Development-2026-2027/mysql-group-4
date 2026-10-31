@@ -199,23 +199,25 @@ class TestMissionService:
         self.session.rollback.assert_awaited_once()
 
     async def test_accept_updates_state_and_audit_after_manager_check(self):
-        result = await self.service.accept_mission(self.mission.id, self.manager.id)
+        result = await self.service.accept_mission(self.mission.id, self.manager.id, "Approvo")
         self.repository.find_by_id_for_update.assert_awaited_once_with(self.mission.id)
         assert self.mission.status == MissionStatus.ACCEPTED
+        assert self.mission.response == "Approvo"
         assert self.mission.updated_by == self.manager.id
         assert result.status == MissionStatus.ACCEPTED
         self.session.commit.assert_awaited_once()
 
     async def test_reject_updates_state_and_audit(self):
-        await self.service.reject_mission(self.mission.id, self.manager.id)
+        await self.service.reject_mission(self.mission.id, self.manager.id, "Rifiuto")
         assert self.mission.status == MissionStatus.REJECTED
+        assert self.mission.response == "Rifiuto"
         assert self.mission.updated_by == self.manager.id
         self.repository.save.assert_awaited_once_with(self.mission)
         self.session.commit.assert_awaited_once()
 
     async def test_unauthorized_decision_does_not_change_state(self):
         with pytest.raises(AccessDeniedError):
-            await self.service.accept_mission(self.mission.id, self.user.id)
+            await self.service.accept_mission(self.mission.id, self.user.id, "Approvo")
         assert self.mission.status == MissionStatus.PENDING
         self.repository.save.assert_not_awaited()
         self.session.rollback.assert_awaited_once()
@@ -223,7 +225,7 @@ class TestMissionService:
     async def test_decided_mission_cannot_be_decided_again(self):
         self.mission.status = MissionStatus.ACCEPTED
         with pytest.raises(InvalidMissionStateError):
-            await self.service.reject_mission(self.mission.id, self.manager.id)
+            await self.service.reject_mission(self.mission.id, self.manager.id, "Rifiuto")
         assert self.mission.status == MissionStatus.ACCEPTED
         self.repository.save.assert_not_awaited()
         self.session.rollback.assert_awaited_once()

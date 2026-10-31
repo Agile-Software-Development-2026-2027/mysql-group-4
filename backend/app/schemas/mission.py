@@ -19,6 +19,7 @@ class MissionDTO(CamelModel):
     estimated_cost: Decimal
     starts_at: datetime
     ends_at: datetime
+    response: str | None = None
     requester_id: UUID
     fund_manager_id: UUID
     created_at: datetime
@@ -72,6 +73,6 @@ class MissionFilterDTO(CamelModel):
             ("ends_at", self.ends_at_from, self.ends_at_to),
         )
         for name, lower, upper in ranges:
-            if lower is not None and upper is not None and lower > upper:
+            if lower is not None and upper is not None and   lower > upper:
                 raise ValueError(f"Invalid {name} range: lower bound exceeds upper bound")
         return self
