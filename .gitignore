@@ -119,3 +119,6 @@ tests/**/__pycache__/
 tests/**/*.py[cod]
 
 .pytest_cache/
+
+#file caricati ed usati nei test
+uploads/
