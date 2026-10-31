@@ -20,7 +20,7 @@ async def greeting():
 async def get_current_user_profile(user: User = Depends(current_active_user)):
     return user
 
-@user_router.get("/fund-managers", response_model=List[UserRead], status_code=status.HTTP_200_OK)
+@user_router.get("/users/fund-managers", response_model=List[UserRead], status_code=status.HTTP_200_OK)
 async def get_fund_managers(session: AsyncSession=Depends(get_async_session)):
     result=await session.execute(select(User).where(User.is_active==True))
     return result.scalars().all()
