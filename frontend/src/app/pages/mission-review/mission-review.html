@@ -2,8 +2,8 @@
   @if (!isDetailView) {
     <div class="dashboard-header">
       <div class="header-text">
-        <h1>Gestione Fondi Missioni</h1>
-        <p>Clicca sulle categorie per espanderle e seleziona una richiesta per visualizzarne il referto.</p>
+        <h1>Mission Funds Management</h1>
+        <p>Click on the categories to expand them and select a request to view its details.</p>
       </div>
     </div>
 
@@ -11,7 +11,7 @@
       <div class="accordion-section" [class.is-open]="activeSection === 'pending'">
         <button class="accordion-header pending" (click)="toggleSection('pending')">
           <div class="header-title">
-            <h2>Da Approvare (In Coda)</h2>
+            <h2>Pending Approval</h2>
             <span class="count-badge pending">{{ pendingMissions.length }}</span>
           </div>
           <span class="chevron"></span>
@@ -23,10 +23,10 @@
               <div class="list-card status-pending" (click)="openDetail(mission)">
                 <div class="card-info">
                   <div class="title-row">
-                    <span class="badge pending">Da Valutare</span>
+                    <span class="badge pending">Pending</span>
                     <h3>{{ mission.subject }}</h3>
                   </div>
-                  <p><strong>Richiedente ID:</strong> {{ mission.requesterId }} &nbsp;&bull;&nbsp; <strong>Data:</strong> {{ mission.startsAt | date:'dd/MM/yyyy' }} &nbsp;&bull;&nbsp; <strong>Costo stimato:</strong> € {{ mission.estimatedCost | number:'1.2-2' }}</p>
+                  <p><strong>Requester ID:</strong> {{ mission.requesterId }} &nbsp;&bull;&nbsp; <strong>Date:</strong> {{ mission.startsAt | date:'dd/MM/yyyy' }} &nbsp;&bull;&nbsp; <strong>Estimated cost:</strong> € {{ mission.estimatedCost | number:'1.2-2' }}</p>
                 </div>
               </div>
             }
@@ -37,7 +37,7 @@
       <div class="accordion-section" [class.is-open]="activeSection === 'approved'">
         <button class="accordion-header approved" (click)="toggleSection('approved')">
           <div class="header-title">
-            <h2>Missioni Approvate</h2>
+            <h2>Approved Missions</h2>
             <span class="count-badge approved">{{ approvedMissions.length }}</span>
           </div>
           <span class="chevron"></span>
@@ -49,10 +49,10 @@
               <div class="list-card status-approved" (click)="openDetail(mission)">
                 <div class="card-info">
                   <div class="title-row">
-                    <span class="badge approved">Approvata</span>
+                    <span class="badge approved">Approved</span>
                     <h3>{{ mission.subject }}</h3>
                   </div>
-                  <p><strong>Richiedente ID:</strong> {{ mission.requesterId }} &nbsp;&bull;&nbsp; <strong>Data:</strong> {{ mission.startsAt | date:'dd/MM/yyyy' }} &nbsp;&bull;&nbsp; <strong>Costo stimato:</strong> € {{ mission.estimatedCost | number:'1.2-2' }}</p>
+                  <p><strong>Requester ID:</strong> {{ mission.requesterId }} &nbsp;&bull;&nbsp; <strong>Date:</strong> {{ mission.startsAt | date:'dd/MM/yyyy' }} &nbsp;&bull;&nbsp; <strong>Estimated cost:</strong> € {{ mission.estimatedCost | number:'1.2-2' }}</p>
                 </div>
               </div>
             }
@@ -63,7 +63,7 @@
       <div class="accordion-section" [class.is-open]="activeSection === 'rejected'">
         <button class="accordion-header rejected" (click)="toggleSection('rejected')">
           <div class="header-title">
-            <h2>Missioni Rifiutate</h2>
+            <h2>Rejected Missions</h2>
             <span class="count-badge rejected">{{ rejectedMissions.length }}</span>
           </div>
           <span class="chevron"></span>
@@ -75,10 +75,10 @@
               <div class="list-card status-rejected" (click)="openDetail(mission)">
                 <div class="card-info">
                   <div class="title-row">
-                    <span class="badge rejected">Rifiutata</span>
+                    <span class="badge rejected">Rejected</span>
                     <h3>{{ mission.subject }}</h3>
                   </div>
-                  <p><strong>Richiedente ID:</strong> {{ mission.requesterId }} &nbsp;&bull;&nbsp; <strong>Data:</strong> {{ mission.startsAt | date:'dd/MM/yyyy' }} &nbsp;&bull;&nbsp; <strong>Costo stimato:</strong> € {{ mission.estimatedCost | number:'1.2-2' }}</p>
+                  <p><strong>Requester ID:</strong> {{ mission.requesterId }} &nbsp;&bull;&nbsp; <strong>Date:</strong> {{ mission.startsAt | date:'dd/MM/yyyy' }} &nbsp;&bull;&nbsp; <strong>Estimated cost:</strong> € {{ mission.estimatedCost | number:'1.2-2' }}</p>
                 </div>
               </div>
             }
@@ -91,34 +91,34 @@
       <div class="detail-wrapper">
         <section class="card detail-card">
           <div class="detail-main-header">
-            <h1>Referto Missione</h1>
-            <p class="subtitle">Analisi dettagliata della richiesta e modulo di delibera</p>
+            <h1>Mission Report</h1>
+            <p class="subtitle">Detailed analysis of the request and decision form</p>
           </div>
 
           <div class="detail-box">
             <div class="detail-grid">
               <div class="detail-item full-width">
-                <span class="label">Oggetto della Trasferta</span>
+                <span class="label">Mission Subject</span>
                 <span class="value">{{ selectedMission.subject }}</span>
               </div>
               <div class="detail-item">
-                <span class="label">Richiedente ID</span>
+                <span class="label">Requester ID</span>
                 <span class="value">{{ selectedMission.requesterId }}</span>
               </div>
               <div class="detail-item">
-                <span class="label">Destinazione</span>
+                <span class="label">Destination</span>
                 <span class="value">{{ selectedMission.destination }}</span>
               </div>
               <div class="detail-item">
-                <span class="label">Data Inizio</span>
+                <span class="label">Start Date</span>
                 <span class="value">{{ selectedMission.startsAt | date:'dd/MM/yyyy' }}</span>
               </div>
               <div class="detail-item">
-                <span class="label">Data Fine</span>
+                <span class="label">End Date</span>
                 <span class="value">{{ selectedMission.endsAt | date:'dd/MM/yyyy' }}</span>
               </div>
               <div class="detail-item highlight-cost">
-                <span class="label">Costo Stimato</span>
+                <span class="label">Estimated Cost</span>
                 <span class="value">€ {{ selectedMission.estimatedCost | number:'1.2-2' }}</span>
               </div>
             </div>
@@ -128,24 +128,24 @@
 
           <div class="decision-form">
             <div class="form-header">
-              <h3>Decisione del Responsabile</h3>
-              <p>Utilizza il campo sottostante per inserire eventuali note, raccomandazioni o motivare un rifiuto.</p>
+              <h3>Manager Decision</h3>
+              <p>Use the field below to enter any notes, recommendations, or reasons for rejection.</p>
             </div>
 
-            <label for="managerNotes">Note e motivazioni:</label>
-            <textarea #managerNotes id="managerNotes" rows="5"
-                      placeholder="Es. 'Budget esaurito' oppure 'Procedi pure ma scegli un hotel più economico...'"
+            <label for="managerNotes">Notes and reasons:</label>
+            <textarea class="form-control" #managerNotes id="managerNotes" rows="5"
+                      placeholder="E.g., 'Budget exhausted' or 'Proceed but choose a cheaper hotel...'"
                       [value]="selectedMission.response || ''"
                       [readonly]="selectedMission.status !== 'PENDING'">
             </textarea>
 
             <div class="action-buttons">
-              <button class="btn btn-secondary" (click)="closeDetail()">&larr; Torna indietro</button>
+              <button class="btn btn--outline" (click)="closeDetail()">&larr; Go back</button>
 
               @if (selectedMission.status === 'PENDING') {
                 <div class="primary-actions">
-                  <button class="btn btn-danger" type="button" (click)="reject(selectedMission.id, managerNotes.value)">Rifiuta Missione</button>
-                  <button class="btn btn-success" type="button" (click)="accept(selectedMission.id, managerNotes.value)">Approva Missione</button>
+                  <button class="btn btn--danger" type="button" (click)="reject(selectedMission.id, managerNotes.value)">Reject Mission</button>
+                  <button class="btn btn--success" type="button" (click)="accept(selectedMission.id, managerNotes.value)">Approve Mission</button>
                 </div>
               }
             </div>
