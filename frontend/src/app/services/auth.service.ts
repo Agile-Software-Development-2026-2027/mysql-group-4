@@ -4,7 +4,7 @@ import { Router } from '@angular/router';
 import { Observable, catchError, finalize, of, switchMap, tap } from 'rxjs';
 
 import { API_CONFIG } from '../core/config/api.config';
-import { LoginRequest, User, UserCreate } from '../core/models';
+import { ForgotPasswordRequest, LoginRequest, ResetPasswordRequest, User, UserCreate } from '../core/models';
 
 @Injectable({
   providedIn: 'root',
@@ -82,6 +82,22 @@ export class AuthService {
           this._isLoading.set(false);
         })
       );
+  }
+
+  forgotPassword(payload: ForgotPasswordRequest): Observable<void> {
+    this._isLoading.set(true);
+
+    return this.http
+      .post<void>(API_CONFIG.endpoints.auth.forgotPassword, payload, { withCredentials: true, })
+      .pipe(finalize(() => { this._isLoading.set(false); }));
+  }
+
+  resetPassword(payload: ResetPasswordRequest): Observable<void> {
+    this._isLoading.set(true);
+
+    return this.http
+      .post<void>(API_CONFIG.endpoints.auth.resetPassword, payload, { withCredentials: true, })
+      .pipe(finalize(() => { this._isLoading.set(false); }));
   }
 
   logout(): Observable<void> {
