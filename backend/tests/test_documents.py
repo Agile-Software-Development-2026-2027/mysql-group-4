@@ -32,6 +32,8 @@ async def test_upload_pdf_document_success(client: AsyncClient):
     assert data["filename"]=="document.pdf"
     assert data["mission_id"]==str(mission_id)
     assert "id" in data
+    assert "created_at" in data
+    assert "created_by" in data
 
 @pytest.mark.asyncio
 async def test_upload_non_pdf_fails(client: AsyncClient):
