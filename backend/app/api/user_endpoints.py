@@ -21,6 +21,13 @@ async def get_current_user_profile(user: User = Depends(current_active_user)):
     return user
 
 @user_router.get("/users/fund-managers", response_model=List[UserRead], status_code=status.HTTP_200_OK)
-async def get_fund_managers(session: AsyncSession=Depends(get_async_session)):
-    result=await session.execute(select(User).where(User.is_active==True))
+async def get_fund_managers(session: AsyncSession=Depends(get_async_session), user: User=Depends(current_active_user)):
+    ########################################################################################################
+    #DECOMMENTARE APPENA SARA CREATA L'ENTITA FUND
+    #stmt=(select(User).join(Fund, Fund.responsible_fc==User.id).where(User.is_active==True).distinct())
+
+    #TOGLIERE APPENA SARA CREATA L'ENTITA FUND
+    stmt = select(User).where(User.is_active == True)
+    ########################################################################################################
+    result=await session.execute(stmt)
     return result.scalars().all()

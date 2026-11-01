@@ -10,25 +10,30 @@ from app.db.models import User
 
 UPLOAD_DIR=Path("uploads/missions")
 
-async def _get_mission_and_check_permission(mission_id: uuid.UUID, user: User, session: AsyncSession,)->Mission:
+async def _get_mission_and_check_permission(mission_id: uuid.UUID, user: User, session: AsyncSession, action: str="read")->Mission:
     result=await session.execute(select(Mission).where(Mission.id==mission_id))
     mission=result.scalar_one_or_none()
     if not mission:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Mission not foud."
+            detail="Mission not found.",
         )
     is_requester=mission.requester_id==user.id
+    is_fund_manager=getattr(mission, "fund_manager_id", None)==user.id
     is_superuser=getattr(user, "is_superuser", False)
-    if not(is_requester or is_superuser):
+    if action=="write":
+        allowed=is_requester or is_superuser
+    else:
+        allowed=is_requester or is_fund_manager or is_superuser
+    if not allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="No permission."
+            detail="No permission.",
         )
     return mission
 
 async def save_mission_document(mission_id: uuid.UUID, file: UploadFile, user: User, session: AsyncSession)->MissionDocument:
-    await _get_mission_and_check_permission(mission_id, user, session)
+    await _get_mission_and_check_permission(mission_id, user, session, action="write")
     safe_original_filename=Path(file.filename).name if file.filename else "document.pdf"
     if file.content_type!="application/pdf" or not safe_original_filename.lower().endswith(".pdf"):
         raise HTTPException(
@@ -49,6 +54,6 @@ async def save_mission_document(mission_id: uuid.UUID, file: UploadFile, user: U
     return document
 
 async def get_mission_documents(mission_id: uuid.UUID, user: User, session: AsyncSession)->list[MissionDocument]:
-    await _get_mission_and_check_permission(mission_id, user, session)
+    await _get_mission_and_check_permission(mission_id, user, session, action="read")
     result=await session.execute(select(MissionDocument).where(MissionDocument.mission_id==mission_id))
     return list(result.scalars().all())
