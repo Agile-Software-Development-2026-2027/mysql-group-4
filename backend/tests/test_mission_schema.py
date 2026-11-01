@@ -29,7 +29,7 @@ class TestMissionDTO:
                 MissionCreateDTO(**self.values | changes)
 
     def test_client_cannot_supply_identity_state_or_audit(self):
-        for field in ('id', 'requester_id', 'status', 'created_by', 'updated_by', 'created_at', 'updated_at'):
+        for field in ('id', 'requester_id', 'status', 'created_by', 'updated_by', 'created_at', 'updated_at', 'response'):
             with pytest.raises(ValidationError):
                 MissionCreateDTO(**self.values | {field: str(uuid4())})
 
@@ -72,7 +72,7 @@ class TestMissionModelIntegration:
 
     def test_update_preserves_identity_requester_state_and_audit(self):
         mission = make_mission()
-        protected = {field: getattr(mission, field) for field in ('id', 'requester_id', 'status', 'created_by', 'created_at', 'updated_by', 'updated_at')}
+        protected = {field: getattr(mission, field) for field in ('id', 'requester_id', 'status', 'created_by', 'created_at', 'updated_by', 'updated_at', 'response')}
         data = MissionUpdateDTO(**make_create_data(subject='Updated', destination='Paris').model_dump())
         for field, value in data.model_dump(exclude_unset=True).items():
             setattr(mission, field, value)
