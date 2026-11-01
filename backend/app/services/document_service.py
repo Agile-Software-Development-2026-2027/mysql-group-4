@@ -47,7 +47,7 @@ async def save_mission_document(mission_id: uuid.UUID, file: UploadFile, user: U
     content=await file.read()
     async with await anyio.open_file(file_path, "wb") as f:
         await f.write(content)
-    document=MissionDocument(mission_id=mission_id, filename=safe_original_filename, file_path=str(file_path))
+    document=MissionDocument(mission_id=mission_id, filename=safe_original_filename, file_path=str(file_path), created_by=user.id)
     session.add(document)
     await session.commit()
     await session.refresh(document)

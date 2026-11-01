@@ -7,5 +7,6 @@ class MissionDocumentResponse(BaseModel):
     id: UUID
     mission_id: UUID
     filename: str
-    uploaded_at: datetime
+    created_at: datetime
+    created_by: UUID | None=None
     model_config=ConfigDict(from_attributes=True)
