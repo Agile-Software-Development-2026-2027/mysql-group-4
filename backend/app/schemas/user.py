@@ -1,5 +1,5 @@
 import uuid
-from pydantic import ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 from fastapi_users import schemas
 
@@ -36,3 +36,15 @@ class UserCreate(schemas.BaseUserCreate):
     @classmethod
     def normalize_fiscal_code(cls, v: str) -> str:
         return v.strip().upper() if v else v
+
+
+class UserUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=50, description="Nome dell'utente")
+    surname: str | None = Field(default=None, min_length=2, max_length=50, description="Cognome dell'utente")
+    department: str | None = Field(default=None, min_length=2, max_length=50, description="Dipartimento dell'utente")
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+

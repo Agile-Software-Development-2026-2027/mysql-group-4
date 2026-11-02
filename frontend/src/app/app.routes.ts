@@ -5,15 +5,17 @@ import { AuthComponent } from './pages/auth/auth';
 import { NewMissionComponent } from './pages/new-mission/new-mission';
 import { authGuard, guestGuard } from './core/guards';
 import { MissionReview } from './pages/mission-review/mission-review';
+import { SettingsComponent } from './pages/settings/settings';
 
 export const routes: Routes = [
   { path: '', component: Landingpage, canActivate: [guestGuard] },
   { path: 'login', component: AuthComponent, canActivate: [guestGuard] },
   { path: 'register', component: AuthComponent, canActivate: [guestGuard] },
   { path: 'forgot-password', component: AuthComponent, canActivate: [guestGuard] },
-  { path: 'reset-password', component: AuthComponent, canActivate: [guestGuard] },
+  { path: 'reset-password', component: AuthComponent },
   { path: 'home', component: Homepage, canActivate: [authGuard] },
   { path: 'mission/new', component: NewMissionComponent, canActivate: [authGuard] },
   { path: 'missionreview', component: MissionReview },
+  { path: 'settings', component: SettingsComponent, canActivate: [authGuard] },
   { path: '**', redirectTo: '' }
 ];
