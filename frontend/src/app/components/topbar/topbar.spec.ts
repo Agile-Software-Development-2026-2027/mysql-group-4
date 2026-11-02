@@ -16,8 +16,10 @@ describe('Topbar', () => {
         provideRouter([
           { path: 'home', component: Topbar },
           { path: 'mission/new', component: Topbar },
-          { path: 'mission', component: Topbar },
+          { path: 'mission/review', component: Topbar },
           { path: 'mission/approve', component: Topbar },
+          { path: 'fund', component: Topbar },
+          { path: 'fund/add', component: Topbar },
         ])
       ],
     }).compileComponents();

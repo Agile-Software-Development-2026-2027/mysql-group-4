@@ -13,6 +13,12 @@ class MissionNotFoundError(ResourceNotFoundError):
         super().__init__("Mission", mission_id)
 
 
+class FundNotFoundError(ResourceNotFoundError):
+    def __init__(self, fund_id: UUID):
+        self.fund_id = fund_id
+        super().__init__("Fund", fund_id)
+
+
 class UserNotFoundError(ResourceNotFoundError):
     def __init__(self, user_id: UUID):
         self.user_id = user_id
@@ -29,3 +35,9 @@ class InvalidMissionStateError(ValueError):
 
 class InvalidMissionPeriodError(ValueError):
     pass
+
+
+class FundLockedError(Exception):
+    def __init__(self, fund_id: UUID):
+        self.fund_id = fund_id
+        super().__init__(f"Fund {fund_id} is already used by another mission")

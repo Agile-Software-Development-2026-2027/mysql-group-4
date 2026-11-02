@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.core.exceptions import (
-    AccessDeniedError, InvalidMissionPeriodError, InvalidMissionStateError,
+    AccessDeniedError, FundLockedError, InvalidMissionPeriodError, InvalidMissionStateError,
     ResourceNotFoundError,
 )
 from app.schemas.service_error import ServiceError
@@ -31,6 +31,10 @@ async def invalid_mission_handler(request: Request, exc: ValueError) -> JSONResp
     return _error_response(request, 400, str(exc))
 
 
+async def fund_locked_handler(request: Request, exc: FundLockedError) -> JSONResponse:
+    return _error_response(request, 409, str(exc))
+
+
 async def unexpected_error_handler(request: Request, exc: Exception) -> JSONResponse:
     logger.error("Unhandled error for %s", request.url.path,
                  exc_info=(type(exc), exc, exc.__traceback__))
@@ -42,4 +46,5 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(AccessDeniedError, access_denied_handler)
     app.add_exception_handler(InvalidMissionPeriodError, invalid_mission_handler)
     app.add_exception_handler(InvalidMissionStateError, invalid_mission_handler)
+    app.add_exception_handler(FundLockedError, fund_locked_handler)
     app.add_exception_handler(Exception, unexpected_error_handler)

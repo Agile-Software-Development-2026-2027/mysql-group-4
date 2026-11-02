@@ -2,11 +2,12 @@ import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MissionService } from '../../services/mission.service';
 import { MissionDTO } from '../../core/models';
+import { Topbar } from '../../components/topbar/topbar';
 
 @Component({
   selector: 'app-mission-review',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, Topbar],
   templateUrl: './mission-review.html',
   styleUrls: ['./mission-review.scss']
 })

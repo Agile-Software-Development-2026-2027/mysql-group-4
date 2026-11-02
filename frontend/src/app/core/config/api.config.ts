@@ -17,5 +17,8 @@ export const API_CONFIG = {
       create: `${environment.apiBaseUrl}/api/v1/missions`,
       toApprove: `${environment.apiBaseUrl}/api/v1/missions/to-approve/filter`,
     },
+    funds: {
+      base: `${environment.apiBaseUrl}/api/v1/funds`,
+    },
   },
 } as const;
