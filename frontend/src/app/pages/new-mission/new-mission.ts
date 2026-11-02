@@ -3,11 +3,10 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, AbstractContro
 import { Router, RouterLink } from '@angular/router';
 import { Topbar } from '../../components/topbar/topbar';
 
-export enum MissionType {
-  RESEARCH = 'RESEARCH',
-  TRAINING = 'TRAINING',
-  TEACHING = 'TEACHING',
-}
+import { ToastService } from '../../services/toast.service';
+import { MissionService } from '../../services/mission.service';
+import { AuthService } from '../../services/auth.service';
+import { MissionCreatePayload, MissionType } from '../../core/models';
 
 @Component({
   selector: 'app-new-mission',
@@ -19,10 +18,16 @@ export enum MissionType {
 export class NewMissionComponent {
   private fb = inject(FormBuilder);
   private router = inject(Router);
+  private toastService = inject(ToastService);
+  private missionService = inject(MissionService);
+  private authService = inject(AuthService);
 
   siteName = 'MYSOL';
   isSubmitted = signal(false);
-  successMessage = signal<string | null>(null);
+  isSubmitting = signal(false);
+  showSummaryModal = signal(false);
+
+  currentUser = this.authService.currentUser;
 
   missionTypes = [
     { value: MissionType.RESEARCH, label: 'Research (Ricerca)' },
@@ -46,7 +51,7 @@ export class NewMissionComponent {
       estimatedCost: [null, [Validators.required, Validators.min(0)]],
       fundManagerInput: [''],
     },
-    { validators: [this.datePeriodValidator] }
+    { validators: [this.datePeriodValidator.bind(this)] }
   );
 
   setFundSource(source: 'self' | 'other'): void {
@@ -67,15 +72,15 @@ export class NewMissionComponent {
   datePeriodValidator(control: AbstractControl): ValidationErrors | null {
     const startDateVal = control.get('startDate')?.value;
     const endDateVal = control.get('endDate')?.value;
-    const startTimeVal = control.get('startTime')?.value || '00:00';
-    const endTimeVal = control.get('endTime')?.value || '23:59';
+    const startTimeVal = control.get('startTime')?.value || '08:00';
+    const endTimeVal = control.get('endTime')?.value || '20:00';
 
     if (!startDateVal || !endDateVal) {
       return null;
     }
 
-    const start = new Date(`${startDateVal}T${startTimeVal}`);
-    const end = new Date(`${endDateVal}T${endTimeVal}`);
+    const start = new Date(`${startDateVal}T${this.normalizeTime(startTimeVal)}`);
+    const end = new Date(`${endDateVal}T${this.normalizeTime(endTimeVal)}`);
 
     if (end <= start) {
       return { invalidPeriod: 'End date and time must be after the start date and time.' };
@@ -83,9 +88,34 @@ export class NewMissionComponent {
     return null;
   }
 
+  private normalizeTime(timeVal?: string): string {
+    if (!timeVal) return '00:00:00';
+    const parts = timeVal.split(':');
+    const hh = parts[0].padStart(2, '0');
+    const mm = (parts[1] || '00').padStart(2, '0');
+    const ss = (parts[2] || '00').padStart(2, '0');
+    return `${hh}:${mm}:${ss}`;
+  }
+
   isFieldInvalid(fieldName: string): boolean {
     const field = this.missionForm.get(fieldName);
     return !!(field && field.invalid && (field.touched || this.isSubmitted()));
+  }
+
+  formatEmploymentLevel(level?: string | null): string {
+    if (!level) return 'Not specified';
+    const map: Record<string, string> = {
+      ricercatore: 'Researcher (Ricercatore)',
+      professore_associato: 'Associate Professor (Professore Associato)',
+      professore_ordinario: 'Full Professor (Professore Ordinario)',
+    };
+    return map[level] || level;
+  }
+
+  getMissionTypeLabel(): string {
+    const val = this.missionForm.get('missionType')?.value;
+    const found = this.missionTypes.find((t) => t.value === val);
+    return found ? found.label : val;
   }
 
   onSubmit(): void {
@@ -96,32 +126,90 @@ export class NewMissionComponent {
       return;
     }
 
+    const user = this.authService.getUser();
+    if (!user) {
+      this.toastService.showError(
+        'You must be logged in to create a mission.',
+        'Authentication Required'
+      );
+      return;
+    }
+
+    // Apre il riepilogo in rilievo prima dell'invio definitivo
+    this.showSummaryModal.set(true);
+  }
+
+  closeSummary(): void {
+    this.showSummaryModal.set(false);
+  }
+
+  confirmSubmit(): void {
+    const currentUser = this.authService.getUser();
+    if (!currentUser) {
+      this.toastService.showError(
+        'You must be logged in to create a mission.',
+        'Authentication Required'
+      );
+      return;
+    }
+
     const formValues = this.missionForm.value;
 
-    const startsAtIso = `${formValues.startDate}T${formValues.startTime || '08:00'}:00`;
-    const endsAtIso = `${formValues.endDate}T${formValues.endTime || '20:00'}:00`;
+    const startTime = formValues.startTime || '08:00';
+    const endTime = formValues.endTime || '20:00';
+    const startsAt = `${formValues.startDate}T${this.normalizeTime(startTime)}`;
+    const endsAt = `${formValues.endDate}T${this.normalizeTime(endTime)}`;
 
-    const mockMissionPayload = {
+    // Distinzione gestore fondi: 'self' (utente corrente) vs 'other' (placeholder)
+    let fundManagerId: string;
+    if (this.fundSource() === 'self') {
+      fundManagerId = currentUser.id;
+    } else {
+      const inputVal = formValues.fundManagerInput?.trim();
+      fundManagerId = inputVal || '00000000-0000-0000-0000-000000000002';
+    }
+
+    const payload: MissionCreatePayload = {
       missionType: formValues.missionType,
-      subject: formValues.subject,
-      destination: formValues.destination,
-      estimatedCost: formValues.estimatedCost,
-      startsAt: startsAtIso,
-      endsAt: endsAtIso,
-      fundManagerId:
-        this.fundSource() === 'self'
-          ? '00000000-0000-0000-0000-000000000001'
-          : '00000000-0000-0000-0000-000000000002',
-      fundSourceMode: this.fundSource(),
+      subject: formValues.subject.trim(),
+      destination: formValues.destination.trim(),
+      estimatedCost: Math.round(Number(formValues.estimatedCost) * 100) / 100,
+      startsAt,
+      endsAt,
+      fundManagerId,
     };
 
-    console.log('[NewMission] Form submitted successfully (Mock Frontend Mode):', mockMissionPayload);
+    this.isSubmitting.set(true);
 
-    this.successMessage.set(
-      'Mission request created successfully! (Frontend simulated submission)'
-    );
+    this.missionService.createMission(payload).subscribe({
+      next: (_mission) => {
+        this.isSubmitting.set(false);
+        this.showSummaryModal.set(false);
+        this.toastService.showSuccess(
+          'Mission request created successfully!',
+          'Mission Submitted'
+        );
+        this.resetForm();
+        this.closeMapPanel();
+        this.router.navigate(['/home']);
+      },
+      error: (err) => {
+        this.isSubmitting.set(false);
+        let errorDetail = 'Failed to create mission. Please try again.';
+        if (err?.status === 0) {
+          errorDetail = 'Cannot reach backend server. Please check your connection.';
+        } else if (typeof err?.error?.detail === 'string') {
+          errorDetail = err.error.detail;
+        } else if (Array.isArray(err?.error?.detail) && err.error.detail.length > 0) {
+          errorDetail = err.error.detail.map((d: any) => d.msg || JSON.stringify(d)).join('; ');
+        } else if (err?.error?.message) {
+          errorDetail = err.error.message;
+        }
 
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+        this.toastService.showError(errorDetail, 'Submission Error');
+        console.error('[NewMission] Backend submission error:', err);
+      },
+    });
   }
 
   resetForm(): void {
@@ -137,7 +225,6 @@ export class NewMissionComponent {
       fundManagerInput: '',
     });
     this.isSubmitted.set(false);
-    this.successMessage.set(null);
     this.fundSource.set('self');
   }
 }
