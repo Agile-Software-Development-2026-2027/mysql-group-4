@@ -58,6 +58,24 @@ $topbar-height: 64px;
   }
 }
 
+.form-action-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -8px;
+  margin-bottom: 16px;
+}
+
+.auth-forgot-link {
+  font-size: 0.9rem;
+  color: #be0e01;
+  text-decoration: none;
+  font-weight: 600;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
 .uppercase-input {
   text-transform: uppercase;
 }

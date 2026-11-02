@@ -9,6 +9,8 @@ export const routes: Routes = [
   { path: '', component: Landingpage, canActivate: [guestGuard] },
   { path: 'login', component: AuthComponent, canActivate: [guestGuard] },
   { path: 'register', component: AuthComponent, canActivate: [guestGuard] },
+  { path: 'forgot-password', component: AuthComponent, canActivate: [guestGuard] },
+  { path: 'reset-password', component: AuthComponent, canActivate: [guestGuard] },
   { path: 'home', component: Homepage, canActivate: [authGuard] },
   { path: 'mission/new', component: NewMissionComponent, canActivate: [authGuard] },
   { path: '**', redirectTo: '' },
