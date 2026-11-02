@@ -14,13 +14,21 @@
 <main class="auth-wrapper">
   <div class="card auth-card">
     <div class="auth-header">
-      <h2>{{ isLoginMode() ? 'Sign In' : 'Create an Account' }}</h2>
+      <h2>
+        @switch (authMode()) {
+          @case ('login') { Sign In }
+          @case ('register') { Create an Account }
+          @case ('forgot-password') { Reset Password }
+          @case ('reset-password') { Set New Password }
+        }
+      </h2>
       <p class="auth-subtitle">
-        {{
-          isLoginMode()
-            ? 'Access your MySOL account to manage your missions.'
-            : 'Fill in your academic details to request an account.'
-        }}
+        @switch (authMode()) {
+          @case ('login') { Access your MySOL account to manage your missions. }
+          @case ('register') { Fill in your academic details to request an account. }
+          @case ('forgot-password') { Enter your institutional email to receive recovery instructions. }
+          @case ('reset-password') { Choose a new secure password for your account. }
+        }
       </p>
     </div>
 
@@ -39,7 +47,7 @@
     }
 
     <!-- ==================== LOGIN FORM ==================== -->
-    @if (isLoginMode()) {
+    @if (authMode() === 'login') {
       <form [formGroup]="loginForm" (ngSubmit)="onLoginSubmit()" novalidate>
         <div class="form-group">
           <label for="login-email">Institutional Email</label>
@@ -79,13 +87,17 @@
           }
         </div>
 
+        <div class="form-action-row">
+          <a routerLink="/forgot-password" class="auth-forgot-link">Forgot password?</a>
+        </div>
+
         <button type="submit" class="btn btn--block" [disabled]="isSubmitting()">
           {{ isSubmitting() ? 'Signing in...' : 'Sign In' }}
         </button>
 
         <div class="auth-switch">
           <span>Don't have an account yet? </span>
-          <button type="button" class="link-btn" (click)="switchMode(false)">
+          <button type="button" class="link-btn" (click)="switchMode('register')">
             Register here
           </button>
         </div>
@@ -93,7 +105,7 @@
     }
 
     <!-- ==================== REGISTRATION FORM ==================== -->
-    @if (!isLoginMode()) {
+    @if (authMode() === 'register') {
       <form [formGroup]="registerForm" (ngSubmit)="onRegisterSubmit()" novalidate>
         <div class="form-row">
           <div class="form-group">
@@ -104,7 +116,8 @@
               formControlName="name"
               class="form-control"
               [class.is-invalid]="isFieldInvalid('register', 'name')"
-              placeholder="First name"
+              placeholder="e.g., Mario"
+              autocomplete="given-name"
             />
             @if (isFieldInvalid('register', 'name')) {
               <div class="form-error">
@@ -112,8 +125,6 @@
                   First name is required.
                 } @else if (registerForm.get('name')?.hasError('minlength')) {
                   Must be at least 2 characters.
-                } @else if (registerForm.get('name')?.hasError('maxlength')) {
-                  Cannot exceed 50 characters.
                 }
               </div>
             }
@@ -127,7 +138,8 @@
               formControlName="surname"
               class="form-control"
               [class.is-invalid]="isFieldInvalid('register', 'surname')"
-              placeholder="Last name"
+              placeholder="e.g., Rossi"
+              autocomplete="family-name"
             />
             @if (isFieldInvalid('register', 'surname')) {
               <div class="form-error">
@@ -135,8 +147,6 @@
                   Last name is required.
                 } @else if (registerForm.get('surname')?.hasError('minlength')) {
                   Must be at least 2 characters.
-                } @else if (registerForm.get('surname')?.hasError('maxlength')) {
-                  Cannot exceed 50 characters.
                 }
               </div>
             }
@@ -151,7 +161,7 @@
             formControlName="email"
             class="form-control"
             [class.is-invalid]="isFieldInvalid('register', 'email')"
-            placeholder="e.g., name.surname@unical.it"
+            placeholder="e.g., mario.rossi@unical.it"
             autocomplete="email"
           />
           @if (isFieldInvalid('register', 'email')) {
@@ -159,7 +169,7 @@
               @if (registerForm.get('email')?.hasError('required')) {
                 Email is required.
               } @else if (registerForm.get('email')?.hasError('email')) {
-                Please enter a valid email address.
+                Please enter a valid institutional email.
               }
             </div>
           }
@@ -173,7 +183,7 @@
             formControlName="password"
             class="form-control"
             [class.is-invalid]="isFieldInvalid('register', 'password')"
-            placeholder="Minimum 8 characters"
+            placeholder="At least 8 characters"
             autocomplete="new-password"
           />
           @if (isFieldInvalid('register', 'password')) {
@@ -188,14 +198,14 @@
         </div>
 
         <div class="form-group">
-          <label for="reg-fiscal-code">Italian Fiscal Code (Codice Fiscale)</label>
+          <label for="reg-fiscal-code">Fiscal Code (Codice Fiscale)</label>
           <input
             id="reg-fiscal-code"
             type="text"
             formControlName="fiscalCode"
             class="form-control uppercase-input"
             [class.is-invalid]="isFieldInvalid('register', 'fiscalCode')"
-            placeholder="e.g., RSSMRA85M01H501Z"
+            placeholder="e.g., RSSMRA80A01H501U"
             maxlength="16"
           />
           @if (isFieldInvalid('register', 'fiscalCode')) {
@@ -255,11 +265,120 @@
 
         <div class="auth-switch">
           <span>Already have an account? </span>
-          <button type="button" class="link-btn" (click)="switchMode(true)">
+          <button type="button" class="link-btn" (click)="switchMode('login')">
             Sign in
           </button>
         </div>
       </form>
+    }
+
+    <!-- ==================== FORGOT PASSWORD FORM ==================== -->
+    @if (authMode() === 'forgot-password') {
+      <form [formGroup]="forgotPasswordForm" (ngSubmit)="onForgotPasswordSubmit()" novalidate>
+        <div class="form-group">
+          <label for="forgot-email">Institutional Email</label>
+          <input
+            id="forgot-email"
+            type="email"
+            formControlName="email"
+            class="form-control"
+            [class.is-invalid]="isFieldInvalid('forgot', 'email')"
+            placeholder="e.g., name.surname@unical.it"
+            autocomplete="email"
+          />
+          @if (isFieldInvalid('forgot', 'email')) {
+            <div class="form-error">
+              @if (forgotPasswordForm.get('email')?.hasError('required')) {
+                Email is required.
+              } @else if (forgotPasswordForm.get('email')?.hasError('email')) {
+                Please enter a valid email address.
+              }
+            </div>
+          }
+        </div>
+
+        <button type="submit" class="btn btn--block" [disabled]="isSubmitting()">
+          {{ isSubmitting() ? 'Sending instructions...' : 'Send Reset Instructions' }}
+        </button>
+
+        <div class="auth-switch">
+          <span>Remember your password? </span>
+          <button type="button" class="link-btn" (click)="switchMode('login')">
+            Back to Sign In
+          </button>
+        </div>
+      </form>
+    }
+
+    <!-- ==================== RESET PASSWORD FORM ==================== -->
+    @if (authMode() === 'reset-password') {
+      @if (tokenError()) {
+        <div class="alert alert--danger" role="alert">
+          {{ tokenError() }}
+        </div>
+        <div class="auth-switch">
+          <button type="button" class="btn btn--block" (click)="switchMode('forgot-password')">
+            Request New Reset Link
+          </button>
+        </div>
+      } @else {
+        <form [formGroup]="resetPasswordForm" (ngSubmit)="onResetPasswordSubmit()" novalidate>
+          <div class="form-group">
+            <label for="reset-password">New Password</label>
+            <input
+              id="reset-password"
+              type="password"
+              formControlName="password"
+              class="form-control"
+              [class.is-invalid]="isFieldInvalid('reset', 'password')"
+              placeholder="Enter at least 8 characters"
+              autocomplete="new-password"
+            />
+            @if (isFieldInvalid('reset', 'password')) {
+              <div class="form-error">
+                @if (resetPasswordForm.get('password')?.hasError('required')) {
+                  Password is required.
+                } @else if (resetPasswordForm.get('password')?.hasError('minlength')) {
+                  Password must be at least 8 characters long.
+                }
+              </div>
+            }
+          </div>
+
+          <div class="form-group">
+            <label for="reset-confirm-password">Confirm New Password</label>
+            <input
+              id="reset-confirm-password"
+              type="password"
+              formControlName="confirmPassword"
+              class="form-control"
+              [class.is-invalid]="
+                isFieldInvalid('reset', 'confirmPassword') ||
+                (resetPasswordForm.hasError('passwordMismatch') && resetPasswordForm.get('confirmPassword')?.touched)
+              "
+              placeholder="Re-enter your new password"
+              autocomplete="new-password"
+            />
+            @if (resetPasswordForm.get('confirmPassword')?.touched) {
+              @if (resetPasswordForm.get('confirmPassword')?.hasError('required')) {
+                <div class="form-error">Please confirm your password.</div>
+              } @else if (resetPasswordForm.hasError('passwordMismatch')) {
+                <div class="form-error">Passwords do not match.</div>
+              }
+            }
+          </div>
+
+          <button type="submit" class="btn btn--block" [disabled]="isSubmitting()">
+            {{ isSubmitting() ? 'Updating password...' : 'Update Password' }}
+          </button>
+
+          <div class="auth-switch">
+            <button type="button" class="link-btn" (click)="switchMode('login')">
+              Back to Sign In
+            </button>
+          </div>
+        </form>
+      }
     }
   </div>
 </main>
