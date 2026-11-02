@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { Topbar } from '../../components/topbar/topbar';
@@ -6,7 +6,14 @@ import { Topbar } from '../../components/topbar/topbar';
 import { ToastService } from '../../services/toast.service';
 import { MissionService } from '../../services/mission.service';
 import { AuthService } from '../../services/auth.service';
+import { FundService } from '../../services/fund.service';
 import { MissionCreatePayload, MissionType } from '../../core/models';
+
+interface ManagerOption {
+  id: string;
+  name: string;
+  department: string;
+}
 
 @Component({
   selector: 'app-new-mission',
@@ -21,6 +28,7 @@ export class NewMissionComponent {
   private toastService = inject(ToastService);
   private missionService = inject(MissionService);
   private authService = inject(AuthService);
+  private fundService = inject(FundService);
 
   siteName = 'MYSOL';
   isSubmitted = signal(false);
@@ -37,6 +45,19 @@ export class NewMissionComponent {
 
   fundSource = signal<'self' | 'other'>('self');
 
+  managerOptions = signal<ManagerOption[]>([]);
+  isLoadingManagers = signal(false);
+
+  managerQuery = signal('');
+  showManagerSuggestions = signal(false);
+  activeSuggestion = signal(0);
+  filteredManagers = computed(() => {
+    const query = this.managerQuery().trim().toLowerCase();
+    return this.managerOptions().filter((option) =>
+      `${option.name} ${option.department}`.toLowerCase().includes(query)
+    );
+  });
+
   showMapPanel = signal(false);
 
   missionForm: FormGroup = this.fb.group(
@@ -49,16 +70,91 @@ export class NewMissionComponent {
       endDate: ['', [Validators.required]],
       endTime: [''],
       estimatedCost: [null, [Validators.required, Validators.min(0)]],
-      fundManagerInput: [''],
+      fundManagerId: [''],
     },
     { validators: [this.datePeriodValidator.bind(this)] }
   );
 
   setFundSource(source: 'self' | 'other'): void {
     this.fundSource.set(source);
+    const managerControl = this.missionForm.get('fundManagerId');
     if (source === 'self') {
-      this.missionForm.get('fundManagerInput')?.setValue('');
+      managerControl?.setValue('');
+      managerControl?.clearValidators();
+      this.managerQuery.set('');
+      this.showManagerSuggestions.set(false);
+    } else {
+      managerControl?.setValidators(Validators.required);
+      this.loadManagerOptions();
     }
+    managerControl?.updateValueAndValidity();
+  }
+
+  selectedManager(): ManagerOption | undefined {
+    const managerId = this.missionForm.get('fundManagerId')?.value;
+    return this.managerOptions().find((option) => option.id === managerId);
+  }
+
+  managerLabel(option: ManagerOption): string {
+    return `${option.name} — ${option.department}`;
+  }
+
+  onManagerQueryInput(value: string): void {
+    this.managerQuery.set(value);
+    // Se l'utente riscrive, la scelta precedente non vale più.
+    this.missionForm.get('fundManagerId')?.setValue('');
+    this.activeSuggestion.set(0);
+    this.showManagerSuggestions.set(true);
+  }
+
+  selectManager(option: ManagerOption): void {
+    this.missionForm.get('fundManagerId')?.setValue(option.id);
+    this.managerQuery.set(this.managerLabel(option));
+    this.showManagerSuggestions.set(false);
+  }
+
+  onManagerKeydown(event: KeyboardEvent): void {
+    const options = this.filteredManagers();
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      this.showManagerSuggestions.set(true);
+      const step = event.key === 'ArrowDown' ? 1 : -1;
+      this.activeSuggestion.update((i) => (i + step + options.length) % Math.max(options.length, 1));
+    } else if (event.key === 'Enter' && this.showManagerSuggestions() && options.length > 0) {
+      event.preventDefault();
+      this.selectManager(options[this.activeSuggestion()] ?? options[0]);
+    } else if (event.key === 'Escape') {
+      this.showManagerSuggestions.set(false);
+    }
+  }
+
+  closeManagerSuggestions(): void {
+    this.showManagerSuggestions.set(false);
+    this.missionForm.get('fundManagerId')?.markAsTouched();
+  }
+
+  // Responsabili che hanno almeno un fondo ancora libero: il fondo lo sceglie lui in approvazione.
+  private loadManagerOptions(): void {
+    this.isLoadingManagers.set(true);
+    this.fundService.getFundManagers().subscribe({
+      next: (managers) => {
+        const myId = this.authService.getUser()?.id;
+        this.managerOptions.set(
+          managers
+            .filter((manager) => manager.id !== myId)
+            .map((manager) => ({
+              id: manager.id,
+              name: `${manager.name} ${manager.surname}`,
+              department: manager.department,
+            }))
+        );
+        this.isLoadingManagers.set(false);
+      },
+      error: () => {
+        this.isLoadingManagers.set(false);
+        this.toastService.showError('Unable to load the fund managers.', 'Fund Managers');
+      },
+    });
   }
 
   openMapPanel(): void {
@@ -160,13 +256,17 @@ export class NewMissionComponent {
     const startsAt = `${formValues.startDate}T${this.normalizeTime(startTime)}`;
     const endsAt = `${formValues.endDate}T${this.normalizeTime(endTime)}`;
 
-    // Distinzione gestore fondi: 'self' (utente corrente) vs 'other' (placeholder)
+    // Distinzione gestore fondi: 'self' (utente corrente) vs 'other' (responsabile scelto)
     let fundManagerId: string;
     if (this.fundSource() === 'self') {
       fundManagerId = currentUser.id;
     } else {
-      const inputVal = formValues.fundManagerInput?.trim();
-      fundManagerId = inputVal || '00000000-0000-0000-0000-000000000002';
+      const manager = this.selectedManager();
+      if (!manager) {
+        this.toastService.showError('Select the fund manager for this mission.', 'Missing Manager');
+        return;
+      }
+      fundManagerId = manager.id;
     }
 
     const payload: MissionCreatePayload = {
@@ -222,9 +322,9 @@ export class NewMissionComponent {
       endDate: '',
       endTime: '',
       estimatedCost: null,
-      fundManagerInput: '',
+      fundManagerId: '',
     });
     this.isSubmitted.set(false);
-    this.fundSource.set('self');
+    this.setFundSource('self');
   }
 }

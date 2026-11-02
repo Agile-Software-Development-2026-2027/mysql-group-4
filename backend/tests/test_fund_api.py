@@ -115,3 +115,22 @@ async def test_fund_can_be_locked_by_one_mission_at_a_time(
     await db_session.commit()
     available = await client.get("/api/v1/funds/available")
     assert [f["id"] for f in available.json()["content"]] == [str(fund_id)]
+
+
+async def test_fund_manager_disappears_when_all_funds_are_assigned(
+    client: AsyncClient, db_session: AsyncSession, teacher: User
+):
+    fund_ids = [
+        UUID((await client.post("/api/v1/funds", json={"name": name, "amount": "10"})).json()["id"])
+        for name in ("Fondo A", "Fondo B")
+    ]
+    service = FundService(db_session, FundRepository(db_session))
+
+    await service.lock_for_mission(fund_ids[0], (await _make_mission(db_session, teacher)).id)
+    await db_session.commit()
+    managers = (await client.get("/api/v1/users/fund-managers")).json()
+    assert [u["fiscalCode"] for u in managers] == [teacher.fiscal_code]
+
+    await service.lock_for_mission(fund_ids[1], (await _make_mission(db_session, teacher)).id)
+    await db_session.commit()
+    assert (await client.get("/api/v1/users/fund-managers")).json() == []

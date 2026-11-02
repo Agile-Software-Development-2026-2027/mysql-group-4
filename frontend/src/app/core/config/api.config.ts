@@ -12,6 +12,7 @@ export const API_CONFIG = {
     },
     users: {
       me: `${environment.apiBaseUrl}/api/v1/me`,
+      fundManagers: `${environment.apiBaseUrl}/api/v1/users/fund-managers`,
     },
     missions: {
       create: `${environment.apiBaseUrl}/api/v1/missions`,
