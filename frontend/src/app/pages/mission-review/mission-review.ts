@@ -1,7 +1,7 @@
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MissionService } from '../../services/mission';
-import { MissionDTO } from '../../core/models/mission-dto';
+import { MissionService } from '../../services/mission.service';
+import { MissionDTO } from '../../core/models';
 
 @Component({
   selector: 'app-mission-review',

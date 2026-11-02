@@ -6,7 +6,8 @@ export enum MissionType {
 
 export enum MissionStatus {
   PENDING = 'PENDING',
-  APPROVED = 'APPROVED',
+  ACCEPTED = 'ACCEPTED',
+  APPROVED = 'ACCEPTED',
   REJECTED = 'REJECTED',
   CANCELLED = 'CANCELLED',
 }
@@ -23,13 +24,14 @@ export interface MissionCreatePayload {
 
 export interface MissionDTO {
   id: string;
-  missionType: MissionType;
+  missionType: MissionType | string;
   status: MissionStatus;
   subject: string;
   destination: string;
-  estimatedCost: number;
+  estimatedCost: number | string;
   startsAt: string;
   endsAt: string;
+  response?: string | null;
   requesterId: string;
   fundManagerId: string;
   createdAt: string;
