@@ -1,8 +1,10 @@
 import pytest
 from unittest.mock import create_autospec, patch
+from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import (
     AccessDeniedError,
+    FundLockedError,
     InvalidMissionStateError,
     MissionNotFoundError,
     UserNotFoundError,
@@ -12,6 +14,7 @@ from app.crud.user_repository import UserRepository
 from app.core.enums import MissionStatus
 from app.schemas.mission import MissionDTO, MissionFilterDTO, MissionUpdateDTO
 from app.schemas.page import Page, PageRequest
+from app.services.fund_service import FundService
 from app.services.mission_service import MissionService
 from tests.factories import make_create_data, make_mission, make_user
 
@@ -47,7 +50,10 @@ class TestMissionService:
 
         self.repository.save.side_effect = fake_save
         self.dto = MissionDTO.model_validate(self.mission)
-        self.service = MissionService(self.session, self.repository, self.user_repository)
+        self.fund_service = create_autospec(FundService, instance=True)
+        self.service = MissionService(
+            self.session, self.repository, self.user_repository, fund_service=self.fund_service
+        )
 
     async def test_get_by_id_checks_visibility_before_mapping(self):
         result = await self.service.get_mission_by_id(self.mission.id, self.user.id)
@@ -143,6 +149,41 @@ class TestMissionService:
         assert result.subject == self.data.subject
         self.session.commit.assert_awaited_once()
         self.session.rollback.assert_not_awaited()
+
+    async def test_create_without_fund_does_not_lock_anything(self):
+        await self.service.create_mission(self.data, self.user.id)
+        self.fund_service.lock_for_mission.assert_not_awaited()
+
+    async def test_create_as_own_manager_locks_the_chosen_fund(self):
+        fund_id = uuid4()
+        data = make_create_data(fund_manager_id=self.user.id, fund_id=fund_id)
+        result = await self.service.create_mission(data, self.user.id)
+        self.fund_service.lock_for_mission.assert_awaited_once_with(
+            fund_id, result.id, responsible_fc=self.user.fiscal_code
+        )
+        assert result.status == MissionStatus.ACCEPTED
+        self.session.commit.assert_awaited_once()
+
+    async def test_create_as_own_manager_requires_a_fund(self):
+        data = make_create_data(fund_manager_id=self.user.id)
+        with pytest.raises(InvalidMissionStateError):
+            await self.service.create_mission(data, self.user.id)
+        self.repository.save.assert_not_awaited()
+
+    async def test_create_rejects_a_fund_when_manager_is_someone_else(self):
+        data = make_create_data(fund_manager_id=self.manager.id, fund_id=uuid4())
+        with pytest.raises(InvalidMissionStateError):
+            await self.service.create_mission(data, self.user.id)
+        self.repository.save.assert_not_awaited()
+        self.fund_service.lock_for_mission.assert_not_awaited()
+
+    async def test_create_with_a_fund_already_taken_is_rolled_back(self):
+        data = make_create_data(fund_manager_id=self.user.id, fund_id=uuid4())
+        self.fund_service.lock_for_mission.side_effect = FundLockedError(data.fund_id)
+        with pytest.raises(FundLockedError):
+            await self.service.create_mission(data, self.user.id)
+        self.session.commit.assert_not_awaited()
+        self.session.rollback.assert_awaited_once()
 
     async def test_create_inactive_actor_stops_before_mapping(self):
         self.user.is_active = False

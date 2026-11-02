@@ -7,6 +7,7 @@ import { NewMissionComponent } from './new-mission';
 import { API_CONFIG } from '../../core/config/api.config';
 import { EmploymentLevel, User } from '../../core/models';
 import { AuthService } from '../../services/auth.service';
+import { ToastService } from '../../services/toast.service';
 
 const makeUser = (id: string, surname: string, department: string): User => ({
   id, email: `${surname}@example.com`, name: 'Simone', surname, fiscalCode: `FC-${surname}`,
@@ -80,5 +81,44 @@ describe('NewMissionComponent fund manager selection', () => {
 
     const req = httpMock.expectOne(API_CONFIG.endpoints.missions.create);
     expect(req.request.body.fundManagerId).toBe('other-id');
+  });
+
+  function loadOwnFunds(): void {
+    httpMock.expectOne((req) => req.url === API_CONFIG.endpoints.funds.base).flush({
+      content: [
+        { id: 'taken', name: 'Preso', amount: '10', responsibleFc: me.fiscalCode, lockedByMissionId: 'm1' },
+        { id: 'mine', name: 'Mio', amount: '500', responsibleFc: me.fiscalCode, lockedByMissionId: null },
+      ],
+      totalElements: 2, number: 0, size: 100,
+    });
+  }
+
+  it('should load the own funds and require one when managing the mission yourself', () => {
+    loadOwnFunds();
+    expect(component.myFunds().map((f) => f.id)).toEqual(['taken', 'mine']);
+    expect(component.missionForm.get('fundId')?.hasError('required')).toBe(true);
+
+    component.selectOwnFund(component.myFunds()[0]);
+    expect(component.missionForm.get('fundId')?.value).toBe('');
+    component.selectOwnFund(component.myFunds()[1]);
+    expect(component.missionForm.get('fundId')?.value).toBe('mine');
+    expect(component.ownFundQuery()).toBe('Mio');
+  });
+
+  it('should send yourself as manager together with the chosen fund', () => {
+    loadOwnFunds();
+    component.selectOwnFund(component.myFunds()[1]);
+    component.missionForm.patchValue({
+      subject: 'Conference', destination: 'Rome', startDate: '2026-12-01', endDate: '2026-12-03',
+      estimatedCost: 300,
+    });
+    component.confirmSubmit();
+
+    const req = httpMock.expectOne(API_CONFIG.endpoints.missions.create);
+    expect(req.request.body.fundManagerId).toBe('me-id');
+    expect(req.request.body.fundId).toBe('mine');
+
+    req.flush({ id: 'mission-id', status: 'ACCEPTED' });
+    expect(TestBed.inject(ToastService).toasts()[0]).toMatchObject({ type: 'success', title: 'Mission Approved' });
   });
 });

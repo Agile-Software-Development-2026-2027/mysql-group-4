@@ -7,7 +7,7 @@ import { ToastService } from '../../services/toast.service';
 import { MissionService } from '../../services/mission.service';
 import { AuthService } from '../../services/auth.service';
 import { FundService } from '../../services/fund.service';
-import { MissionCreatePayload, MissionType } from '../../core/models';
+import { FundDTO, MissionCreatePayload, MissionStatus, MissionType } from '../../core/models';
 
 interface ManagerOption {
   id: string;
@@ -58,6 +58,16 @@ export class NewMissionComponent {
     );
   });
 
+  myFunds = signal<FundDTO[]>([]);
+  hasFreeFunds = computed(() => this.myFunds().some((fund) => this.isFundFree(fund)));
+  ownFundQuery = signal('');
+  showOwnFundSuggestions = signal(false);
+  activeOwnFund = signal(-1);
+  filteredOwnFunds = computed(() => {
+    const query = this.ownFundQuery().trim().toLowerCase();
+    return this.myFunds().filter((fund) => fund.name.toLowerCase().includes(query));
+  });
+
   showMapPanel = signal(false);
 
   missionForm: FormGroup = this.fb.group(
@@ -71,23 +81,103 @@ export class NewMissionComponent {
       endTime: [''],
       estimatedCost: [null, [Validators.required, Validators.min(0)]],
       fundManagerId: [''],
+      fundId: [''],
     },
     { validators: [this.datePeriodValidator.bind(this)] }
   );
 
+  constructor() {
+    this.setFundSource('self');
+  }
+
   setFundSource(source: 'self' | 'other'): void {
     this.fundSource.set(source);
     const managerControl = this.missionForm.get('fundManagerId');
+    const fundControl = this.missionForm.get('fundId');
     if (source === 'self') {
       managerControl?.setValue('');
       managerControl?.clearValidators();
       this.managerQuery.set('');
       this.showManagerSuggestions.set(false);
+      fundControl?.setValidators(Validators.required);
+      this.loadMyFunds();
     } else {
       managerControl?.setValidators(Validators.required);
+      fundControl?.setValue('');
+      fundControl?.clearValidators();
+      this.ownFundQuery.set('');
+      this.showOwnFundSuggestions.set(false);
       this.loadManagerOptions();
     }
     managerControl?.updateValueAndValidity();
+    fundControl?.updateValueAndValidity();
+  }
+
+  isFundFree(fund: FundDTO): boolean {
+    return !fund.lockedByMissionId;
+  }
+
+  selectedOwnFund(): FundDTO | undefined {
+    const fundId = this.missionForm.get('fundId')?.value;
+    return this.myFunds().find((fund) => fund.id === fundId);
+  }
+
+  onOwnFundQueryInput(value: string): void {
+    this.ownFundQuery.set(value);
+    // Se l'utente riscrive, la scelta precedente non vale più.
+    this.missionForm.get('fundId')?.setValue('');
+    this.activeOwnFund.set(-1);
+    this.showOwnFundSuggestions.set(true);
+  }
+
+  selectOwnFund(fund: FundDTO): void {
+    if (!this.isFundFree(fund)) {
+      return;
+    }
+    this.missionForm.get('fundId')?.setValue(fund.id);
+    this.ownFundQuery.set(fund.name);
+    this.showOwnFundSuggestions.set(false);
+  }
+
+  onOwnFundKeydown(event: KeyboardEvent): void {
+    const funds = this.filteredOwnFunds();
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      this.showOwnFundSuggestions.set(true);
+      // Le frecce saltano i fondi già assegnati.
+      const step = event.key === 'ArrowDown' ? 1 : -1;
+      let index = this.activeOwnFund();
+      for (let i = 0; i < funds.length; i++) {
+        index = (index + step + funds.length) % funds.length;
+        if (this.isFundFree(funds[index])) {
+          this.activeOwnFund.set(index);
+          return;
+        }
+      }
+    } else if (event.key === 'Enter' && this.showOwnFundSuggestions()) {
+      event.preventDefault();
+      const fund = funds[this.activeOwnFund()] ?? funds.find((f) => this.isFundFree(f));
+      if (fund) {
+        this.selectOwnFund(fund);
+      }
+    } else if (event.key === 'Escape') {
+      this.showOwnFundSuggestions.set(false);
+    }
+  }
+
+  closeOwnFundSuggestions(): void {
+    this.showOwnFundSuggestions.set(false);
+    this.missionForm.get('fundId')?.markAsTouched();
+  }
+
+  private loadMyFunds(): void {
+    this.fundService.getMyFunds().subscribe({
+      next: (page) => {
+        const myFiscalCode = this.authService.getUser()?.fiscalCode;
+        this.myFunds.set(page.content.filter((fund) => fund.responsibleFc === myFiscalCode));
+      },
+      error: () => this.toastService.showError('Unable to load your funds.', 'Funds'),
+    });
   }
 
   selectedManager(): ManagerOption | undefined {
@@ -258,8 +348,15 @@ export class NewMissionComponent {
 
     // Distinzione gestore fondi: 'self' (utente corrente) vs 'other' (responsabile scelto)
     let fundManagerId: string;
+    let fundId: string | undefined;
     if (this.fundSource() === 'self') {
+      const fund = this.selectedOwnFund();
+      if (!fund) {
+        this.toastService.showError('Select one of your funds for this mission.', 'Missing Fund');
+        return;
+      }
       fundManagerId = currentUser.id;
+      fundId = fund.id;
     } else {
       const manager = this.selectedManager();
       if (!manager) {
@@ -277,18 +374,27 @@ export class NewMissionComponent {
       startsAt,
       endsAt,
       fundManagerId,
+      fundId,
     };
 
     this.isSubmitting.set(true);
 
     this.missionService.createMission(payload).subscribe({
-      next: (_mission) => {
+      next: (mission) => {
         this.isSubmitting.set(false);
         this.showSummaryModal.set(false);
-        this.toastService.showSuccess(
-          'Mission request created successfully!',
-          'Mission Submitted'
-        );
+        // Se sei tu il responsabile la missione è già approvata dal backend.
+        if (mission.status === MissionStatus.ACCEPTED) {
+          this.toastService.showSuccess(
+            'You manage the fund yourself, so the mission was approved automatically.',
+            'Mission Approved'
+          );
+        } else {
+          this.toastService.showSuccess(
+            'Mission request created successfully!',
+            'Mission Submitted'
+          );
+        }
         this.resetForm();
         this.closeMapPanel();
         this.router.navigate(['/home']);
@@ -308,6 +414,14 @@ export class NewMissionComponent {
 
         this.toastService.showError(errorDetail, 'Submission Error');
         console.error('[NewMission] Backend submission error:', err);
+
+        // Il fondo scelto è stato appena assegnato ad altro: aggiorno l'elenco e annullo la scelta.
+        if (err?.status === 409 && this.fundSource() === 'self') {
+          this.showSummaryModal.set(false);
+          this.missionForm.get('fundId')?.setValue('');
+          this.ownFundQuery.set('');
+          this.loadMyFunds();
+        }
       },
     });
   }
@@ -323,6 +437,7 @@ export class NewMissionComponent {
       endTime: '',
       estimatedCost: null,
       fundManagerId: '',
+      fundId: '',
     });
     this.isSubmitted.set(false);
     this.setFundSource('self');

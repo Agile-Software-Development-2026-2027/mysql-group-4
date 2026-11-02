@@ -306,6 +306,13 @@ textarea { min-height: 110px; resize: vertical; }
     cursor: pointer;
 
     &:hover, &.is-active { background: rgba($primary, 0.06); }
+
+    // Opzione visibile ma non selezionabile (es. fondo già assegnato)
+    &.is-disabled {
+      color: $text-muted;
+      background: $bg;
+      cursor: not-allowed;
+    }
   }
 
   &__empty {

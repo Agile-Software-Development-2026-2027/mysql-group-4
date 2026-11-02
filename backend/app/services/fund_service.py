@@ -93,10 +93,12 @@ class FundService:
             await self._repository.delete(fund)
         logger.info("Fund %s deleted by user %s", fund_id, user_id)
 
-    # lock_for_mission e release_from_mission non fanno commit: vanno chiamati
-    # dentro la transazione del MissionService, con la stessa sessione.
-    async def lock_for_mission(self, fund_id: UUID, mission_id: UUID) -> Fund:
+    async def lock_for_mission(
+        self, fund_id: UUID, mission_id: UUID, *, responsible_fc: str | None = None
+    ) -> Fund:
         fund = await self._get_fund_or_throw(fund_id)
+        if responsible_fc is not None and fund.responsible_fc != responsible_fc:
+            raise AccessDeniedError("The fund does not belong to the mission fund manager")
         if not await self._repository.lock(fund_id, mission_id):
             raise FundLockedError(fund_id)
         await self._session.refresh(fund)

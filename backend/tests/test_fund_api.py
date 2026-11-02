@@ -103,7 +103,6 @@ async def test_fund_can_be_locked_by_one_mission_at_a_time(
     available = await client.get("/api/v1/funds/available")
     assert available.json()["content"] == []
     assert (await client.delete(f"/api/v1/funds/{fund_id}")).status_code == 409
-    # Nei test la sessione è condivisa con l'API: il 409 ha fatto rollback e scaduto gli oggetti.
     for obj in list(db_session.identity_map.values()):
         await db_session.refresh(obj)
 
@@ -134,3 +133,20 @@ async def test_fund_manager_disappears_when_all_funds_are_assigned(
     await service.lock_for_mission(fund_ids[1], (await _make_mission(db_session, teacher)).id)
     await db_session.commit()
     assert (await client.get("/api/v1/users/fund-managers")).json() == []
+
+
+async def test_mission_on_own_fund_locks_it_at_creation(client: AsyncClient, teacher: User):
+    fund_id = (await client.post("/api/v1/funds", json={"name": "Mio", "amount": "500"})).json()["id"]
+    body = {
+        "missionType": "RESEARCH", "subject": "Convegno", "destination": "Roma",
+        "estimatedCost": "100", "startsAt": "2026-12-01T08:00:00", "endsAt": "2026-12-02T20:00:00",
+        "fundManagerId": str(teacher.id), "fundId": fund_id,
+    }
+    created = await client.post("/api/v1/missions", json=body)
+    assert created.status_code == 201
+    assert created.json()["status"] == "ACCEPTED"
+    fund = (await client.get(f"/api/v1/funds/{fund_id}")).json()
+    assert fund["lockedByMissionId"] == created.json()["id"]
+
+    second = await client.post("/api/v1/missions", json=body)
+    assert second.status_code == 409

@@ -11,6 +11,7 @@ from app.core.exceptions import (
     MissionNotFoundError,
     UserNotFoundError,
 )
+from app.crud.fund_repository import FundRepository
 from app.crud.mission_repository import MissionRepository
 from app.crud.user_repository import UserRepository
 from app.core.enums import MissionStatus
@@ -23,6 +24,7 @@ from app.schemas.mission import (
     MissionUpdateDTO,
 )
 from app.schemas.page import Page, PageRequest
+from app.services.fund_service import FundService
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +35,14 @@ class MissionService:
         session: AsyncSession,
         repository: MissionRepository,
         user_repository: UserRepository | None = None,
+        fund_service: FundService | None = None,
     ):
         self._session = session
         self._repository = repository
         self._user_repository = user_repository or UserRepository()
+        self._fund_service = fund_service or FundService(
+            session, FundRepository(session), self._user_repository
+        )
 
     async def get_mission_by_id(self, mission_id: UUID, user_id: UUID) -> MissionDTO:
         user = await self._get_active_user_or_throw(user_id)
@@ -99,17 +105,32 @@ class MissionService:
         async with self._transaction():
             user = await self._get_active_user_or_throw(user_id)
             manager = await self._get_active_user_or_throw(data.fund_manager_id)
-            mission = Mission(**data.model_dump())
+            # Se il richiedente è anche il responsabile non serve approvazione:
+            # sceglie subito uno dei suoi fondi e la missione nasce già accettata.
+            self_managed = manager.id == user.id
+            if data.fund_id is not None and not self_managed:
+                raise InvalidMissionStateError(
+                    "A fund can be chosen only when you are the fund manager of the mission"
+                )
+            if self_managed and data.fund_id is None:
+                raise InvalidMissionStateError(
+                    "Choose one of your funds when you are the fund manager of the mission"
+                )
+            mission = Mission(**data.model_dump(exclude={"fund_id"}))
             mission.requester_id = user.id
             mission.requester = user
             mission.fund_manager_id = manager.id
             mission.fund_manager = manager
-            mission.status = MissionStatus.PENDING
+            mission.status = MissionStatus.ACCEPTED if self_managed else MissionStatus.PENDING
             mission.created_by = user.id
             mission.updated_by = user.id
             saved = await self._repository.save(mission)
+            if data.fund_id is not None:
+                await self._fund_service.lock_for_mission(
+                    data.fund_id, saved.id, responsible_fc=user.fiscal_code
+                )
             result = MissionDTO.model_validate(saved)
-        logger.info("Mission %s created by user %s", result.id, user_id)
+        logger.info("Mission %s created by user %s with status %s", result.id, user_id, result.status.value)
         return result
 
     async def update_mission(
@@ -122,7 +143,7 @@ class MissionService:
             mission = await self._get_mission_or_throw(mission_id, for_update=True)
             self._validate_mission_is_pending(mission)
             manager = await self._get_active_user_or_throw(data.fund_manager_id)
-            for field, value in data.model_dump(exclude_unset=True).items():
+            for field, value in data.model_dump(exclude_unset=True, exclude={"fund_id"}).items():
                 setattr(mission, field, value)
             mission.fund_manager_id = manager.id
             mission.fund_manager = manager
