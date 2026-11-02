@@ -4,12 +4,16 @@ import { Landingpage } from './pages/landingpage/landingpage';
 import { AuthComponent } from './pages/auth/auth';
 import { NewMissionComponent } from './pages/new-mission/new-mission';
 import { authGuard, guestGuard } from './core/guards';
+import { MissionReview } from './pages/mission-review/mission-review';
 
 export const routes: Routes = [
   { path: '', component: Landingpage, canActivate: [guestGuard] },
   { path: 'login', component: AuthComponent, canActivate: [guestGuard] },
   { path: 'register', component: AuthComponent, canActivate: [guestGuard] },
+  { path: 'forgot-password', component: AuthComponent, canActivate: [guestGuard] },
+  { path: 'reset-password', component: AuthComponent, canActivate: [guestGuard] },
   { path: 'home', component: Homepage, canActivate: [authGuard] },
   { path: 'mission/new', component: NewMissionComponent, canActivate: [authGuard] },
-  { path: '**', redirectTo: '' },
+  { path: 'missionreview', component: MissionReview },
+  { path: '**', redirectTo: '' }
 ];

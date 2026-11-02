@@ -1,6 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
+import { Topbar } from '../../components/topbar/topbar';
 
 import { ToastService } from '../../core/services/toast.service';
 import { MissionService } from '../../services/mission.service';
@@ -10,7 +11,7 @@ import { MissionCreatePayload, MissionType } from '../../core/models';
 @Component({
   selector: 'app-new-mission',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, Topbar],
   templateUrl: './new-mission.html',
   styleUrl: './new-mission.scss',
 })
