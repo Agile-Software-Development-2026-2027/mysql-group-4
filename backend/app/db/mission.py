@@ -12,6 +12,7 @@ from app.core.enums import MissionStatus, MissionType
 
 if TYPE_CHECKING:
     from app.db.models import User
+    from app.db.mission_document import MissionDocument
 
 
 class Mission(Base):
@@ -67,4 +68,11 @@ class Mission(Base):
         foreign_keys=[fund_manager_id],
         cascade="save-update, merge",
         lazy="raise",
+    )
+
+    documents: Mapped[list["MissionDocument"]] = relationship(
+        back_populates="mission",
+        lazy="raise",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
