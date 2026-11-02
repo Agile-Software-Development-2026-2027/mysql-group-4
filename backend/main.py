@@ -6,6 +6,7 @@ from app.db.session import create_db_and_tables
 from app.api.user_endpoints import user_router
 from app.api.admin_endpoints import admin_router
 from app.api.mission_endpoints import mission_router
+from app.api.fund_endpoints import fund_router
 from app.security import fastapi_users, auth_backend
 from app.schemas.user import UserRead, UserCreate
 from app.core.exception_handler import register_exception_handlers
@@ -73,5 +74,10 @@ app.include_router(
 )
 
 app.include_router(
-    document_router, 
+    document_router,
     prefix="/api/v1")
+
+app.include_router(
+    fund_router,
+    prefix="/api/v1",
+)

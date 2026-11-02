@@ -20,6 +20,7 @@ export interface MissionCreatePayload {
   startsAt: string; // Naive ISO datetime string: YYYY-MM-DDTHH:MM:SS
   endsAt: string;   // Naive ISO datetime string: YYYY-MM-DDTHH:MM:SS
   fundManagerId: string;
+  fundId?: string;
 }
 
 export interface MissionDTO {

@@ -27,7 +27,9 @@ export class Topbar implements OnInit {
     { label: 'Home', link: '/home' },
     { label: 'New Mission', link: '/mission/new' },
     { label: 'My Mission', link: '/mission' },
-    { label: 'Approve Missions', link: '/mission/approve' },
+    { label: 'Approve Missions', link: '/missionreview' },
+    { label: 'Add Fund', link: '/fund/add' },
+    { label: 'My Fund', link: '/fund' },
     { label: 'Logout', link: '/logout' },
   ];
   missionsToApprove = signal(0);

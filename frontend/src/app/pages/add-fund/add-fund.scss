@@ -1,0 +1,117 @@
+$primary: #be0e01;
+$text-muted: #5b6f82;
+
+.page-container {
+  max-width: 1440px;
+}
+
+.fund-card {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 36px;
+
+  @media (max-width: 600px) {
+    padding: 20px 16px;
+  }
+}
+
+.card-header {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #edf2f7;
+
+  h2 { margin: 0 0 6px; }
+  .subtitle { margin: 0; color: $text-muted; font-size: 0.95rem; }
+}
+
+.section-divider {
+  margin: 28px 0 16px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid #edf2f7;
+
+  h4 {
+    margin: 0;
+    font-size: 1.15rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+}
+
+.owner-box {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: #fcfdfe;
+  border: 1px solid #dbe4ee;
+  border-left: 4px solid $primary;
+  border-radius: 4px;
+
+  &__icon { flex-shrink: 0; color: $primary; }
+
+  &__info {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-width: fit-content;
+  }
+
+  &__name { font-weight: 700; }
+  &__meta {
+    font-size: 0.85rem;
+    color: $text-muted;
+
+    strong { font-weight: 600; white-space: nowrap; }
+  }
+
+  .badge {
+    padding: 3px 10px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: #fdf2f2;
+    border: 1px solid #f8b4b4;
+    color: $primary;
+    border-radius: 12px;
+  }
+
+  @media (max-width: 500px) {
+    flex-wrap: wrap;
+  }
+}
+
+.owner-note {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  color: $text-muted;
+}
+
+.optional-label {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: $text-muted;
+}
+
+.char-counter {
+  text-align: right;
+  font-size: 0.8rem;
+  color: $text-muted;
+  margin-top: 4px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid #edf2f7;
+
+  .btn { min-width: 160px; }
+
+  @media (max-width: 500px) {
+    flex-direction: column;
+  }
+}

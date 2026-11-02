@@ -38,6 +38,7 @@ class MissionCreateDTO(CamelModel):
     starts_at: NaiveDatetime
     ends_at: NaiveDatetime
     fund_manager_id: UUID
+    fund_id: UUID | None = None
 
     @model_validator(mode="after")
     def validate_period(self) -> Self:

@@ -2,7 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import uuid4
 
-from app.db import Mission, User
+from app.db import Fund, Mission, User
 from app.core.enums import MissionStatus, MissionType
 from app.schemas.mission import MissionCreateDTO
 
@@ -27,4 +27,13 @@ def make_create_data(**overrides):
         mission_type=MissionType.RESEARCH, subject="Research", destination="Rome",
         estimated_cost=Decimal("120.50"), starts_at=datetime(2026, 11, 1, 9),
         ends_at=datetime(2026, 11, 3, 18), fund_manager_id=uuid4(),
+    ) | overrides))
+
+
+def make_fund(**overrides):
+    return Fund(**(dict(
+        id=uuid4(), name="Research fund", description="Lab equipment", amount=Decimal("5000.00"),
+        responsible_fc="RSSMRA80A01H501U",
+        created_at=datetime(2026, 10, 24), updated_at=datetime(2026, 10, 24),
+        created_by=uuid4(), updated_by=uuid4(),
     ) | overrides))
