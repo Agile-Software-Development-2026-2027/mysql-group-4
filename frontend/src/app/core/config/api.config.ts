@@ -7,6 +7,8 @@ export const API_CONFIG = {
       login: `${environment.apiBaseUrl}/auth/jwt/login`,
       logout: `${environment.apiBaseUrl}/auth/jwt/logout`,
       register: `${environment.apiBaseUrl}/auth/register`,
+      forgotPassword: `${environment.apiBaseUrl}/auth/forgot-password`,
+      resetPassword: `${environment.apiBaseUrl}/auth/reset-password`,
     },
     users: {
       me: `${environment.apiBaseUrl}/api/v1/me`,
