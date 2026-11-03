@@ -20,6 +20,7 @@ describe('Topbar', () => {
           { path: 'missionreview', component: Topbar },
           { path: 'fund', component: Topbar },
           { path: 'fund/add', component: Topbar },
+          { path: 'settings', component: Topbar },
         ])
       ],
     }).compileComponents();

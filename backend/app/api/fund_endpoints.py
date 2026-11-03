@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Query, Response, status
 
 from app.api.deps import get_fund_service
 from app.api.mission_endpoints import CurrentUser, Pagination
@@ -74,6 +74,7 @@ async def delete_fund(
     fund_id: UUID,
     user: CurrentUser,
     service: FundServiceDependency,
+    force: Annotated[bool, Query()] = False,
 ) -> Response:
-    await service.delete_fund(fund_id, user.id)
+    await service.delete_fund(fund_id, user.id, force=force)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

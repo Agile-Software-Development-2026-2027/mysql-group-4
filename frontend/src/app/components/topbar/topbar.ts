@@ -31,6 +31,7 @@ export class Topbar implements OnInit {
     { label: 'Add Fund', link: '/fund/add' },
     { label: 'My Fund', link: '/fund' },
     { label: 'Logout', link: '/logout' },
+    { label: 'Settings', link: '/settings' },
   ];
   missionsToApprove = signal(0);
   bellOpen = signal(false);

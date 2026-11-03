@@ -27,6 +27,7 @@ class TestFundService:
         }.get(user_id)
         self.repository.find_by_id.return_value = self.fund
         self.repository.find_by_id_for_update.return_value = self.fund
+        self.repository.find_lock_holders.return_value = {}
 
         def fake_save(f):
             if f.id is None:

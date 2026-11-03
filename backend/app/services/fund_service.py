@@ -38,7 +38,7 @@ class FundService:
         user = await self._get_active_user_or_throw(user_id)
         fund = await self._get_fund_or_throw(fund_id)
         self._validate_user_can_read(fund, user)
-        return FundDTO.model_validate(fund)
+        return (await self._to_dtos([fund]))[0]
 
     async def get_fund_by_mission_id(self, mission_id: UUID, user_id: UUID) -> FundDTO | None:
         user = await self._get_active_user_or_throw(user_id)
@@ -68,7 +68,12 @@ class FundService:
         funds = await self._repository.find_all(
             responsible_fc=visible_to, page_request=page_request
         )
-        return funds.map(FundDTO.model_validate)
+        return Page(
+            content=await self._to_dtos(funds.content),
+            total_elements=funds.total_elements,
+            number=funds.number,
+            size=funds.size,
+        )
 
     async def get_available_funds(
         self, user_id: UUID, page_request: PageRequest | None = None
@@ -105,12 +110,12 @@ class FundService:
         logger.info("Fund %s updated by user %s", fund_id, user_id)
         return result
 
-    async def delete_fund(self, fund_id: UUID, user_id: UUID) -> None:
+    async def delete_fund(self, fund_id: UUID, user_id: UUID, *, force: bool = False) -> None:
         async with self._transaction():
             user = await self._get_active_user_or_throw(user_id)
             fund = await self._get_fund_or_throw(fund_id, for_update=True)
             self._validate_user_is_responsible(fund, user)
-            if fund.locked_by_mission_id is not None:
+            if fund.locked_by_mission_id is not None and not force:
                 raise FundLockedError(fund.id)
             await self._repository.delete(fund)
         logger.info("Fund %s deleted by user %s", fund_id, user_id)
@@ -130,6 +135,23 @@ class FundService:
     async def release_from_mission(self, fund_id: UUID, mission_id: UUID) -> None:
         await self._repository.release(fund_id, mission_id)
         logger.info("Fund %s released by mission %s", fund_id, mission_id)
+
+    async def _to_dtos(self, funds: list[Fund]) -> list[FundDTO]:
+        holders = await self._repository.find_lock_holders(
+            {fund.locked_by_mission_id for fund in funds if fund.locked_by_mission_id}
+        )
+        dtos = []
+        for fund in funds:
+            dto = FundDTO.model_validate(fund)
+            holder = holders.get(fund.locked_by_mission_id)
+            if holder is not None:
+                dto = dto.model_copy(update={
+                    "mission_subject": holder.subject,
+                    "requested_amount": holder.estimated_cost,
+                    "requester_name": f"{holder.name} {holder.surname}",
+                })
+            dtos.append(dto)
+        return dtos
 
     async def _get_fund_or_throw(self, fund_id: UUID, *, for_update: bool = False) -> Fund:
         if for_update:

@@ -13,6 +13,9 @@ class FundDTO(CamelModel):
     amount: Decimal
     responsible_fc: str
     locked_by_mission_id: UUID | None = None
+    mission_subject: str | None = None
+    requested_amount: Decimal | None = None
+    requester_name: str | None = None
 
 
 class FundCreateDTO(CamelModel):
