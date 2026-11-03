@@ -36,4 +36,10 @@ export class FundService {
       withCredentials: true,
     });
   }
+
+  getByMissionId(missionId: string): Observable<FundDTO> {
+    return this.http.get<FundDTO>(`${API_CONFIG.endpoints.funds.base}/by-mission/${missionId}`, {
+      withCredentials: true,
+    });
+  }
 }

@@ -32,6 +32,15 @@ async def get_available_funds(
     return await service.get_available_funds(user.id, page_request)
 
 
+@fund_router.get("/by-mission/{mission_id}", response_model=FundDTO | None)
+async def get_fund_by_mission(
+    mission_id: UUID,
+    user: CurrentUser,
+    service: FundServiceDependency,
+) -> FundDTO | None:
+    return await service.get_fund_by_mission_id(mission_id, user.id)
+
+
 @fund_router.get("/{fund_id}", response_model=FundDTO)
 async def get_fund_by_id(
     fund_id: UUID,

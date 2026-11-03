@@ -50,8 +50,8 @@ export class MissionService {
     );
   }
 
-  acceptMission(missionId: string, responseNote?: string): Observable<MissionDTO> {
-    const body = responseNote ? { response: responseNote } : {};
+  acceptMission(missionId: string, fundId: string, responseNote?: string): Observable<MissionDTO> {
+    const body = responseNote ? { fundId, response: responseNote } : { fundId };
     return this.http.patch<MissionDTO>(
       `${this.baseUrl}/${missionId}/accept`,
       body,
@@ -64,6 +64,30 @@ export class MissionService {
     return this.http.patch<MissionDTO>(
       `${this.baseUrl}/${missionId}/reject`,
       body,
+      { withCredentials: true }
+    );
+  }
+
+  getMyPendingMissions(): Observable<Page<MissionDTO>> {
+    return this.http.post<Page<MissionDTO>>(
+      `${this.baseUrl}/sent/filter`,
+      { status: MissionStatus.PENDING },
+      { withCredentials: true }
+    );
+  }
+
+  getMyAcceptedMissions(): Observable<Page<MissionDTO>> {
+    return this.http.post<Page<MissionDTO>>(
+      `${this.baseUrl}/sent/filter`,
+      { status: MissionStatus.ACCEPTED },
+      { withCredentials: true }
+    );
+  }
+
+  getMyRejectedMissions(): Observable<Page<MissionDTO>> {
+    return this.http.post<Page<MissionDTO>>(
+      `${this.baseUrl}/sent/filter`,
+      { status: MissionStatus.REJECTED },
       { withCredentials: true }
     );
   }
