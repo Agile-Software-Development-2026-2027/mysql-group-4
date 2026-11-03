@@ -1,13 +1,16 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, OnDestroy } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { Topbar } from '../../components/topbar/topbar';
+import { forkJoin, Subject, Subscription } from 'rxjs';
+import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import * as L from 'leaflet';
 
+import { Topbar } from '../../components/topbar/topbar';
 import { ToastService } from '../../services/toast.service';
 import { MissionService } from '../../services/mission.service';
+import { LocationService, LocationResponse } from '../../services/location.service';
 import { AuthService } from '../../services/auth.service';
 import { MissionCreatePayload, MissionType } from '../../core/models';
-import { forkJoin } from 'rxjs';
 
 @Component({
   selector: 'app-new-mission',
@@ -16,12 +19,14 @@ import { forkJoin } from 'rxjs';
   templateUrl: './new-mission.html',
   styleUrl: './new-mission.scss',
 })
-export class NewMissionComponent {
+export class NewMissionComponent implements OnDestroy {
   private fb = inject(FormBuilder);
   private router = inject(Router);
   private toastService = inject(ToastService);
   private missionService = inject(MissionService);
+  private locationService = inject(LocationService);
   private authService = inject(AuthService);
+
   siteName = 'MYSOL';
   isSubmitted = signal(false);
   isSubmitting = signal(false);
@@ -36,10 +41,17 @@ export class NewMissionComponent {
   ];
 
   fundSource = signal<'self' | 'other'>('self');
-
   showMapPanel = signal(false);
 
+  locationSuggestions = signal<LocationResponse[]>([]);
+  isSearchingLocation = signal(false);
+  private searchSubject = new Subject<string>();
+  private searchSub?: Subscription;
+  private map?: L.Map;
+  private marker?: L.Marker;
+
   selectedFiles: File[] = [];
+
   missionForm: FormGroup = this.fb.group(
     {
       subject: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(250)]],
@@ -56,8 +68,110 @@ export class NewMissionComponent {
     { validators: [this.datePeriodValidator.bind(this)] }
   );
 
+  constructor() {
+    this.searchSub = this.searchSubject
+      .pipe(
+        debounceTime(350),
+        distinctUntilChanged(),
+        switchMap((query) => {
+          if (!query || query.trim().length < 3) {
+            this.isSearchingLocation.set(false);
+            return [];
+          }
+          this.isSearchingLocation.set(true);
+          return this.locationService.autocomplete(query);
+        })
+      )
+      .subscribe((results) => {
+        this.locationSuggestions.set(results);
+        this.isSearchingLocation.set(false);
+      });
+  }
+
+  ngOnDestroy(): void {
+    this.searchSub?.unsubscribe();
+    if (this.map) {
+      this.map.remove();
+    }
+  }
+
   get selectedFile(): File | null {
     return this.missionForm.get('documentFile')?.value || null;
+  }
+
+  onDestinationInput(event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    this.searchSubject.next(value);
+  }
+
+  private lastSelectedLocation?: { lat: number; lon: number; label: string };
+
+  selectLocation(location: LocationResponse): void {
+    this.missionForm.patchValue({ destination: location.display_name });
+    this.locationSuggestions.set([]);
+
+    const lat = parseFloat(location.lat);
+    const lon = parseFloat(location.lon);
+    this.lastSelectedLocation = { lat, lon, label: location.display_name };
+
+    this.openMapPanel();
+  }
+
+  openMapPanel(): void {
+    this.showMapPanel.set(true);
+    setTimeout(() => this.initMapIfNeeded(), 100);
+  }
+
+  closeMapPanel(): void {
+    this.showMapPanel.set(false);
+    this.destroyMap();
+  }
+
+  private destroyMap(): void {
+    if (this.map) {
+      this.map.remove();
+      this.map = undefined;
+      this.marker = undefined;
+    }
+  }
+
+  private initMapIfNeeded(): void {
+    const mapElement = document.getElementById('map-container');
+    if (!mapElement) return;
+    this.destroyMap();
+    const defaultIcon = L.icon({
+      iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+      shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+    });
+    L.Marker.prototype.options.icon = defaultIcon;
+    this.map = L.map('map-container').setView([39.3621, 16.2255], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors',
+    }).addTo(this.map);
+    if (this.lastSelectedLocation) {
+      this.updateMapLocation(
+        this.lastSelectedLocation.lat,
+        this.lastSelectedLocation.lon,
+        this.lastSelectedLocation.label
+      );
+    }
+  }
+
+  private updateMapLocation(lat: number, lon: number, label: string): void {
+    if (!this.map) return;
+
+    this.map.setView([lat, lon], 15);
+
+    if (this.marker) {
+      this.marker.setLatLng([lat, lon]);
+    } else {
+      this.marker = L.marker([lat, lon]).addTo(this.map);
+    }
+    this.marker.bindPopup(`<b>${label}</b>`).openPopup();
   }
 
   setFundSource(source: 'self' | 'other'): void {
@@ -67,14 +181,6 @@ export class NewMissionComponent {
     }
   }
 
-  openMapPanel(): void {
-    this.showMapPanel.set(true);
-  }
-
-  closeMapPanel(): void {
-    this.showMapPanel.set(false);
-  }
-
   onFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     if (input.files && input.files.length > 0) {
@@ -82,7 +188,7 @@ export class NewMissionComponent {
       const validPdfs = files.filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
 
       if (validPdfs.length !== files.length) {
-        this.toastService.showError('Oly PDFs accepted.', 'Invalid File');
+        this.toastService.showError('Only PDFs accepted.', 'Invalid File');
       }
       this.selectedFiles = [...this.selectedFiles, ...validPdfs];
       this.missionForm.patchValue({ documentFile: this.selectedFiles.length > 0 ? this.selectedFiles : null });
@@ -162,7 +268,6 @@ export class NewMissionComponent {
       return;
     }
 
-    // Apre il riepilogo in rilievo prima dell'invio definitivo
     this.showSummaryModal.set(true);
   }
 
@@ -179,15 +284,14 @@ export class NewMissionComponent {
       );
       return;
     }
-  
+
     const formValues = this.missionForm.value;
-  
+
     const startTime = formValues.startTime || '08:00';
     const endTime = formValues.endTime || '20:00';
     const startsAt = `${formValues.startDate}T${this.normalizeTime(startTime)}`;
     const endsAt = `${formValues.endDate}T${this.normalizeTime(endTime)}`;
-  
-    // Distinzione gestore fondi: 'self' (utente corrente) vs 'other' (placeholder)
+
     let fundManagerId: string;
     if (this.fundSource() === 'self') {
       fundManagerId = currentUser.id;
@@ -195,7 +299,7 @@ export class NewMissionComponent {
       const inputVal = formValues.fundManagerInput?.trim();
       fundManagerId = inputVal || '00000000-0000-0000-0000-000000000002';
     }
-  
+
     const payload: MissionCreatePayload = {
       missionType: formValues.missionType,
       subject: formValues.subject.trim(),
@@ -205,16 +309,16 @@ export class NewMissionComponent {
       endsAt,
       fundManagerId,
     };
-  
+
     this.isSubmitting.set(true);
-  
+
     this.missionService.createMission(payload).subscribe({
       next: (createdMission) => {
         if (this.selectedFiles && this.selectedFiles.length > 0 && createdMission?.id) {
           const uploadRequests = this.selectedFiles.map((file) =>
             this.missionService.uploadDocument(createdMission.id, file)
           );
-  
+
           forkJoin(uploadRequests).subscribe({
             next: () => {
               this.finalizeSubmission();
@@ -244,7 +348,7 @@ export class NewMissionComponent {
         } else if (err?.error?.message) {
           errorDetail = err.error.message;
         }
-  
+
         this.toastService.showError(errorDetail, 'Submission Error');
         console.error('[NewMission] Backend submission error:', err);
       },
@@ -277,6 +381,7 @@ export class NewMissionComponent {
       documentFile: null,
     });
     this.selectedFiles = [];
+    this.locationSuggestions.set([]);
     this.isSubmitted.set(false);
     this.fundSource.set('self');
   }

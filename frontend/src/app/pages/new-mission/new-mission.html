@@ -12,7 +12,7 @@
               <line x1="8" y1="2" x2="8" y2="18"></line>
               <line x1="16" y1="6" x2="16" y2="22"></line>
             </svg>
-            <h3>Location & Map</h3>
+            <h3>Map</h3>
           </div>
           <button type="button" class="close-sidebar-btn" (click)="closeMapPanel()" aria-label="Close map panel">
             ✕
@@ -20,18 +20,7 @@
         </div>
 
         <div class="map-sidebar__content">
-          <div class="map-placeholder-box">
-            <div class="map-placeholder-box__icon">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="10" r="3"></circle>
-                <path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z"></path>
-              </svg>
-            </div>
-            <h4>Interactive Map View</h4>
-            <p>
-              [Placeholder] la mappa la piazziamo qui :)
-            </p>
-          </div>
+          <div id="map-container" style="height: 380px; width: 100%; border-radius: 6px; z-index: 1;"></div>
         </div>
       </aside>
     }
@@ -93,15 +82,15 @@
         <h4>Schedule & Location</h4>
       </div>
 
-      <div class="form-group">
+      <div class="form-group autocomplete-container" style="position: relative;">
         <div class="label-with-action">
-          <label for="destination">Destination / Location *</label>
+          <label for="destination">Location *</label>
           <button
             type="button"
             class="text-link-action"
             (click)="showMapPanel() ? closeMapPanel() : openMapPanel()"
           >
-            {{ showMapPanel() ? 'Hide Map' : 'Open Map Panel' }}
+            {{ showMapPanel() ? 'Hide Map' : 'Open Map' }}
           </button>
         </div>
         <input
@@ -110,9 +99,26 @@
           formControlName="destination"
           class="form-control"
           [class.is-invalid]="isFieldInvalid('destination')"
-          placeholder="e.g. Aula Magna, University of Calabria (click to open map)"
+          placeholder="Type location (e.g. University of Padova)..."
+          (input)="onDestinationInput($event)"
           (focus)="openMapPanel()"
+          autocomplete="off"
         />
+
+        @if (isSearchingLocation()) {
+          <div class="autocomplete-loading">Searching location...</div>
+        }
+
+        @if (locationSuggestions().length > 0) {
+          <ul class="autocomplete-dropdown">
+            @for (loc of locationSuggestions(); track loc.display_name) {
+              <li (click)="selectLocation(loc)">
+                📍 {{ loc.display_name }}
+              </li>
+            }
+          </ul>
+        }
+
         @if (isFieldInvalid('destination')) {
           <div class="form-error">Destination is required.</div>
         }
