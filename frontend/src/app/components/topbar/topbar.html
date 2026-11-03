@@ -19,7 +19,7 @@
         <div class="bell__panel">
           @if (missionsToApprove() > 0) {
             <p>You have <strong>{{ missionsToApprove() }}</strong> {{ missionsToApprove() === 1 ? 'mission' : 'missions' }} to approve.</p>
-            <a class="bell__link" routerLink="/mission/approve">Go to approvals →</a>
+            <a class="bell__link" routerLink="/missionreview">Go to approvals →</a>
           } @else {
             <p>No missions to approve.</p>
           }

@@ -236,29 +236,111 @@
       @if (fundSource() === 'self') {
         <div class="fund-placeholder-box">
           <div class="badge">Own Fund Selected</div>
-          <p>
-            You have selected your personal academic fund.
-          </p>
-          <div class="mock-component-notice">
-            <em>[Placeholder] Gestione fondo personale configurato qui :)</em>
+          <div class="form-group" style="margin-top: 12px; margin-bottom: 8px;">
+            <label for="ownFundSearch">Fund *</label>
+            <div class="search-select">
+              <input
+                id="ownFundSearch"
+                type="text"
+                class="form-control"
+                [class.is-invalid]="isFieldInvalid('fundId')"
+                [value]="ownFundQuery()"
+                (input)="onOwnFundQueryInput($any($event.target).value)"
+                (focus)="showOwnFundSuggestions.set(true)"
+                (blur)="closeOwnFundSuggestions()"
+                (keydown)="onOwnFundKeydown($event)"
+                placeholder="Search one of your funds..."
+                autocomplete="off"
+                role="combobox"
+                aria-controls="ownFundSuggestions"
+                [attr.aria-expanded]="showOwnFundSuggestions()"
+              />
+              @if (showOwnFundSuggestions()) {
+                <ul id="ownFundSuggestions" class="search-select__list" role="listbox">
+                  @for (fund of filteredOwnFunds(); track fund.id; let i = $index) {
+                    <li
+                      class="search-select__option"
+                      role="option"
+                      [class.is-active]="i === activeOwnFund()"
+                      [class.is-disabled]="!isFundFree(fund)"
+                      [attr.aria-disabled]="!isFundFree(fund)"
+                      [attr.aria-selected]="fund.id === missionForm.get('fundId')?.value"
+                      (mousedown)="$event.preventDefault(); selectOwnFund(fund)"
+                    >
+                      <span>{{ fund.name }}</span>
+                      <span>{{ isFundFree(fund) ? '€ ' + fund.amount : 'Already assigned' }}</span>
+                    </li>
+                  } @empty {
+                    <li class="search-select__empty">
+                      {{ myFunds().length === 0 ? 'You have no funds yet.' : 'No fund matches your search.' }}
+                    </li>
+                  }
+                </ul>
+              }
+            </div>
+            @if (isFieldInvalid('fundId')) {
+              <div class="form-error">Select the fund that will pay for this mission.</div>
+            }
           </div>
+          @if (!hasFreeFunds()) {
+            <p class="form-error">
+              You have no free funds. <a routerLink="/fund/add">Create a fund</a> or request another manager.
+            </p>
+          } @else if (selectedOwnFund()) {
+            <p>You manage this fund, so the mission will be <strong>approved automatically</strong> and the fund reserved as soon as you submit it.</p>
+          }
         </div>
       } @else {
         <div class="fund-placeholder-box">
           <div class="badge">External Fund Manager</div>
           <div class="form-group" style="margin-top: 12px; margin-bottom: 8px;">
-            <label for="fundManagerInput">Account Manager</label>
-            <input
-              id="fundManagerInput"
-              type="text"
-              formControlName="fundManagerInput"
-              class="form-control"
-              placeholder="Search or select user..."
-            />
+            <label for="managerSearch">Fund Manager *</label>
+            <div class="search-select">
+              <input
+                id="managerSearch"
+                type="text"
+                class="form-control"
+                [class.is-invalid]="isFieldInvalid('fundManagerId')"
+                [value]="managerQuery()"
+                (input)="onManagerQueryInput($any($event.target).value)"
+                (focus)="showManagerSuggestions.set(true)"
+                (blur)="closeManagerSuggestions()"
+                (keydown)="onManagerKeydown($event)"
+                [placeholder]="isLoadingManagers() ? 'Loading fund managers...' : 'Search by name or department...'"
+                [disabled]="isLoadingManagers()"
+                autocomplete="off"
+                role="combobox"
+                aria-controls="managerSuggestions"
+                [attr.aria-expanded]="showManagerSuggestions()"
+              />
+              @if (showManagerSuggestions() && !isLoadingManagers()) {
+                <ul id="managerSuggestions" class="search-select__list" role="listbox">
+                  @for (option of filteredManagers(); track option.id; let i = $index) {
+                    <li
+                      class="search-select__option"
+                      role="option"
+                      [class.is-active]="i === activeSuggestion()"
+                      [attr.aria-selected]="i === activeSuggestion()"
+                      (mousedown)="$event.preventDefault(); selectManager(option)"
+                    >
+                      <span>{{ option.name }}</span>
+                      <span>{{ option.department }}</span>
+                    </li>
+                  } @empty {
+                    <li class="search-select__empty">
+                      {{ managerOptions().length === 0 ? 'No fund manager is available right now.' : 'No fund manager matches your search.' }}
+                    </li>
+                  }
+                </ul>
+              }
+            </div>
+            @if (isFieldInvalid('fundManagerId')) {
+              <div class="form-error">Select the fund manager for this mission.</div>
+            }
           </div>
-          <div class="mock-component-notice">
-            <em>[Placeholder] Selezione e gestione fondo altrui configurato qui :)</em>
-          </div>
+          @if (selectedManager(); as manager) {
+            <p>The request will be sent to <strong>{{ manager.name }}</strong>, who will choose the fund when approving it.</p>
+          }
         </div>
       }
 
@@ -345,9 +427,9 @@
               <span class="summary-label">Funding Source:</span>
               <span class="summary-value">
                 @if (fundSource() === 'self') {
-                  <span class="fund-status fund-status--self">Personal Academic Fund (Self)</span>
+                  <span class="fund-status fund-status--self">{{ selectedOwnFund()?.name }} (own fund)</span>
                 } @else {
-                  <span class="fund-status fund-status--other">External Manager {{ missionForm.get('fundManagerInput')?.value ? '(' + missionForm.get('fundManagerInput')?.value + ')' : '' }}</span>
+                  <span class="fund-status fund-status--other">{{ selectedManager()?.name }} — {{ selectedManager()?.department }}</span>
                 }
               </span>
             </div>

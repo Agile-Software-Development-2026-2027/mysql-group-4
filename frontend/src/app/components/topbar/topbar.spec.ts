@@ -17,7 +17,9 @@ describe('Topbar', () => {
           { path: 'home', component: Topbar },
           { path: 'mission/new', component: Topbar },
           { path: 'mission', component: Topbar },
-          { path: 'mission/approve', component: Topbar },
+          { path: 'missionreview', component: Topbar },
+          { path: 'fund', component: Topbar },
+          { path: 'fund/add', component: Topbar },
           { path: 'settings', component: Topbar },
         ])
       ],
