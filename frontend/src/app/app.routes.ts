@@ -6,6 +6,7 @@ import { NewMissionComponent } from './pages/new-mission/new-mission';
 import { authGuard, guestGuard } from './core/guards';
 import { MissionReview } from './pages/mission-review/mission-review';
 import { AddFund } from './pages/add-fund/add-fund';
+import { MyFunds } from './pages/my-funds/my-funds';
 
 export const routes: Routes = [
   { path: '', component: Landingpage, canActivate: [guestGuard] },
@@ -16,6 +17,7 @@ export const routes: Routes = [
   { path: 'home', component: Homepage, canActivate: [authGuard] },
   { path: 'mission/new', component: NewMissionComponent, canActivate: [authGuard] },
   { path: 'missionreview', component: MissionReview, canActivate: [authGuard] },
+  { path: 'fund', component: MyFunds, canActivate: [authGuard] },
   { path: 'fund/add', component: AddFund, canActivate: [authGuard] },
   { path: '**', redirectTo: '' }
 ];

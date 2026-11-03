@@ -24,6 +24,13 @@ export class FundService {
     });
   }
 
+  deleteFund(fundId: string, force = false): Observable<void> {
+    return this.http.delete<void>(`${API_CONFIG.endpoints.funds.base}/${fundId}`, {
+      params: force ? { force: true } : {},
+      withCredentials: true,
+    });
+  }
+
   getFundManagers(): Observable<User[]> {
     return this.http.get<User[]>(API_CONFIG.endpoints.users.fundManagers, {
       withCredentials: true,

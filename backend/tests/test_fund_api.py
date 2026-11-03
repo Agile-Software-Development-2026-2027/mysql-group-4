@@ -1,3 +1,4 @@
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 import pytest
@@ -150,3 +151,31 @@ async def test_mission_on_own_fund_locks_it_at_creation(client: AsyncClient, tea
 
     second = await client.post("/api/v1/missions", json=body)
     assert second.status_code == 409
+
+
+async def test_my_funds_show_who_requested_a_locked_fund_and_force_delete_it(
+    client: AsyncClient, db_session: AsyncSession, teacher: User
+):
+    fund_id = (await client.post("/api/v1/funds", json={"name": "Fondo", "amount": "200"})).json()["id"]
+    mission = make_mission(
+        requester_id=teacher.id, fund_manager_id=teacher.id,
+        subject="Convegno", estimated_cost=Decimal("150.00"),
+    )
+    db_session.add(mission)
+    await db_session.commit()
+    mission_id = mission.id
+    await FundService(db_session, FundRepository(db_session)).lock_for_mission(UUID(fund_id), mission_id)
+    await db_session.commit()
+
+    fund = (await client.get("/api/v1/funds")).json()["content"][0]
+    assert fund["requestedAmount"] == "150.00"
+    assert fund["requesterName"] == "Mario Rossi"
+    assert fund["missionSubject"] == "Convegno"
+    assert (await client.get(f"/api/v1/funds/{fund_id}")).json()["requesterName"] == "Mario Rossi"
+
+    assert (await client.delete(f"/api/v1/funds/{fund_id}")).status_code == 409
+    for obj in list(db_session.identity_map.values()):
+        await db_session.refresh(obj)
+    assert (await client.delete(f"/api/v1/funds/{fund_id}", params={"force": "true"})).status_code == 204
+    assert (await client.get(f"/api/v1/funds/{fund_id}")).status_code == 404
+    assert (await client.get(f"/api/v1/missions/{mission_id}")).status_code == 200

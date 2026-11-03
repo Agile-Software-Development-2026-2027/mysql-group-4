@@ -1,10 +1,13 @@
+from collections.abc import Collection
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import Row, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.pagination import paginate
 from app.db.fund import Fund
+from app.db.mission import Mission
+from app.db.models import User
 from app.schemas.page import Page, PageRequest
 
 
@@ -41,8 +44,17 @@ class FundRepository:
         query = query.order_by(Fund.name, Fund.id)
         return await paginate(self._session, query, request.page, request.size)
 
+    async def find_lock_holders(self, mission_ids: Collection[UUID]) -> dict[UUID, Row]:
+        if not mission_ids:
+            return {}
+        result = await self._session.execute(
+            select(Mission.id, Mission.subject, Mission.estimated_cost, User.name, User.surname)
+            .join(User, User.id == Mission.requester_id)
+            .where(Mission.id.in_(mission_ids))
+        )
+        return {row.id: row for row in result}
+
     async def lock(self, fund_id: UUID, mission_id: UUID) -> bool:
-        # UPDATE condizionato: se due richieste arrivano insieme solo una trova il fondo libero.
         result = await self._session.execute(
             update(Fund)
             .where(Fund.id == fund_id, Fund.locked_by_mission_id.is_(None))
