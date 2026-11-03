@@ -26,3 +26,10 @@ export interface UserCreate {
   department: string;
   employmentLevel: EmploymentLevel | string;
 }
+
+export interface UserUpdatePayload {
+  name?: string;
+  surname?: string;
+  department?: string;
+}
+

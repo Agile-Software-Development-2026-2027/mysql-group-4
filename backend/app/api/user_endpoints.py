@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_async_session
 from app.db.fund import Fund
 from app.db.models import User
-from app.schemas.user import UserRead
+from app.schemas.user import UserRead, UserUpdate
 from app.security import current_active_user
 
 user_router = APIRouter(tags=["users"])
@@ -19,6 +19,24 @@ async def greeting():
 #Esempio endpoint protetto
 @user_router.get("/me", response_model=UserRead)
 async def get_current_user_profile(user: User = Depends(current_active_user)):
+    return user
+
+
+@user_router.patch("/me", response_model=UserRead, status_code=status.HTTP_200_OK)
+async def update_current_user_profile(
+    payload: UserUpdate,
+    user: User = Depends(current_active_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    if payload.name is not None:
+        user.name = payload.name.strip()
+    if payload.surname is not None:
+        user.surname = payload.surname.strip()
+    if payload.department is not None:
+        user.department = payload.department.strip()
+
+    await session.commit()
+    await session.refresh(user)
     return user
 
 @user_router.get("/users/fund-managers", response_model=List[UserRead], status_code=status.HTTP_200_OK)

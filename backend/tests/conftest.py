@@ -1,7 +1,7 @@
 """Isolated configuration, loaded before application imports in unit tests."""
 import os
 
-os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
 os.environ.update({
     "SECRET_KEY": "unit-tests-only-not-a-production-secret",
     "MAIL_USERNAME": "test",
