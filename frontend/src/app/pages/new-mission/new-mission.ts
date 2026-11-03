@@ -7,6 +7,7 @@ import { ToastService } from '../../services/toast.service';
 import { MissionService } from '../../services/mission.service';
 import { AuthService } from '../../services/auth.service';
 import { MissionCreatePayload, MissionType } from '../../core/models';
+import { forkJoin } from 'rxjs';
 
 @Component({
   selector: 'app-new-mission',
@@ -21,7 +22,6 @@ export class NewMissionComponent {
   private toastService = inject(ToastService);
   private missionService = inject(MissionService);
   private authService = inject(AuthService);
-
   siteName = 'MYSOL';
   isSubmitted = signal(false);
   isSubmitting = signal(false);
@@ -39,6 +39,7 @@ export class NewMissionComponent {
 
   showMapPanel = signal(false);
 
+  selectedFiles: File[] = [];
   missionForm: FormGroup = this.fb.group(
     {
       subject: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(250)]],
@@ -50,9 +51,14 @@ export class NewMissionComponent {
       endTime: [''],
       estimatedCost: [null, [Validators.required, Validators.min(0)]],
       fundManagerInput: [''],
+      documentFile: [null, [Validators.required]],
     },
     { validators: [this.datePeriodValidator.bind(this)] }
   );
+
+  get selectedFile(): File | null {
+    return this.missionForm.get('documentFile')?.value || null;
+  }
 
   setFundSource(source: 'self' | 'other'): void {
     this.fundSource.set(source);
@@ -67,6 +73,27 @@ export class NewMissionComponent {
 
   closeMapPanel(): void {
     this.showMapPanel.set(false);
+  }
+
+  onFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      const files = Array.from(input.files);
+      const validPdfs = files.filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+
+      if (validPdfs.length !== files.length) {
+        this.toastService.showError('Oly PDFs accepted.', 'Invalid File');
+      }
+      this.selectedFiles = [...this.selectedFiles, ...validPdfs];
+      this.missionForm.patchValue({ documentFile: this.selectedFiles.length > 0 ? this.selectedFiles : null });
+      this.missionForm.get('documentFile')?.markAsTouched();
+      input.value = '';
+    }
+  }
+
+  removeFile(index: number): void {
+    this.selectedFiles.splice(index, 1);
+    this.missionForm.patchValue({ documentFile: this.selectedFiles.length > 0 ? this.selectedFiles : null });
   }
 
   datePeriodValidator(control: AbstractControl): ValidationErrors | null {
@@ -152,14 +179,14 @@ export class NewMissionComponent {
       );
       return;
     }
-
+  
     const formValues = this.missionForm.value;
-
+  
     const startTime = formValues.startTime || '08:00';
     const endTime = formValues.endTime || '20:00';
     const startsAt = `${formValues.startDate}T${this.normalizeTime(startTime)}`;
     const endsAt = `${formValues.endDate}T${this.normalizeTime(endTime)}`;
-
+  
     // Distinzione gestore fondi: 'self' (utente corrente) vs 'other' (placeholder)
     let fundManagerId: string;
     if (this.fundSource() === 'self') {
@@ -168,7 +195,7 @@ export class NewMissionComponent {
       const inputVal = formValues.fundManagerInput?.trim();
       fundManagerId = inputVal || '00000000-0000-0000-0000-000000000002';
     }
-
+  
     const payload: MissionCreatePayload = {
       missionType: formValues.missionType,
       subject: formValues.subject.trim(),
@@ -178,20 +205,32 @@ export class NewMissionComponent {
       endsAt,
       fundManagerId,
     };
-
+  
     this.isSubmitting.set(true);
-
+  
     this.missionService.createMission(payload).subscribe({
-      next: (_mission) => {
-        this.isSubmitting.set(false);
-        this.showSummaryModal.set(false);
-        this.toastService.showSuccess(
-          'Mission request created successfully!',
-          'Mission Submitted'
-        );
-        this.resetForm();
-        this.closeMapPanel();
-        this.router.navigate(['/home']);
+      next: (createdMission) => {
+        if (this.selectedFiles && this.selectedFiles.length > 0 && createdMission?.id) {
+          const uploadRequests = this.selectedFiles.map((file) =>
+            this.missionService.uploadDocument(createdMission.id, file)
+          );
+  
+          forkJoin(uploadRequests).subscribe({
+            next: () => {
+              this.finalizeSubmission();
+            },
+            error: (err) => {
+              this.isSubmitting.set(false);
+              this.toastService.showError(
+                'Mission created, but document upload failed. Please try re-uploading from mission details.',
+                'Upload Error'
+              );
+              console.error('[NewMission] MinIO upload error:', err);
+            },
+          });
+        } else {
+          this.finalizeSubmission();
+        }
       },
       error: (err) => {
         this.isSubmitting.set(false);
@@ -205,11 +244,23 @@ export class NewMissionComponent {
         } else if (err?.error?.message) {
           errorDetail = err.error.message;
         }
-
+  
         this.toastService.showError(errorDetail, 'Submission Error');
         console.error('[NewMission] Backend submission error:', err);
       },
     });
+  }
+
+  private finalizeSubmission(): void {
+    this.isSubmitting.set(false);
+    this.showSummaryModal.set(false);
+    this.toastService.showSuccess(
+      'Mission request created successfully',
+      'Mission submitted'
+    );
+    this.resetForm();
+    this.closeMapPanel();
+    this.router.navigate(['/home']);
   }
 
   resetForm(): void {
@@ -223,7 +274,9 @@ export class NewMissionComponent {
       endTime: '',
       estimatedCost: null,
       fundManagerInput: '',
+      documentFile: null,
     });
+    this.selectedFiles = [];
     this.isSubmitted.set(false);
     this.fundSource.set('self');
   }

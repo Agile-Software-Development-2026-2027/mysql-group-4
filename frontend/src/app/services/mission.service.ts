@@ -67,4 +67,21 @@ export class MissionService {
       { withCredentials: true }
     );
   }
+
+  uploadDocument(missionId: string, file: File): Observable<any> {
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+    return this.http.post<any>(
+      `${this.baseUrl}/${missionId}/documents`,
+      formData,
+      { withCredentials: true }
+    );
+  }
+
+  getDocuments(missionId: string): Observable<any[]> {
+    return this.http.get<any[]>(
+      `${this.baseUrl}/${missionId}/documents`,
+      { withCredentials: true }
+    );
+  }
 }

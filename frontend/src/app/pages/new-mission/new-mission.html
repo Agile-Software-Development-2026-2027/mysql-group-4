@@ -175,6 +175,42 @@
       }
 
       <div class="section-divider">
+        <h4>Documents</h4>
+      </div>
+
+      <div class="form-group">
+        <label for="documentFile">Mission Documents (PDF) *</label>
+        
+        <div class="custom-file-upload">
+          <input
+            id="documentFile"
+            type="file"
+            accept="application/pdf"
+            multiple
+            (change)="onFileSelected($event)"
+            class="hidden-file-input"
+          />
+          <label for="documentFile" class="btn btn--outline upload-btn">
+            Choose Files
+          </label>
+          <span class="file-status-text">
+            {{ selectedFiles.length > 0 ? selectedFiles.length + ' file(s) selected' : 'No file chosen' }}
+          </span>
+        </div>
+
+        @if (isFieldInvalid('documentFile')) {
+          <div class="form-error">At least one mission document (PDF) is required.</div>
+        }
+
+        @for (file of selectedFiles; track file.name; let i = $index) {
+          <div class="file-preview-box">
+            <span>📄 <strong>{{ file.name }}</strong> ({{ (file.size / 1024).toFixed(1) }} KB)</span>
+            <button type="button" class="btn-remove-file" (click)="removeFile(i)">✕ Remove</button>
+          </div>
+        }
+      </div>
+
+      <div class="section-divider">
         <h4>Funding & Budget</h4>
       </div>
 
@@ -294,6 +330,16 @@
         </div>
 
         <div class="summary-modal__body">
+          @if (selectedFiles.length > 0) {
+            <div class="summary-row">
+              <span class="summary-label">Attached Documents:</span>
+              <span class="summary-value">
+                @for (file of selectedFiles; track file.name) {
+                  <div>📄 {{ file.name }}</div>
+                }
+              </span>
+            </div>
+          }
           <div class="formal-declaration">
             <div class="declaration-item">
               <span class="label">I, the undersigned:</span>
