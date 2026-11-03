@@ -1,0 +1,114 @@
+<app-topbar></app-topbar>
+
+<main class="container page-container">
+  <div class="card fund-card">
+    <div class="card-header">
+      <h2>Create New Fund</h2>
+      <p class="subtitle">
+        Register a new fund that you will manage. Missions can then be charged to it.
+      </p>
+    </div>
+
+    <form [formGroup]="fundForm" (ngSubmit)="onSubmit()" novalidate>
+      <div class="section-divider">
+        <h4>Fund Owner</h4>
+      </div>
+
+      <div class="owner-box">
+        <svg class="owner-box__icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+          <circle cx="12" cy="7" r="4"></circle>
+        </svg>
+        <div class="owner-box__info">
+          @if (currentUser(); as user) {
+            <span class="owner-box__name">{{ user.name }} {{ user.surname }}</span>
+            <span class="owner-box__meta">Fiscal code: <strong>{{ user.fiscalCode }}</strong></span>
+            <span class="owner-box__meta">{{ user.department }}</span>
+          } @else {
+            <span class="owner-box__name">You</span>
+          }
+        </div>
+        <div class="badge">Responsible</div>
+      </div>
+      <p class="owner-note">You will be registered as the responsible of this fund.</p>
+
+      <div class="section-divider">
+        <h4>Fund Details</h4>
+      </div>
+
+      <div class="form-group">
+        <label for="name">Fund Name *</label>
+        <input
+          id="name"
+          type="text"
+          formControlName="name"
+          class="form-control"
+          [class.is-invalid]="isFieldInvalid('name')"
+          maxlength="100"
+          placeholder="e.g. PRIN 2026 - Machine Learning Lab"
+        />
+        @if (isFieldInvalid('name')) {
+          <div class="form-error">
+            @if (fundForm.get('name')?.hasError('required')) {
+              Fund name is required.
+            } @else if (fundForm.get('name')?.hasError('maxlength')) {
+              Fund name cannot exceed 100 characters.
+            }
+          </div>
+        }
+      </div>
+
+      <div class="form-group">
+        <label for="description">Description <span class="optional-label">(optional)</span></label>
+        <textarea
+          id="description"
+          formControlName="description"
+          class="form-control"
+          [class.is-invalid]="isFieldInvalid('description')"
+          rows="4"
+          maxlength="500"
+          placeholder="Describe the purpose or the source of this fund..."
+        ></textarea>
+        <div class="char-counter">
+          <span>{{ fundForm.get('description')?.value?.length || 0 }} / 500 characters</span>
+        </div>
+      </div>
+
+      <div class="section-divider">
+        <h4>Budget</h4>
+      </div>
+
+      <div class="form-group">
+        <label for="amount">Total Amount (€) *</label>
+        <input
+          id="amount"
+          type="number"
+          step="0.01"
+          min="0"
+          formControlName="amount"
+          class="form-control"
+          [class.is-invalid]="isFieldInvalid('amount')"
+          placeholder="e.g. 15000.00"
+        />
+        @if (isFieldInvalid('amount')) {
+          <div class="form-error">
+            @if (fundForm.get('amount')?.hasError('required')) {
+              Amount is required.
+            } @else if (fundForm.get('amount')?.hasError('min')) {
+              Amount must be greater than or equal to 0.
+            } @else if (fundForm.get('amount')?.hasError('pattern')) {
+              Amount can have at most 2 decimal places.
+            }
+          </div>
+        }
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn--primary" [disabled]="isSaving()">
+          {{ isSaving() ? 'Saving...' : 'Create Fund' }}
+        </button>
+        <a routerLink="/home" class="btn btn--outline">Cancel</a>
+      </div>
+    </form>
+  </div>
+</main>

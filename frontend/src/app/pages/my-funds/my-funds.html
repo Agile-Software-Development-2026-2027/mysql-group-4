@@ -1,0 +1,121 @@
+<app-topbar></app-topbar>
+<main class="container">
+  @if (selectedFund(); as fund) {
+    <div class="detail-wrapper">
+      <section class="card detail-card">
+        <div class="detail-header">
+          <h1>{{ fund.name }}</h1>
+          <span class="badge" [class.is-locked]="isLocked(fund)">
+            {{ isLocked(fund) ? 'Assigned' : 'Available' }}
+          </span>
+        </div>
+
+        <div class="detail-box">
+          <div class="detail-grid">
+            <div class="detail-item full-width">
+              <span class="label">Description</span>
+              <span class="value">{{ fund.description || '—' }}</span>
+            </div>
+            <div class="detail-item highlight">
+              <span class="label">Available</span>
+              <span class="value">€ {{ available(fund) | number:'1.2-2' }} / € {{ fund.amount | number:'1.2-2' }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="label">Total Amount</span>
+              <span class="value">€ {{ fund.amount | number:'1.2-2' }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="label">Responsible</span>
+              <span class="value">
+                @if (currentUser(); as user) { {{ user.name }} {{ user.surname }} — }
+                {{ fund.responsibleFc }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        @if (isLocked(fund)) {
+          <div class="detail-box">
+            <h3>Assigned Mission</h3>
+            <div class="detail-grid">
+              <div class="detail-item">
+                <span class="label">Requested by</span>
+                <span class="value">{{ fund.requesterName || '—' }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="label">Mission</span>
+                <span class="value">{{ fund.missionSubject || '—' }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="label">Requested Amount</span>
+                <span class="value">€ {{ fund.requestedAmount | number:'1.2-2' }}</span>
+              </div>
+            </div>
+          </div>
+        }
+
+        <div class="action-buttons">
+          <button class="btn btn--outline" type="button" (click)="closeDetail()">&larr; Go back</button>
+          <button class="btn btn--danger" type="button" [disabled]="isDeleting()" (click)="requestDelete(fund)">
+            Delete Fund
+          </button>
+        </div>
+      </section>
+    </div>
+
+    @if (confirmingDelete()) {
+      <div class="confirm-overlay" (click)="cancelDelete()">
+        <div class="confirm-modal card" role="alertdialog" aria-labelledby="confirm-title" (click)="$event.stopPropagation()">
+          <h3 id="confirm-title">This fund is already assigned</h3>
+          <p>
+            <strong>{{ fund.name }}</strong> is being used by
+            <strong>{{ fund.requesterName || 'another user' }}</strong>@if (fund.missionSubject) { for the mission "{{ fund.missionSubject }}"}.
+            Are you sure you want to delete it anyway?
+          </p>
+          <div class="action-buttons">
+            <button class="btn btn--outline" type="button" (click)="cancelDelete()">No, keep it</button>
+            <button class="btn btn--danger" type="button" [disabled]="isDeleting()" (click)="deleteFund(fund, true)">
+              Yes, delete it
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+  } @else {
+    <div class="dashboard-header">
+      <div>
+        <h1>My Funds</h1>
+        <p>Select a fund to see its details. Grey funds are already assigned to a mission.</p>
+      </div>
+      <a class="btn" routerLink="/fund/add">Add Fund</a>
+    </div>
+
+    @if (isLoading()) {
+      <p class="empty-state">Loading your funds…</p>
+    } @else if (funds().length === 0) {
+      <div class="card empty-state">
+        <p>You haven't created any funds yet.</p>
+        <a class="btn" routerLink="/fund/add">Create your first fund</a>
+      </div>
+    } @else {
+      <div class="fund-grid">
+        @for (fund of funds(); track fund.id) {
+          <button class="card fund-tile" type="button" [class.is-locked]="isLocked(fund)" (click)="openDetail(fund)">
+            <h3>{{ fund.name }}</h3>
+            <span class="fund-tile__amount">
+              € {{ available(fund) | number:'1.2-2' }}
+              <small>/ € {{ fund.amount | number:'1.2-2' }}</small>
+            </span>
+            <span class="fund-tile__status">
+              @if (isLocked(fund)) {
+                Requested by <strong>{{ fund.requesterName || 'another user' }}</strong>
+              } @else {
+                Available
+              }
+            </span>
+          </button>
+        }
+      </div>
+    }
+  }
+</main>

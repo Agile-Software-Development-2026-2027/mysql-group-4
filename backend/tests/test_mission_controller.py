@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 import pytest
 from unittest.mock import create_autospec
 from pydantic import ValidationError
@@ -52,13 +54,16 @@ class TestMissionController:
         assert response.body == b''
         self.service.delete_mission.assert_awaited_once_with(self.mission_id, self.user.id)
 
-    @pytest.mark.parametrize('name', ('accept_mission', 'reject_mission'))
-    async def test_decisions_forward_id_and_authenticated_actor(self, name):
-        operation = getattr(self.service, name)
-        result = await getattr(controller, name)(self.mission_id, self.user, self.service)
-        assert result is operation.return_value
-        # Aggiunto None come terzo parametro atteso
-        operation.assert_awaited_once_with(self.mission_id, self.user.id, None)
+    async def test_reject_forwards_id_and_authenticated_actor(self):
+        result = await controller.reject_mission(self.mission_id, self.user, self.service)
+        assert result is self.service.reject_mission.return_value
+        self.service.reject_mission.assert_awaited_once_with(self.mission_id, self.user.id, None)
+
+    async def test_accept_forwards_the_chosen_fund(self):
+        fund_id = uuid4()
+        result = await controller.accept_mission(self.mission_id, self.user, self.service, fund_id, 'Ok')
+        assert result is self.service.accept_mission.return_value
+        self.service.accept_mission.assert_awaited_once_with(self.mission_id, self.user.id, fund_id, 'Ok')
 
     async def test_service_exception_propagates_to_global_handler(self):
         self.service.get_mission_by_id.side_effect = AccessDeniedError('Denied')

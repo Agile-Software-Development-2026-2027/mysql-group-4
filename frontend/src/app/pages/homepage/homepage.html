@@ -14,13 +14,13 @@
     <section class="card">
       <h3>My Missions</h3>
       <p>View the history, details, and current status of your missions.</p>
-      <a routerLink="/mission" class="btn">View Missions</a>
+      <a routerLink="/missionreview" [queryParams]="{ view: 'requester' }" class="btn">View Missions</a>
     </section>
 
     <section class="card">
       <h3>Approve Missions</h3>
       <p>Review and approve pending mission requests from your team.</p>
-      <a routerLink="/mission/approve" class="btn">Approve Missions</a>
+      <a routerLink="/missionreview" [queryParams]="{ view: 'manager' }" class="btn">Approve Missions</a>
     </section>
   </div>
 </main>

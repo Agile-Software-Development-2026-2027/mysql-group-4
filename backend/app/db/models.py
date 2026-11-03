@@ -8,6 +8,7 @@ from app.core.enums import EmploymentLevel
 from app.db.base import Base
 
 if TYPE_CHECKING:
+    from app.db.fund import Fund
     from app.db.mission import Mission
 
 
@@ -32,4 +33,9 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
         lazy="raise",
         passive_deletes="all",
     )
-
+    funds: Mapped[list["Fund"]] = relationship(
+        back_populates="responsible",
+        foreign_keys="Fund.responsible_fc",
+        lazy="raise",
+        passive_deletes="all",
+    )

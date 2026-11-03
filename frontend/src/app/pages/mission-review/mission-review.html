@@ -1,8 +1,9 @@
+<app-topbar></app-topbar>
 <main class="container">
   @if (!isDetailView) {
     <div class="dashboard-header">
       <div class="header-text">
-        <h1>Mission Funds Management</h1>
+        <h1>{{ pageTitle }}</h1>
         <p>Click on the categories to expand them and select a request to view its details.</p>
       </div>
     </div>
@@ -121,6 +122,12 @@
                 <span class="label">Estimated Cost</span>
                 <span class="value">€ {{ selectedMission.estimatedCost | number:'1.2-2' }}</span>
               </div>
+              @if (selectedMission.status === 'ACCEPTED' && associatedFundName()) {
+                <div class="detail-item">
+                  <span class="label">Associated Fund</span>
+                  <span class="value">{{ associatedFundName() }}</span>
+                </div>
+              }
             </div>
           </div>
 
@@ -129,27 +136,78 @@
           <div class="decision-form">
             <div class="form-header">
               <h3>Manager Decision</h3>
-              <p>Use the field below to enter any notes, recommendations, or reasons for rejection.</p>
+              <p>Notes, recommendations, or reasons regarding this mission.</p>
             </div>
 
             <label for="managerNotes">Notes and reasons:</label>
             <textarea class="form-control" #managerNotes id="managerNotes" rows="5"
-                      placeholder="E.g., 'Budget exhausted' or 'Proceed but choose a cheaper hotel...'"
+                      placeholder="No notes provided."
                       [value]="selectedMission.response || ''"
-                      [readonly]="selectedMission.status !== 'PENDING'">
+                      [readonly]="!canManageDecisions || selectedMission.status !== 'PENDING'">
             </textarea>
+
+            @if (canDecide(selectedMission)) {
+              <div class="form-group fund-choice">
+                <label for="fundToCharge">Fund to charge (required to approve) *</label>
+                <div class="search-select">
+                  <input
+                    id="fundToCharge"
+                    type="text"
+                    class="form-control"
+                    [value]="fundQuery()"
+                    (input)="onFundQueryInput($any($event.target).value)"
+                    (focus)="showFundSuggestions.set(true)"
+                    (blur)="showFundSuggestions.set(false)"
+                    (keydown)="onFundKeydown($event)"
+                    placeholder="Search one of your funds..."
+                    autocomplete="off"
+                    role="combobox"
+                    aria-controls="fundSuggestions"
+                    [attr.aria-expanded]="showFundSuggestions()"
+                  />
+                  @if (showFundSuggestions()) {
+                    <ul id="fundSuggestions" class="search-select__list" role="listbox">
+                      @for (fund of filteredFunds(); track fund.id; let i = $index) {
+                        <li
+                          class="search-select__option"
+                          role="option"
+                          [class.is-active]="i === activeSuggestion()"
+                          [class.is-disabled]="!isFundFree(fund)"
+                          [attr.aria-disabled]="!isFundFree(fund)"
+                          [attr.aria-selected]="fund.id === selectedFundId()"
+                          (mousedown)="$event.preventDefault(); selectFund(fund)"
+                        >
+                          <span>{{ fund.name }}</span>
+                          <span>{{ isFundFree(fund) ? '€ ' + (fund.amount | number:'1.2-2') : 'Already assigned' }}</span>
+                        </li>
+                      } @empty {
+                        <li class="search-select__empty">
+                          {{ myFunds().length === 0 ? 'You have no funds yet.' : 'No fund matches your search.' }}
+                        </li>
+                      }
+                    </ul>
+                  }
+                </div>
+                @if (!hasFreeFunds()) {
+                  <p class="form-error">
+                    You have no free funds to assign. <a routerLink="/fund/add">Create a fund</a> to approve this mission.
+                  </p>
+                }
+              </div>
+            }
 
             <div class="action-buttons">
               <button class="btn btn--outline" (click)="closeDetail()">&larr; Go back</button>
 
-              @if (selectedMission.status === 'PENDING') {
+              @if (canDecide(selectedMission)) {
                 <div class="primary-actions">
                   <button class="btn btn--danger" type="button" (click)="reject(selectedMission.id, managerNotes.value)">Reject Mission</button>
-                  <button class="btn btn--success" type="button" (click)="accept(selectedMission.id, managerNotes.value)">Approve Mission</button>
+                  <button class="btn btn--success" type="button" [disabled]="!selectedFundId()" (click)="accept(selectedMission.id, managerNotes.value)">Approve Mission</button>
                 </div>
               }
             </div>
           </div>
+
         </section>
       </div>
     }

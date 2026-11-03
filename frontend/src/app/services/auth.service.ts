@@ -4,7 +4,7 @@ import { Router } from '@angular/router';
 import { Observable, catchError, finalize, of, switchMap, tap } from 'rxjs';
 
 import { API_CONFIG } from '../core/config/api.config';
-import { ForgotPasswordRequest, LoginRequest, ResetPasswordRequest, User, UserCreate } from '../core/models';
+import { ForgotPasswordRequest, LoginRequest, ResetPasswordRequest, User, UserCreate, UserUpdatePayload } from '../core/models';
 
 @Injectable({
   providedIn: 'root',
@@ -81,6 +81,17 @@ export class AuthService {
         finalize(() => {
           this._isLoading.set(false);
         })
+      );
+  }
+
+  updateProfile(payload: UserUpdatePayload): Observable<User> {
+    this._isLoading.set(true);
+
+    return this.http
+      .patch<User>(API_CONFIG.endpoints.users.me, payload, { withCredentials: true })
+      .pipe(
+        tap((updatedUser) => { this._currentUser.set(updatedUser); }),
+        finalize(() => { this._isLoading.set(false); })
       );
   }
 

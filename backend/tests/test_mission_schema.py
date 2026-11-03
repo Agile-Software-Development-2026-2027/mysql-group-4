@@ -64,8 +64,8 @@ class TestMissionModelIntegration:
 
     def test_creation_maps_editable_fields(self):
         data = make_create_data()
-        mission = Mission(**data.model_dump())
-        for field, value in data.model_dump().items():
+        mission = Mission(**data.model_dump(exclude={'fund_id'}))
+        for field, value in data.model_dump(exclude={'fund_id'}).items():
             assert getattr(mission, field) == value
         assert mission.id is None
         assert mission.requester_id is None

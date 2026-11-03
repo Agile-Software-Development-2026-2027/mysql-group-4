@@ -73,7 +73,6 @@ export class NewMissionComponent implements OnDestroy {
     return this.myFunds().filter((fund) => fund.name.toLowerCase().includes(query));
   });
 
-  // Mappa & Autocomplete Location
   showMapPanel = signal(false);
   locationSuggestions = signal<LocationResponse[]>([]);
   isSearchingLocation = signal(false);
@@ -169,6 +168,7 @@ export class NewMissionComponent implements OnDestroy {
 
   onOwnFundQueryInput(value: string): void {
     this.ownFundQuery.set(value);
+    // Se l'utente riscrive, la scelta precedente non vale più.
     this.missionForm.get('fundId')?.setValue('');
     this.activeOwnFund.set(-1);
     this.showOwnFundSuggestions.set(true);
@@ -188,6 +188,7 @@ export class NewMissionComponent implements OnDestroy {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       this.showOwnFundSuggestions.set(true);
+      // Le frecce saltano i fondi già assegnati.
       const step = event.key === 'ArrowDown' ? 1 : -1;
       let index = this.activeOwnFund();
       for (let i = 0; i < funds.length; i++) {
@@ -234,6 +235,7 @@ export class NewMissionComponent implements OnDestroy {
 
   onManagerQueryInput(value: string): void {
     this.managerQuery.set(value);
+    // Se l'utente riscrive, la scelta precedente non vale più.
     this.missionForm.get('fundManagerId')?.setValue('');
     this.activeSuggestion.set(0);
     this.showManagerSuggestions.set(true);
@@ -265,6 +267,7 @@ export class NewMissionComponent implements OnDestroy {
     this.missionForm.get('fundManagerId')?.markAsTouched();
   }
 
+  // Responsabili che hanno almeno un fondo ancora libero: il fondo lo sceglie lui in approvazione.
   private loadManagerOptions(): void {
     this.isLoadingManagers.set(true);
     this.fundService.getFundManagers().subscribe({
@@ -479,6 +482,7 @@ export class NewMissionComponent implements OnDestroy {
     const startsAt = `${formValues.startDate}T${this.normalizeTime(startTime)}`;
     const endsAt = `${formValues.endDate}T${this.normalizeTime(endTime)}`;
 
+    // Distinzione gestore fondi: 'self' (utente corrente) vs 'other' (responsabile scelto)
     let fundManagerId: string;
     let fundId: string | undefined;
     if (this.fundSource() === 'self') {
@@ -551,6 +555,7 @@ export class NewMissionComponent implements OnDestroy {
         this.toastService.showError(errorDetail, 'Submission Error');
         console.error('[NewMission] Backend submission error:', err);
 
+        // Il fondo scelto è stato appena assegnato ad altro: aggiorno l'elenco e annullo la scelta.
         if (err?.status === 409 && this.fundSource() === 'self') {
           this.showSummaryModal.set(false);
           this.missionForm.get('fundId')?.setValue('');
