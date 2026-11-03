@@ -1,4 +1,4 @@
-import { Component, inject, signal, OnDestroy } from '@angular/core';
+import { Component, computed, inject, signal, OnDestroy } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { forkJoin, Subject, Subscription } from 'rxjs';
@@ -10,7 +10,14 @@ import { ToastService } from '../../services/toast.service';
 import { MissionService } from '../../services/mission.service';
 import { LocationService, LocationResponse } from '../../services/location.service';
 import { AuthService } from '../../services/auth.service';
-import { MissionCreatePayload, MissionType } from '../../core/models';
+import { FundService } from '../../services/fund.service';
+import { FundDTO, MissionCreatePayload, MissionStatus, MissionType } from '../../core/models';
+
+interface ManagerOption {
+  id: string;
+  name: string;
+  department: string;
+}
 
 @Component({
   selector: 'app-new-mission',
@@ -26,6 +33,7 @@ export class NewMissionComponent implements OnDestroy {
   private missionService = inject(MissionService);
   private locationService = inject(LocationService);
   private authService = inject(AuthService);
+  private fundService = inject(FundService);
 
   siteName = 'MYSOL';
   isSubmitted = signal(false);
@@ -41,15 +49,41 @@ export class NewMissionComponent implements OnDestroy {
   ];
 
   fundSource = signal<'self' | 'other'>('self');
-  showMapPanel = signal(false);
 
+  managerOptions = signal<ManagerOption[]>([]);
+  isLoadingManagers = signal(false);
+
+  managerQuery = signal('');
+  showManagerSuggestions = signal(false);
+  activeSuggestion = signal(0);
+  filteredManagers = computed(() => {
+    const query = this.managerQuery().trim().toLowerCase();
+    return this.managerOptions().filter((option) =>
+      `${option.name} ${option.department}`.toLowerCase().includes(query)
+    );
+  });
+
+  myFunds = signal<FundDTO[]>([]);
+  hasFreeFunds = computed(() => this.myFunds().some((fund) => this.isFundFree(fund)));
+  ownFundQuery = signal('');
+  showOwnFundSuggestions = signal(false);
+  activeOwnFund = signal(-1);
+  filteredOwnFunds = computed(() => {
+    const query = this.ownFundQuery().trim().toLowerCase();
+    return this.myFunds().filter((fund) => fund.name.toLowerCase().includes(query));
+  });
+
+  // Mappa & Autocomplete Location
+  showMapPanel = signal(false);
   locationSuggestions = signal<LocationResponse[]>([]);
   isSearchingLocation = signal(false);
   private searchSubject = new Subject<string>();
   private searchSub?: Subscription;
   private map?: L.Map;
   private marker?: L.Marker;
+  private lastSelectedLocation?: { lat: number; lon: number; label: string };
 
+  // Allegati PDF
   selectedFiles: File[] = [];
 
   missionForm: FormGroup = this.fb.group(
@@ -62,18 +96,21 @@ export class NewMissionComponent implements OnDestroy {
       endDate: ['', [Validators.required]],
       endTime: [''],
       estimatedCost: [null, [Validators.required, Validators.min(0)]],
-      fundManagerInput: [''],
+      fundManagerId: [''],
+      fundId: [''],
       documentFile: [null, [Validators.required]],
     },
     { validators: [this.datePeriodValidator.bind(this)] }
   );
 
   constructor() {
+    this.setFundSource('self');
+
     this.searchSub = this.searchSubject
       .pipe(
         debounceTime(350),
         distinctUntilChanged(),
-        switchMap((query) => {
+        switchMap((query: string) => {
           if (!query || query.trim().length < 3) {
             this.isSearchingLocation.set(false);
             return [];
@@ -82,7 +119,7 @@ export class NewMissionComponent implements OnDestroy {
           return this.locationService.autocomplete(query);
         })
       )
-      .subscribe((results) => {
+      .subscribe((results: LocationResponse[]) => {
         this.locationSuggestions.set(results);
         this.isSearchingLocation.set(false);
       });
@@ -90,21 +127,172 @@ export class NewMissionComponent implements OnDestroy {
 
   ngOnDestroy(): void {
     this.searchSub?.unsubscribe();
-    if (this.map) {
-      this.map.remove();
-    }
+    this.destroyMap();
   }
 
   get selectedFile(): File | null {
     return this.missionForm.get('documentFile')?.value || null;
   }
 
+  // --- Logica Gestione Fondi & Manager ---
+  setFundSource(source: 'self' | 'other'): void {
+    this.fundSource.set(source);
+    const managerControl = this.missionForm.get('fundManagerId');
+    const fundControl = this.missionForm.get('fundId');
+    if (source === 'self') {
+      managerControl?.setValue('');
+      managerControl?.clearValidators();
+      this.managerQuery.set('');
+      this.showManagerSuggestions.set(false);
+      fundControl?.setValidators(Validators.required);
+      this.loadMyFunds();
+    } else {
+      managerControl?.setValidators(Validators.required);
+      fundControl?.setValue('');
+      fundControl?.clearValidators();
+      this.ownFundQuery.set('');
+      this.showOwnFundSuggestions.set(false);
+      this.loadManagerOptions();
+    }
+    managerControl?.updateValueAndValidity();
+    fundControl?.updateValueAndValidity();
+  }
+
+  isFundFree(fund: FundDTO): boolean {
+    return !fund.lockedByMissionId;
+  }
+
+  selectedOwnFund(): FundDTO | undefined {
+    const fundId = this.missionForm.get('fundId')?.value;
+    return this.myFunds().find((fund) => fund.id === fundId);
+  }
+
+  onOwnFundQueryInput(value: string): void {
+    this.ownFundQuery.set(value);
+    this.missionForm.get('fundId')?.setValue('');
+    this.activeOwnFund.set(-1);
+    this.showOwnFundSuggestions.set(true);
+  }
+
+  selectOwnFund(fund: FundDTO): void {
+    if (!this.isFundFree(fund)) {
+      return;
+    }
+    this.missionForm.get('fundId')?.setValue(fund.id);
+    this.ownFundQuery.set(fund.name);
+    this.showOwnFundSuggestions.set(false);
+  }
+
+  onOwnFundKeydown(event: KeyboardEvent): void {
+    const funds = this.filteredOwnFunds();
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      this.showOwnFundSuggestions.set(true);
+      const step = event.key === 'ArrowDown' ? 1 : -1;
+      let index = this.activeOwnFund();
+      for (let i = 0; i < funds.length; i++) {
+        index = (index + step + funds.length) % funds.length;
+        if (this.isFundFree(funds[index])) {
+          this.activeOwnFund.set(index);
+          return;
+        }
+      }
+    } else if (event.key === 'Enter' && this.showOwnFundSuggestions()) {
+      event.preventDefault();
+      const fund = funds[this.activeOwnFund()] ?? funds.find((f) => this.isFundFree(f));
+      if (fund) {
+        this.selectOwnFund(fund);
+      }
+    } else if (event.key === 'Escape') {
+      this.showOwnFundSuggestions.set(false);
+    }
+  }
+
+  closeOwnFundSuggestions(): void {
+    this.showOwnFundSuggestions.set(false);
+    this.missionForm.get('fundId')?.markAsTouched();
+  }
+
+  private loadMyFunds(): void {
+    this.fundService.getMyFunds().subscribe({
+      next: (page) => {
+        const myFiscalCode = this.authService.getUser()?.fiscalCode;
+        this.myFunds.set(page.content.filter((fund) => fund.responsibleFc === myFiscalCode));
+      },
+      error: () => this.toastService.showError('Unable to load your funds.', 'Funds'),
+    });
+  }
+
+  selectedManager(): ManagerOption | undefined {
+    const managerId = this.missionForm.get('fundManagerId')?.value;
+    return this.managerOptions().find((option) => option.id === managerId);
+  }
+
+  managerLabel(option: ManagerOption): string {
+    return `${option.name} — ${option.department}`;
+  }
+
+  onManagerQueryInput(value: string): void {
+    this.managerQuery.set(value);
+    this.missionForm.get('fundManagerId')?.setValue('');
+    this.activeSuggestion.set(0);
+    this.showManagerSuggestions.set(true);
+  }
+
+  selectManager(option: ManagerOption): void {
+    this.missionForm.get('fundManagerId')?.setValue(option.id);
+    this.managerQuery.set(this.managerLabel(option));
+    this.showManagerSuggestions.set(false);
+  }
+
+  onManagerKeydown(event: KeyboardEvent): void {
+    const options = this.filteredManagers();
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      this.showManagerSuggestions.set(true);
+      const step = event.key === 'ArrowDown' ? 1 : -1;
+      this.activeSuggestion.update((i) => (i + step + options.length) % Math.max(options.length, 1));
+    } else if (event.key === 'Enter' && this.showManagerSuggestions() && options.length > 0) {
+      event.preventDefault();
+      this.selectManager(options[this.activeSuggestion()] ?? options[0]);
+    } else if (event.key === 'Escape') {
+      this.showManagerSuggestions.set(false);
+    }
+  }
+
+  closeManagerSuggestions(): void {
+    this.showManagerSuggestions.set(false);
+    this.missionForm.get('fundManagerId')?.markAsTouched();
+  }
+
+  private loadManagerOptions(): void {
+    this.isLoadingManagers.set(true);
+    this.fundService.getFundManagers().subscribe({
+      next: (managers) => {
+        const myId = this.authService.getUser()?.id;
+        this.managerOptions.set(
+          managers
+            .filter((manager) => manager.id !== myId)
+            .map((manager) => ({
+              id: manager.id,
+              name: `${manager.name} ${manager.surname}`,
+              department: manager.department,
+            }))
+        );
+        this.isLoadingManagers.set(false);
+      },
+      error: () => {
+        this.isLoadingManagers.set(false);
+        this.toastService.showError('Unable to load the fund managers.', 'Fund Managers');
+      },
+    });
+  }
+
+  // --- Logica Mappa Leaflet & Autocomplete ---
   onDestinationInput(event: Event): void {
     const value = (event.target as HTMLInputElement).value;
     this.searchSubject.next(value);
   }
-
-  private lastSelectedLocation?: { lat: number; lon: number; label: string };
 
   selectLocation(location: LocationResponse): void {
     this.missionForm.patchValue({ destination: location.display_name });
@@ -138,7 +326,9 @@ export class NewMissionComponent implements OnDestroy {
   private initMapIfNeeded(): void {
     const mapElement = document.getElementById('map-container');
     if (!mapElement) return;
+
     this.destroyMap();
+
     const defaultIcon = L.icon({
       iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
       shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
@@ -147,11 +337,13 @@ export class NewMissionComponent implements OnDestroy {
       popupAnchor: [1, -34],
     });
     L.Marker.prototype.options.icon = defaultIcon;
+
     this.map = L.map('map-container').setView([39.3621, 16.2255], 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '© OpenStreetMap contributors',
     }).addTo(this.map);
+
     if (this.lastSelectedLocation) {
       this.updateMapLocation(
         this.lastSelectedLocation.lat,
@@ -174,13 +366,7 @@ export class NewMissionComponent implements OnDestroy {
     this.marker.bindPopup(`<b>${label}</b>`).openPopup();
   }
 
-  setFundSource(source: 'self' | 'other'): void {
-    this.fundSource.set(source);
-    if (source === 'self') {
-      this.missionForm.get('fundManagerInput')?.setValue('');
-    }
-  }
-
+  // --- Logica Allegati Multipli ---
   onFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     if (input.files && input.files.length > 0) {
@@ -202,6 +388,7 @@ export class NewMissionComponent implements OnDestroy {
     this.missionForm.patchValue({ documentFile: this.selectedFiles.length > 0 ? this.selectedFiles : null });
   }
 
+  // --- Validazioni & Form Helpers ---
   datePeriodValidator(control: AbstractControl): ValidationErrors | null {
     const startDateVal = control.get('startDate')?.value;
     const endDateVal = control.get('endDate')?.value;
@@ -293,11 +480,22 @@ export class NewMissionComponent implements OnDestroy {
     const endsAt = `${formValues.endDate}T${this.normalizeTime(endTime)}`;
 
     let fundManagerId: string;
+    let fundId: string | undefined;
     if (this.fundSource() === 'self') {
+      const fund = this.selectedOwnFund();
+      if (!fund) {
+        this.toastService.showError('Select one of your funds for this mission.', 'Missing Fund');
+        return;
+      }
       fundManagerId = currentUser.id;
+      fundId = fund.id;
     } else {
-      const inputVal = formValues.fundManagerInput?.trim();
-      fundManagerId = inputVal || '00000000-0000-0000-0000-000000000002';
+      const manager = this.selectedManager();
+      if (!manager) {
+        this.toastService.showError('Select the fund manager for this mission.', 'Missing Manager');
+        return;
+      }
+      fundManagerId = manager.id;
     }
 
     const payload: MissionCreatePayload = {
@@ -308,6 +506,7 @@ export class NewMissionComponent implements OnDestroy {
       startsAt,
       endsAt,
       fundManagerId,
+      fundId,
     };
 
     this.isSubmitting.set(true);
@@ -321,9 +520,9 @@ export class NewMissionComponent implements OnDestroy {
 
           forkJoin(uploadRequests).subscribe({
             next: () => {
-              this.finalizeSubmission();
+              this.handleSubmissionSuccess(createdMission);
             },
-            error: (err) => {
+            error: (err: any) => {
               this.isSubmitting.set(false);
               this.toastService.showError(
                 'Mission created, but document upload failed. Please try re-uploading from mission details.',
@@ -333,10 +532,10 @@ export class NewMissionComponent implements OnDestroy {
             },
           });
         } else {
-          this.finalizeSubmission();
+          this.handleSubmissionSuccess(createdMission);
         }
       },
-      error: (err) => {
+      error: (err: any) => {
         this.isSubmitting.set(false);
         let errorDetail = 'Failed to create mission. Please try again.';
         if (err?.status === 0) {
@@ -351,17 +550,31 @@ export class NewMissionComponent implements OnDestroy {
 
         this.toastService.showError(errorDetail, 'Submission Error');
         console.error('[NewMission] Backend submission error:', err);
+
+        if (err?.status === 409 && this.fundSource() === 'self') {
+          this.showSummaryModal.set(false);
+          this.missionForm.get('fundId')?.setValue('');
+          this.ownFundQuery.set('');
+          this.loadMyFunds();
+        }
       },
     });
   }
 
-  private finalizeSubmission(): void {
+  private handleSubmissionSuccess(mission: any): void {
     this.isSubmitting.set(false);
     this.showSummaryModal.set(false);
-    this.toastService.showSuccess(
-      'Mission request created successfully',
-      'Mission submitted'
-    );
+    if (mission.status === MissionStatus.ACCEPTED) {
+      this.toastService.showSuccess(
+        'You manage the fund yourself, so the mission was approved automatically.',
+        'Mission Approved'
+      );
+    } else {
+      this.toastService.showSuccess(
+        'Mission request created successfully!',
+        'Mission Submitted'
+      );
+    }
     this.resetForm();
     this.closeMapPanel();
     this.router.navigate(['/home']);
@@ -377,12 +590,14 @@ export class NewMissionComponent implements OnDestroy {
       endDate: '',
       endTime: '',
       estimatedCost: null,
-      fundManagerInput: '',
+      fundManagerId: '',
+      fundId: '',
       documentFile: null,
     });
     this.selectedFiles = [];
     this.locationSuggestions.set([]);
+    this.lastSelectedLocation = undefined;
     this.isSubmitted.set(false);
-    this.fundSource.set('self');
+    this.setFundSource('self');
   }
 }
