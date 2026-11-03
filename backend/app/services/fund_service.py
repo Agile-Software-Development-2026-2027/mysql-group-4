@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import (
@@ -15,6 +16,7 @@ from app.crud.fund_repository import FundRepository
 from app.crud.user_repository import UserRepository
 from app.db.fund import Fund
 from app.db.models import User
+from app.db.mission import Mission
 from app.schemas.fund import FundCreateDTO, FundDTO, FundUpdateDTO
 from app.schemas.page import Page, PageRequest
 
@@ -37,6 +39,26 @@ class FundService:
         fund = await self._get_fund_or_throw(fund_id)
         self._validate_user_can_read(fund, user)
         return FundDTO.model_validate(fund)
+
+    async def get_fund_by_mission_id(self, mission_id: UUID, user_id: UUID) -> FundDTO | None:
+        user = await self._get_active_user_or_throw(user_id)
+        stmt = select(Fund).where(Fund.locked_by_mission_id == mission_id)
+        result = await self._session.execute(stmt)
+        fund = result.scalars().first()
+        if fund is None:
+            return None
+
+        if user.is_superuser or fund.responsible_fc == user.fiscal_code:
+            return FundDTO.model_validate(fund)
+
+        mission_stmt = select(Mission).where(Mission.id == mission_id)
+        mission_res = await self._session.execute(mission_stmt)
+        mission = mission_res.scalars().first()
+
+        if mission and (user.is_superuser or mission.requester_id == user.id or mission.fund_manager_id == user.id):
+            return FundDTO.model_validate(fund)
+
+        raise AccessDeniedError("User cannot access this fund")
 
     async def get_funds(
         self, user_id: UUID, page_request: PageRequest | None = None
