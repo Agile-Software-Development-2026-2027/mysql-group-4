@@ -1,5 +1,6 @@
 import io
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from minio import Minio
 from minio.error import S3Error
@@ -65,7 +66,13 @@ async def save_mission_document(mission_id: uuid.UUID, file: UploadFile, user: U
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error during saving on MinIO: {str(e)}"
         )
-    document=MissionDocument(mission_id=mission_id, filename=safe_original_filename, file_path=object_name, created_by=user.id)
+    document=MissionDocument(
+        mission_id=mission_id, 
+        filename=safe_original_filename, 
+        file_path=object_name, 
+        created_by=user.id,
+        uploaded_at=datetime.now(timezone.utc)
+    )
     session.add(document)
     await session.commit()
     await session.refresh(document)
