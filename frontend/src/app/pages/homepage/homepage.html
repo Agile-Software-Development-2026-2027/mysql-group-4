@@ -2,7 +2,48 @@
 
 <main class="container">
   <h1>Welcome to {{ siteName }}</h1>
-  <p>DA METTERE QUALCOSA DI DESCRIZIONE GENERALE O IMMAGINI</p>
+
+  <div class="overview-grid">
+    <section class="card overview-card">
+      <h3>Next Mission</h3>
+      @if (nextMission() === undefined) {
+        <p class="muted">Loading…</p>
+      } @else if (nextMission(); as mission) {
+        <div class="next-mission">
+          @if (isInProgress(mission)) {
+            <span class="badge">In progress</span>
+          }
+          <span class="next-mission__subject">{{ mission.subject }}</span>
+          <span class="next-mission__meta">{{ mission.destination }}</span>
+          <span class="next-mission__meta">
+            {{ mission.startsAt | date:'dd/MM/yyyy' }} – {{ mission.endsAt | date:'dd/MM/yyyy' }}
+          </span>
+        </div>
+        <a routerLink="/missionreview" [queryParams]="{ view: 'requester' }" class="btn btn--outline">View details</a>
+      } @else {
+        <p class="muted">No upcoming missions.</p>
+        <a routerLink="/mission/new" class="btn btn--outline">Plan a mission</a>
+      }
+    </section>
+
+    <section class="card overview-card">
+      <h3>My Overview</h3>
+      <div class="stats">
+        <a class="stat" routerLink="/fund">
+          <span class="stat__value">{{ activeFunds() ?? '–' }}</span>
+          <span class="stat__label">Active funds</span>
+          <span class="stat__hint">
+            {{ totalFunds() }} total · € {{ availableAmount() | number:'1.2-2' }} available
+          </span>
+        </a>
+        <a class="stat" routerLink="/missionreview" [queryParams]="{ view: 'requester' }">
+          <span class="stat__value">{{ completedMissions() ?? '–' }}</span>
+          <span class="stat__label">Completed missions</span>
+          <span class="stat__hint">Approved and already ended</span>
+        </a>
+      </div>
+    </section>
+  </div>
 
   <div class="cards-grid">
     <section class="card">

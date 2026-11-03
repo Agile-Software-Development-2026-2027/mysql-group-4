@@ -91,4 +91,16 @@ export class MissionService {
       { withCredentials: true }
     );
   }
+
+  // Missioni inviate dall'utente filtrate lato server (date nel formato YYYY-MM-DDTHH:mm:ss).
+  getMySentMissions(
+    filters: { status?: MissionStatus; endsAtFrom?: string; endsAtTo?: string },
+    size = 100
+  ): Observable<Page<MissionDTO>> {
+    return this.http.post<Page<MissionDTO>>(
+      `${this.baseUrl}/sent/filter`,
+      filters,
+      { params: { page: 0, size }, withCredentials: true }
+    );
+  }
 }
