@@ -1,6 +1,6 @@
 import pytest
 from decimal import Decimal
-from unittest.mock import create_autospec
+from unittest.mock import create_autospec, AsyncMock
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import AccessDeniedError, FundNotFoundError
 from app.crud.fund_repository import FundRepository
@@ -8,7 +8,7 @@ from app.crud.user_repository import UserRepository
 from app.schemas.fund import FundCreateDTO, FundDTO, FundUpdateDTO
 from app.schemas.page import Page, PageRequest
 from app.services.fund_service import FundService
-from tests.factories import make_fund, make_user
+from tests.factories import make_fund, make_user, make_mission
 
 
 class TestFundService:
@@ -63,6 +63,66 @@ class TestFundService:
         self.repository.find_by_id.return_value = None
         with pytest.raises(FundNotFoundError):
             await self.service.get_fund_by_id(self.fund.id, self.user.id)
+
+    async def test_get_fund_by_mission_id_success(self):
+        from uuid import uuid4
+        mission_id = uuid4()
+        self.fund.locked_by_mission_id = mission_id
+
+        class MockResult:
+            def __init__(self, obj):
+                self._obj = obj
+            def scalars(self):
+                return self
+            def first(self):
+                return self._obj
+
+        self.session.execute = AsyncMock(return_value=MockResult(self.fund))
+        result = await self.service.get_fund_by_mission_id(mission_id, self.user.id)
+        assert result.id == self.fund.id
+
+    async def test_get_fund_by_mission_id_not_found(self):
+        from uuid import uuid4
+        mission_id = uuid4()
+        class MockResult:
+            def scalars(self):
+                return self
+            def first(self):
+                return None
+
+        self.session.execute = AsyncMock(return_value=MockResult())
+        result = await self.service.get_fund_by_mission_id(mission_id, self.user.id)
+        assert result is None
+
+    async def test_get_fund_by_mission_id_unauthorized(self):
+        from uuid import uuid4
+        mission_id = uuid4()
+        foreign_fund = make_fund(responsible_fc="OTHERFC90A01H501Z")
+        foreign_fund.locked_by_mission_id = mission_id
+
+        mission = make_mission(requester_id=uuid4(), fund_manager_id=uuid4())
+
+        class MockResultSequence:
+            def __init__(self, results):
+                self.results = results
+                self.index = 0
+            async def __call__(self, *args, **kwargs):
+                res = self.results[self.index]
+                self.index += 1
+                return res
+
+        class MockResult:
+            def __init__(self, obj):
+                self._obj = obj
+            def scalars(self):
+                return self
+            def first(self):
+                return self._obj
+
+        self.session.execute = MockResultSequence([MockResult(foreign_fund), MockResult(mission)])
+
+        with pytest.raises(AccessDeniedError):
+            await self.service.get_fund_by_mission_id(mission_id, self.other.id)
 
     async def test_listing_is_scoped_to_responsible(self):
         request = PageRequest(page=1, size=5)

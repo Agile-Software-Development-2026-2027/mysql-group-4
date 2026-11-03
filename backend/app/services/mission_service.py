@@ -162,20 +162,35 @@ class MissionService:
             await self._repository.delete(mission)
         logger.info("Mission %s deleted by user %s", mission_id, user_id)
 
-    async def accept_mission(self, mission_id: UUID, user_id: UUID, response: str | None = None) -> MissionDTO:
-        return await self._decide_mission(mission_id, user_id, MissionStatus.ACCEPTED, response)
+    async def accept_mission(
+        self, mission_id: UUID, user_id: UUID, fund_id: UUID, response: str | None = None
+    ) -> MissionDTO:
+        return await self._decide_mission(
+            mission_id, user_id, MissionStatus.ACCEPTED, response, fund_id=fund_id
+        )
 
     async def reject_mission(self, mission_id: UUID, user_id: UUID, response: str | None = None) -> MissionDTO:
         return await self._decide_mission(mission_id, user_id, MissionStatus.REJECTED, response)
 
     async def _decide_mission(
-        self, mission_id: UUID, user_id: UUID, status: MissionStatus, response: str | None = None
+        self,
+        mission_id: UUID,
+        user_id: UUID,
+        status: MissionStatus,
+        response: str | None = None,
+        *,
+        fund_id: UUID | None = None,
     ) -> MissionDTO:
         async with self._transaction():
             user = await self._get_active_user_or_throw(user_id)
             mission = await self._get_mission_or_throw(mission_id, for_update=True)
             self._validate_user_is_fund_manager(mission, user)
             self._validate_mission_is_pending(mission)
+
+            if fund_id is not None:
+                await self._fund_service.lock_for_mission(
+                    fund_id, mission.id, responsible_fc=user.fiscal_code
+                )
 
             mission.status = status
             if response is not None:

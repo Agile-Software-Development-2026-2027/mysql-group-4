@@ -51,6 +51,7 @@ class TestMissionService:
         self.repository.save.side_effect = fake_save
         self.dto = MissionDTO.model_validate(self.mission)
         self.fund_service = create_autospec(FundService, instance=True)
+        self.fund_id = uuid4()
         self.service = MissionService(
             self.session, self.repository, self.user_repository, fund_service=self.fund_service
         )
@@ -240,16 +241,28 @@ class TestMissionService:
         self.session.rollback.assert_awaited_once()
 
     async def test_accept_updates_state_and_audit_after_manager_check(self):
-        result = await self.service.accept_mission(self.mission.id, self.manager.id, "Approvo")
+        result = await self.service.accept_mission(self.mission.id, self.manager.id, self.fund_id, "Approvo")
         self.repository.find_by_id_for_update.assert_awaited_once_with(self.mission.id)
+        self.fund_service.lock_for_mission.assert_awaited_once_with(
+            self.fund_id, self.mission.id, responsible_fc=self.manager.fiscal_code
+        )
         assert self.mission.status == MissionStatus.ACCEPTED
         assert self.mission.response == "Approvo"
         assert self.mission.updated_by == self.manager.id
         assert result.status == MissionStatus.ACCEPTED
         self.session.commit.assert_awaited_once()
 
+    async def test_accept_with_a_fund_already_taken_rolls_back(self):
+        self.fund_service.lock_for_mission.side_effect = FundLockedError(self.fund_id)
+        with pytest.raises(FundLockedError):
+            await self.service.accept_mission(self.mission.id, self.manager.id, self.fund_id)
+        self.repository.save.assert_not_awaited()
+        self.session.commit.assert_not_awaited()
+        self.session.rollback.assert_awaited_once()
+
     async def test_reject_updates_state_and_audit(self):
         await self.service.reject_mission(self.mission.id, self.manager.id, "Rifiuto")
+        self.fund_service.lock_for_mission.assert_not_awaited()
         assert self.mission.status == MissionStatus.REJECTED
         assert self.mission.response == "Rifiuto"
         assert self.mission.updated_by == self.manager.id
@@ -258,8 +271,9 @@ class TestMissionService:
 
     async def test_unauthorized_decision_does_not_change_state(self):
         with pytest.raises(AccessDeniedError):
-            await self.service.accept_mission(self.mission.id, self.user.id, "Approvo")
+            await self.service.accept_mission(self.mission.id, self.user.id, self.fund_id, "Approvo")
         assert self.mission.status == MissionStatus.PENDING
+        self.fund_service.lock_for_mission.assert_not_awaited()
         self.repository.save.assert_not_awaited()
         self.session.rollback.assert_awaited_once()
 

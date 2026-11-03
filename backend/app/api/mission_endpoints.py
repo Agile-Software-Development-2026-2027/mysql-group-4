@@ -124,9 +124,10 @@ async def accept_mission(
     mission_id: UUID,
     user: CurrentUser,
     service: MissionServiceDependency,
+    fund_id: Annotated[UUID, Body(embed=True, alias="fundId")],
     response: Annotated[str | None, Body(max_length=255, embed=True)] = None,
 ) -> MissionDTO:
-    return await service.accept_mission(mission_id, user.id, response)
+    return await service.accept_mission(mission_id, user.id, fund_id, response)
 
 
 @mission_router.patch("/{mission_id}/reject", response_model=MissionDTO)

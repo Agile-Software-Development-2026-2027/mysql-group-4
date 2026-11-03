@@ -64,7 +64,7 @@ a {
   box-shadow: $shadow;
   z-index: 100;
 
-    &__brand {
+  &__brand {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -277,7 +277,6 @@ select {
 
 textarea { min-height: 110px; resize: vertical; }
 
-/* Campo di ricerca con elenco dei risultati sotto (es. scelta del fondo) */
 .search-select {
   position: relative;
 
@@ -307,7 +306,6 @@ textarea { min-height: 110px; resize: vertical; }
 
     &:hover, &.is-active { background: rgba($primary, 0.06); }
 
-    // Opzione visibile ma non selezionabile (es. fondo già assegnato)
     &.is-disabled {
       color: $text-muted;
       background: $bg;
