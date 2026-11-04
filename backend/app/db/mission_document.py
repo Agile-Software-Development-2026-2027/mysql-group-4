@@ -1,6 +1,7 @@
 import uuid
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import DateTime, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
@@ -10,8 +11,10 @@ if TYPE_CHECKING:
 
 class MissionDocument(Base):
     __tablename__="mission_documents"
+
     id: Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     mission_id: Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True), ForeignKey("missions.id", ondelete="CASCADE"), nullable=False)
     filename: Mapped[str]=mapped_column(String(255), nullable=False)
     file_path: Mapped[str]=mapped_column(String(512), nullable=False)
+    uploaded_at: Mapped[datetime]=mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=func.now())
     mission: Mapped["Mission"]=relationship(back_populates="documents", lazy="raise")

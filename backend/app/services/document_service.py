@@ -1,14 +1,28 @@
+import io
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
+from minio import Minio
+from minio.error import S3Error
 from fastapi import UploadFile, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import anyio
+from app.core.config import settings
 from app.db.mission import Mission
 from app.db.mission_document import MissionDocument
 from app.db.models import User
 
-UPLOAD_DIR=Path("uploads/missions")
+minio_client=Minio(endpoint=settings.MINIO_ENDPOINT, access_key=settings.MINIO_ACCESS_KEY, secret_key=settings.MINIO_SECRET_KEY, secure=settings.MINIO_SECURE)
+
+def _ensure_bucket_exists():
+    try:
+        if not minio_client.bucket_exists(settings.MINIO_BUCKET_NAME):
+            minio_client.make_bucket(settings.MINIO_BUCKET_NAME)
+    except Exception as e:
+        print(f"[MinIO] Error: {e}")
+
+_ensure_bucket_exists()
 
 async def _get_mission_and_check_permission(mission_id: uuid.UUID, user: User, session: AsyncSession, action: str="read")->Mission:
     result=await session.execute(select(Mission).where(Mission.id==mission_id))
@@ -16,7 +30,7 @@ async def _get_mission_and_check_permission(mission_id: uuid.UUID, user: User, s
     if not mission:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Mission not found.",
+            detail="Mission not found."
         )
     is_requester=mission.requester_id==user.id
     is_fund_manager=getattr(mission, "fund_manager_id", None)==user.id
@@ -28,7 +42,7 @@ async def _get_mission_and_check_permission(mission_id: uuid.UUID, user: User, s
     if not allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="No permission.",
+            detail="No permission."
         )
     return mission
 
@@ -40,14 +54,25 @@ async def save_mission_document(mission_id: uuid.UUID, file: UploadFile, user: U
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only PDFs accepted."
         )
-    mission_folder=UPLOAD_DIR/str(mission_id)
-    mission_folder.mkdir(parents=True, exist_ok=True)
-    stored_filename=f"{uuid.uuid4()}_{safe_original_filename}"
-    file_path=mission_folder/stored_filename
+    object_name=f"missions/{mission_id}/{uuid.uuid4()}_{safe_original_filename}"
     content=await file.read()
-    async with await anyio.open_file(file_path, "wb") as f:
-        await f.write(content)
-    document=MissionDocument(mission_id=mission_id, filename=safe_original_filename, file_path=str(file_path), created_by=user.id)
+    file_stream=io.BytesIO(content)
+    try:
+        await anyio.to_thread.run_sync(
+            lambda: minio_client.put_object(bucket_name=settings.MINIO_BUCKET_NAME, object_name=object_name, data=file_stream, length=len(content), content_type="application/pdf")
+        )
+    except S3Error as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error during saving on MinIO: {str(e)}"
+        )
+    document=MissionDocument(
+        mission_id=mission_id, 
+        filename=safe_original_filename, 
+        file_path=object_name, 
+        created_by=user.id,
+        uploaded_at=datetime.now(timezone.utc)
+    )
     session.add(document)
     await session.commit()
     await session.refresh(document)
@@ -57,3 +82,23 @@ async def get_mission_documents(mission_id: uuid.UUID, user: User, session: Asyn
     await _get_mission_and_check_permission(mission_id, user, session, action="read")
     result=await session.execute(select(MissionDocument).where(MissionDocument.mission_id==mission_id))
     return list(result.scalars().all())
+
+async def download_mission_document(document_id: uuid.UUID, user: User, session: AsyncSession)->tuple[bytes, str]:
+    result=await session.execute(select(MissionDocument).where(MissionDocument.id==document_id))
+    document=result.scalar_one_or_none()
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
+    await _get_mission_and_check_permission(document.mission_id, user, session, action="read")
+    try:
+        response=await anyio.to_thread.run_sync(
+            lambda: minio_client.get_object(settings.MINIO_BUCKET_NAME, document.file_path)
+        )
+        content=response.read()
+        response.close()
+        response.release_conn()
+        return content, document.filename
+    except S3Error as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Cannot get the file from MinIO: {str(e)}"
+        )

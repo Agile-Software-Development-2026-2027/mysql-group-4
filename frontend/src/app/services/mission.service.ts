@@ -92,6 +92,23 @@ export class MissionService {
     );
   }
 
+  uploadDocument(missionId: string, file: File): Observable<any> {
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+    return this.http.post<any>(
+      `${this.baseUrl}/${missionId}/documents`,
+      formData,
+      { withCredentials: true }
+    );
+  }
+
+  getDocuments(missionId: string): Observable<any[]> {
+    return this.http.get<any[]>(
+      `${this.baseUrl}/${missionId}/documents`,
+      { withCredentials: true }
+    );
+  }
+
   // Missioni inviate dall'utente filtrate lato server (date nel formato YYYY-MM-DDTHH:mm:ss).
   getMySentMissions(
     filters: { status?: MissionStatus; endsAtFrom?: string; endsAtTo?: string },

@@ -1,10 +1,14 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, OnDestroy } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { Topbar } from '../../components/topbar/topbar';
+import { forkJoin, Subject, Subscription } from 'rxjs';
+import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import * as L from 'leaflet';
 
+import { Topbar } from '../../components/topbar/topbar';
 import { ToastService } from '../../services/toast.service';
 import { MissionService } from '../../services/mission.service';
+import { LocationService, LocationResponse } from '../../services/location.service';
 import { AuthService } from '../../services/auth.service';
 import { FundService } from '../../services/fund.service';
 import { FundDTO, MissionCreatePayload, MissionStatus, MissionType } from '../../core/models';
@@ -22,11 +26,12 @@ interface ManagerOption {
   templateUrl: './new-mission.html',
   styleUrl: './new-mission.scss',
 })
-export class NewMissionComponent {
+export class NewMissionComponent implements OnDestroy {
   private fb = inject(FormBuilder);
   private router = inject(Router);
   private toastService = inject(ToastService);
   private missionService = inject(MissionService);
+  private locationService = inject(LocationService);
   private authService = inject(AuthService);
   private fundService = inject(FundService);
 
@@ -69,6 +74,16 @@ export class NewMissionComponent {
   });
 
   showMapPanel = signal(false);
+  locationSuggestions = signal<LocationResponse[]>([]);
+  isSearchingLocation = signal(false);
+  private searchSubject = new Subject<string>();
+  private searchSub?: Subscription;
+  private map?: L.Map;
+  private marker?: L.Marker;
+  private lastSelectedLocation?: { lat: number; lon: number; label: string };
+
+  // Allegati PDF
+  selectedFiles: File[] = [];
 
   missionForm: FormGroup = this.fb.group(
     {
@@ -82,14 +97,43 @@ export class NewMissionComponent {
       estimatedCost: [null, [Validators.required, Validators.min(0)]],
       fundManagerId: [''],
       fundId: [''],
+      documentFile: [null, [Validators.required]],
     },
     { validators: [this.datePeriodValidator.bind(this)] }
   );
 
   constructor() {
     this.setFundSource('self');
+
+    this.searchSub = this.searchSubject
+      .pipe(
+        debounceTime(350),
+        distinctUntilChanged(),
+        switchMap((query: string) => {
+          if (!query || query.trim().length < 3) {
+            this.isSearchingLocation.set(false);
+            return [];
+          }
+          this.isSearchingLocation.set(true);
+          return this.locationService.autocomplete(query);
+        })
+      )
+      .subscribe((results: LocationResponse[]) => {
+        this.locationSuggestions.set(results);
+        this.isSearchingLocation.set(false);
+      });
   }
 
+  ngOnDestroy(): void {
+    this.searchSub?.unsubscribe();
+    this.destroyMap();
+  }
+
+  get selectedFile(): File | null {
+    return this.missionForm.get('documentFile')?.value || null;
+  }
+
+  // --- Logica Gestione Fondi & Manager ---
   setFundSource(source: 'self' | 'other'): void {
     this.fundSource.set(source);
     const managerControl = this.missionForm.get('fundManagerId');
@@ -247,14 +291,107 @@ export class NewMissionComponent {
     });
   }
 
+  // --- Logica Mappa Leaflet & Autocomplete ---
+  onDestinationInput(event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    this.searchSubject.next(value);
+  }
+
+  selectLocation(location: LocationResponse): void {
+    this.missionForm.patchValue({ destination: location.display_name });
+    this.locationSuggestions.set([]);
+
+    const lat = parseFloat(location.lat);
+    const lon = parseFloat(location.lon);
+    this.lastSelectedLocation = { lat, lon, label: location.display_name };
+
+    this.openMapPanel();
+  }
+
   openMapPanel(): void {
     this.showMapPanel.set(true);
+    setTimeout(() => this.initMapIfNeeded(), 100);
   }
 
   closeMapPanel(): void {
     this.showMapPanel.set(false);
+    this.destroyMap();
   }
 
+  private destroyMap(): void {
+    if (this.map) {
+      this.map.remove();
+      this.map = undefined;
+      this.marker = undefined;
+    }
+  }
+
+  private initMapIfNeeded(): void {
+    const mapElement = document.getElementById('map-container');
+    if (!mapElement) return;
+
+    this.destroyMap();
+
+    const defaultIcon = L.icon({
+      iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+      shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+    });
+    L.Marker.prototype.options.icon = defaultIcon;
+
+    this.map = L.map('map-container').setView([39.3621, 16.2255], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors',
+    }).addTo(this.map);
+
+    if (this.lastSelectedLocation) {
+      this.updateMapLocation(
+        this.lastSelectedLocation.lat,
+        this.lastSelectedLocation.lon,
+        this.lastSelectedLocation.label
+      );
+    }
+  }
+
+  private updateMapLocation(lat: number, lon: number, label: string): void {
+    if (!this.map) return;
+
+    this.map.setView([lat, lon], 15);
+
+    if (this.marker) {
+      this.marker.setLatLng([lat, lon]);
+    } else {
+      this.marker = L.marker([lat, lon]).addTo(this.map);
+    }
+    this.marker.bindPopup(`<b>${label}</b>`).openPopup();
+  }
+
+  // --- Logica Allegati Multipli ---
+  onFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      const files = Array.from(input.files);
+      const validPdfs = files.filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+
+      if (validPdfs.length !== files.length) {
+        this.toastService.showError('Only PDFs accepted.', 'Invalid File');
+      }
+      this.selectedFiles = [...this.selectedFiles, ...validPdfs];
+      this.missionForm.patchValue({ documentFile: this.selectedFiles.length > 0 ? this.selectedFiles : null });
+      this.missionForm.get('documentFile')?.markAsTouched();
+      input.value = '';
+    }
+  }
+
+  removeFile(index: number): void {
+    this.selectedFiles.splice(index, 1);
+    this.missionForm.patchValue({ documentFile: this.selectedFiles.length > 0 ? this.selectedFiles : null });
+  }
+
+  // --- Validazioni & Form Helpers ---
   datePeriodValidator(control: AbstractControl): ValidationErrors | null {
     const startDateVal = control.get('startDate')?.value;
     const endDateVal = control.get('endDate')?.value;
@@ -321,7 +458,6 @@ export class NewMissionComponent {
       return;
     }
 
-    // Apre il riepilogo in rilievo prima dell'invio definitivo
     this.showSummaryModal.set(true);
   }
 
@@ -380,26 +516,30 @@ export class NewMissionComponent {
     this.isSubmitting.set(true);
 
     this.missionService.createMission(payload).subscribe({
-      next: (mission) => {
-        this.isSubmitting.set(false);
-        this.showSummaryModal.set(false);
-        // Se sei tu il responsabile la missione è già approvata dal backend.
-        if (mission.status === MissionStatus.ACCEPTED) {
-          this.toastService.showSuccess(
-            'You manage the fund yourself, so the mission was approved automatically.',
-            'Mission Approved'
+      next: (createdMission) => {
+        if (this.selectedFiles && this.selectedFiles.length > 0 && createdMission?.id) {
+          const uploadRequests = this.selectedFiles.map((file) =>
+            this.missionService.uploadDocument(createdMission.id, file)
           );
+
+          forkJoin(uploadRequests).subscribe({
+            next: () => {
+              this.handleSubmissionSuccess(createdMission);
+            },
+            error: (err: any) => {
+              this.isSubmitting.set(false);
+              this.toastService.showError(
+                'Mission created, but document upload failed. Please try re-uploading from mission details.',
+                'Upload Error'
+              );
+              console.error('[NewMission] MinIO upload error:', err);
+            },
+          });
         } else {
-          this.toastService.showSuccess(
-            'Mission request created successfully!',
-            'Mission Submitted'
-          );
+          this.handleSubmissionSuccess(createdMission);
         }
-        this.resetForm();
-        this.closeMapPanel();
-        this.router.navigate(['/home']);
       },
-      error: (err) => {
+      error: (err: any) => {
         this.isSubmitting.set(false);
         let errorDetail = 'Failed to create mission. Please try again.';
         if (err?.status === 0) {
@@ -426,6 +566,25 @@ export class NewMissionComponent {
     });
   }
 
+  private handleSubmissionSuccess(mission: any): void {
+    this.isSubmitting.set(false);
+    this.showSummaryModal.set(false);
+    if (mission.status === MissionStatus.ACCEPTED) {
+      this.toastService.showSuccess(
+        'You manage the fund yourself, so the mission was approved automatically.',
+        'Mission Approved'
+      );
+    } else {
+      this.toastService.showSuccess(
+        'Mission request created successfully!',
+        'Mission Submitted'
+      );
+    }
+    this.resetForm();
+    this.closeMapPanel();
+    this.router.navigate(['/home']);
+  }
+
   resetForm(): void {
     this.missionForm.reset({
       subject: '',
@@ -438,7 +597,11 @@ export class NewMissionComponent {
       estimatedCost: null,
       fundManagerId: '',
       fundId: '',
+      documentFile: null,
     });
+    this.selectedFiles = [];
+    this.locationSuggestions.set([]);
+    this.lastSelectedLocation = undefined;
     this.isSubmitted.set(false);
     this.setFundSource('self');
   }

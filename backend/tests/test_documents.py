@@ -1,25 +1,22 @@
 import io
-import shutil
 import uuid
-from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 import pytest
 from httpx import AsyncClient
 from main import app
 from app.security import current_active_user
 from app.db.models import User
 
-UPLOAD_DIR=Path("uploads")
-
 @pytest.fixture(autouse=True)
-def cleanup_uploads_and_mock_auth():
+def mock_auth_and_minio():
     mock_user=User(id=uuid.uuid4(), email="test@example.com", is_active=True, is_superuser=True)
     app.dependency_overrides[current_active_user]=lambda: mock_user
-    with patch("app.services.document_service._get_mission_and_check_permission", return_value=None):
-        yield
+    with patch("app.services.document_service._get_mission_and_check_permission", return_value=None), \
+         patch("app.services.document_service.minio_client") as mock_minio:
+        mock_minio.bucket_exists.return_value=True
+        mock_minio.put_object.return_value=None
+        yield mock_minio
     app.dependency_overrides.clear()
-    if UPLOAD_DIR.exists():
-        shutil.rmtree(UPLOAD_DIR, ignore_errors=True)
 
 @pytest.mark.asyncio
 async def test_upload_pdf_document_success(client: AsyncClient):

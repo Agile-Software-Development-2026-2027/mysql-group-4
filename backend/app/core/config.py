@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     RESET_PASSWORD_TOKEN_LIFETIME_SECONDS: int = 1800
     COOKIE_SECURE: bool = False
 
+    MINIO_ENDPOINT: str = "localhost:9000"
+    MINIO_ACCESS_KEY: str = "minioadmin"
+    MINIO_SECRET_KEY: str = "minioadminpassword"
+    MINIO_BUCKET_NAME: str = "mission-documents"
+    MINIO_SECURE: bool = False
+
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),
         env_file_encoding="utf-8",
