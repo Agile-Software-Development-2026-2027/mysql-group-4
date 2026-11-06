@@ -8,6 +8,7 @@ import { MissionReview } from './pages/mission-review/mission-review';
 import { SettingsComponent } from './pages/settings/settings';
 import { AddFund } from './pages/add-fund/add-fund';
 import { MyFunds } from './pages/my-funds/my-funds';
+import { RefundReview } from './pages/refund-review/refund-review';
 
 export const routes: Routes = [
   { path: '', component: Landingpage, canActivate: [guestGuard] },
@@ -21,5 +22,6 @@ export const routes: Routes = [
   { path: 'missionreview', component: MissionReview, canActivate: [authGuard] },
   { path: 'fund', component: MyFunds, canActivate: [authGuard] },
   { path: 'fund/add', component: AddFund, canActivate: [authGuard] },
+  { path: 'refundreview/:id', component: RefundReview, canActivate: [authGuard]},
   { path: '**', redirectTo: '' }
 ];

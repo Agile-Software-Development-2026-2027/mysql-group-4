@@ -1,4 +1,4 @@
-import { Component, ChangeDetectorRef, OnInit, inject, signal } from '@angular/core';
+import { Component, ChangeDetectorRef, OnInit, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { API_CONFIG } from '../../core/config/api.config';
 import { RouterLink, RouterLinkActive } from '@angular/router';
@@ -33,6 +33,17 @@ export class Topbar implements OnInit {
     { label: 'Logout', link: '/logout' },
     { label: 'Settings', link: '/settings' },
   ];
+  readonly isAdmin = this.authService.isAdmin;
+  readonly homeLink = computed(() => this.authService.landingUrl());
+  readonly visibleMenuItems = computed<MenuItem[]>(() =>
+    this.isAdmin() //se è admin mostriamo solo home logout e settings, altrimenti tutto
+      ? [
+          { label: 'Home', link: this.homeLink() },
+          { label: 'Logout', link: '/logout' },
+          { label: 'Settings', link: '/settings' },
+        ]
+      : this.menuItems
+  );
   missionsToApprove = signal(0);
   bellOpen = signal(false);
 
@@ -57,6 +68,7 @@ export class Topbar implements OnInit {
   }
 
   ngOnInit(): void {
+    if (this.isAdmin()) return;
     this.http
       .post<{ totalElements: number }>(API_CONFIG.endpoints.missions.toApprove, {}, {
         params: { page: 0, size: 1 },
