@@ -1,0 +1,59 @@
+.status {
+  margin-left: 8px;
+  padding: 2px 10px;
+  border-radius: 12px;
+  background: #e8eef4;
+  color: #17324d;
+  font-size: 0.9rem;
+  vertical-align: middle;
+}
+
+.warning {
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  border-left: 4px solid #e0a800;
+  background: #fff6db;
+}
+
+.card { margin-bottom: 20px; }
+
+.category-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.category-total {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px;
+  border: 1px solid #c5d0db;
+  border-left: 4px solid #be0e01;
+  border-radius: 4px;
+  background: #f5f8fb;
+
+  &__label { font-size: 0.85rem; color: #5b6f82; }
+  &__value { font-size: 1.3rem; font-weight: 700; color: #17324d; }
+}
+.total-refund {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #c5d0db;
+  font-size: 1.15rem;
+}
+
+.expense-row { cursor: pointer; }
+.expense-details td { background: #f5f8fb; }
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}

@@ -1,0 +1,65 @@
+<app-topbar></app-topbar>
+
+<main class="container">
+  <h1>Refund request <span class="status">{{ refund().status }}</span></h1>
+
+  @if (exceedsEstimatedCost()) {
+    <div class="warning">⚠ The requested total exceeds the estimated cost declared in the mission authorization.</div>
+  }
+
+  <section class="card">
+    <p><strong>Requester:</strong> {{ refund().requester.name }} {{ refund().requester.surname }} ({{ refund().requester.department }})</p>
+    <p><strong>Mission:</strong> {{ refund().mission.subject }} – {{ refund().mission.destination }}</p>
+    <p><strong>Estimated cost:</strong> € {{ refund().mission.estimatedCost | number:'1.2-2' }}</p>
+    <p><strong>Total requested:</strong> € {{ totalRequested() | number:'1.2-2' }}</p>
+    <p class="total-refund"><strong>Total refund:</strong> € {{ totalRefund() | number:'1.2-2' }}</p>
+  </section>
+
+  <section class="card">
+    <table>
+      <thead>
+        <tr><th>Type</th><th>Description</th><th>Date</th><th>Amount</th><th>Refundable</th><th></th></tr>
+      </thead>
+      <tbody>
+        @for (expense of refund().expenses; track expense.id) {
+          <tr class="expense-row" (click)="toggle(expense.id)">
+            <td>{{ expense.category }}</td>
+            <td>{{ expense.description }}</td>
+            <td>{{ expense.date | date:'dd/MM/yyyy' }}</td>
+            <td>{{ expense.amount | number:'1.2-2' }} {{ expense.currency }}</td>
+            <td>{{ (refundableAmounts()[expense.id] ?? 0) | number:'1.2-2' }} {{ expense.currency }}</td>
+            <td>{{ expandedId() === expense.id ? '▲' : '▼' }}</td>
+          </tr>
+
+          @if (expandedId() === expense.id) {
+            <tr class="expense-details">
+              <td colspan="6">
+                <div class="details-grid">
+                  <div><strong>Type:</strong> {{ expense.category }} {{ expense.transportMode }}</div>
+                  <div><strong>Traceable:</strong> {{ expense.traceable ? 'Yes' : 'No' }}</div>
+                  <div><strong>Receipt: </strong> <a [href]="expense.receiptUrl" target="_blank">View</a></div>
+                </div>
+
+                <div class="form-group">
+                  <label>Refundable amount ({{ expense.currency }})</label>
+                  <input
+                    type="number" min="0" step="0.01" placeholder="0.00"
+                    [value]="refundableAmounts()[expense.id] ?? ''"
+                    (input)="setRefundable(expense.id, $any($event.target).value)"
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Note</label>
+                  <textarea></textarea>
+                </div>
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </section>
+  <div class="actions">
+    <button class="btn" type="button">Approve refund</button>
+  </div>
+</main>

@@ -19,9 +19,13 @@ export class AuthService {
   readonly currentUser = this._currentUser.asReadonly();
   readonly isLoading = this._isLoading.asReadonly();
   readonly isAuthenticated = computed(() => !!this._currentUser());
+  readonly isAdmin = computed(() => this._currentUser()?.isSuperuser === true);
 
   getUser(): User | null {
     return this._currentUser();
+  }
+  landingUrl():string{ //se l'utente è admin va alla pagina refundreview (per ora) altrimenti alla home
+    return this.isAdmin() ? '/refundreview/1' : '/home';
   }
 
   checkSession(): Observable<User | null> {
