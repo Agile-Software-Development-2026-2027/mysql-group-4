@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from crud.mission_repository import MissionRepository
-from crud.refund_repository import RefundRepository
+from app.crud.mission_repository import MissionRepository
+from app.crud.refund_repository import RefundRepository
 
 
 class RefundService:

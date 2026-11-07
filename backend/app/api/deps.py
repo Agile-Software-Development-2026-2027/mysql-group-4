@@ -8,8 +8,8 @@ from app.db.session import get_async_session
 from app.services.fund_service import FundService
 from app.services.mission_service import MissionService
 
-from crud.refund_repository import refund_repository
-from services.refund_service import RefundService
+from app.crud.refund_repository import refund_repository
+from app.services.refund_service import RefundService
 
 
 def get_mission_service(
