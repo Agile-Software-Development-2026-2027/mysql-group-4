@@ -25,6 +25,12 @@ class UserNotFoundError(ResourceNotFoundError):
         super().__init__("User", user_id)
 
 
+class RefundNotFoundError(ResourceNotFoundError):
+    def __init__(self, refund_id: UUID):
+        self.refund_id = refund_id
+        super().__init__("RefundRequest", refund_id)
+
+
 class AccessDeniedError(PermissionError):
     pass
 
@@ -34,6 +40,10 @@ class InvalidMissionStateError(ValueError):
 
 
 class InvalidMissionPeriodError(ValueError):
+    pass
+
+
+class InvalidRefundRequestDateError(InvalidMissionPeriodError):
     pass
 
 
