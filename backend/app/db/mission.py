@@ -13,6 +13,7 @@ from app.core.enums import MissionStatus, MissionType
 if TYPE_CHECKING:
     from app.db.models import User
     from app.db.mission_document import MissionDocument
+    from app.db.refund_request import RefundRequest
 
 
 class Mission(Base):
@@ -75,4 +76,12 @@ class Mission(Base):
         lazy="raise",
         cascade="all, delete-orphan",
         passive_deletes=True,
+    )
+
+    refund_request: Mapped["RefundRequest | None"] = relationship(
+        back_populates="mission",
+        lazy="raise",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        uselist=False,
     )
