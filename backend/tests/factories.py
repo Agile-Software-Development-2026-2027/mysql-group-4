@@ -8,7 +8,7 @@ from app.schemas.mission import MissionCreateDTO
 
 
 def make_user(**overrides):
-    return User(**(dict(id=uuid4(), is_active=True, is_superuser=False) | overrides))
+    return User(**(dict(id=uuid4(), is_active=True, is_superuser=False, hashed_password='x') | overrides))
 
 
 def make_mission(**overrides):

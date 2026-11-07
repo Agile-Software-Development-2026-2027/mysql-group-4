@@ -8,6 +8,9 @@ from app.db.session import get_async_session
 from app.services.fund_service import FundService
 from app.services.mission_service import MissionService
 
+from app.crud.refund_repository import refund_repository
+from app.services.refund_service import RefundService
+
 
 def get_mission_service(
     session: AsyncSession = Depends(get_async_session),
@@ -29,3 +32,6 @@ def get_fund_service(
         repository=FundRepository(session),
         user_repository=UserRepository(),
     )
+
+def get_refund_service(session: AsyncSession = Depends(get_async_session)) -> RefundService:
+    return RefundService(session=session, refund_repository = refund_repository, mission_repository = MissionRepository(session))
