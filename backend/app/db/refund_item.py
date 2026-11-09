@@ -17,8 +17,8 @@ class RefundItem(Base):
     __tablename__ = "refund_items"
     __table_args__ = (
         CheckConstraint(
-            "requested_amount > 0",
-            name="ck_refund_items_requested_amount_positive",
+            "requested_amount > 0 AND requested_amount <= 10000.00",
+            name="ck_refund_items_requested_amount_range",
         ),
         CheckConstraint(
             "reimbursed_amount IS NULL OR (reimbursed_amount >= 0 AND reimbursed_amount <= requested_amount)",
@@ -40,6 +40,10 @@ class RefundItem(Base):
             "(category != 'ACCOMMODATION') OR (ends_at IS NOT NULL AND ends_at >= starts_at)",
             name="ck_refund_items_accommodation_dates",
         ),
+        CheckConstraint(
+            "(category = 'OTHER' AND subtype IS NULL) OR (category != 'OTHER' AND subtype IS NOT NULL)",
+            name="ck_refund_items_other_no_subtype",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -56,9 +60,9 @@ class RefundItem(Base):
         nullable=False,
         index=True,
     )
-    subtype: Mapped[ExpenseSubtype] = mapped_column(
+    subtype: Mapped[ExpenseSubtype | None] = mapped_column(
         Enum(ExpenseSubtype, name="expense_subtype", validate_strings=True),
-        nullable=False,
+        nullable=True,
     )
 
     itinerary_from: Mapped[str | None] = mapped_column(String(255), nullable=True)
