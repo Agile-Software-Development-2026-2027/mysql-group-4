@@ -12,6 +12,7 @@ from app.schemas.user import UserRead, UserCreate
 from app.core.exception_handler import register_exception_handlers
 from app.api.location_endpoints import router as location_router
 from app.api.document_endpoints import router as document_router
+from app.api.refund_endpoints import refund_router
 
 
 @asynccontextmanager
@@ -79,5 +80,10 @@ app.include_router(
 
 app.include_router(
     fund_router,
+    prefix="/api/v1",
+)
+
+app.include_router(
+    refund_router,
     prefix="/api/v1",
 )
