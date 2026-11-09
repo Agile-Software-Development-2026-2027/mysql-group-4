@@ -6,15 +6,21 @@ from httpx import AsyncClient
 from main import app
 from app.security import current_active_user
 from app.db.models import User
+from app.db.mission import Mission
+from app.db.mission_document import MissionDocument
 
 @pytest.fixture(autouse=True)
 def mock_auth_and_minio():
     mock_user=User(id=uuid.uuid4(), email="test@example.com", is_active=True, is_superuser=True)
     app.dependency_overrides[current_active_user]=lambda: mock_user
-    with patch("app.services.document_service._get_mission_and_check_permission", return_value=None), \
-         patch("app.services.document_service.minio_client") as mock_minio:
+    mock_response=MagicMock()
+    mock_response.read.return_value=b"%PDF-1.4 Mock PDF Content"
+    mock_response.close.return_value=None
+    mock_response.release_conn.return_value=None
+    with patch("app.services.document_service.minio_client") as mock_minio:
         mock_minio.bucket_exists.return_value=True
         mock_minio.put_object.return_value=None
+        mock_minio.get_object.return_value=mock_response
         yield mock_minio
     app.dependency_overrides.clear()
 
@@ -52,3 +58,52 @@ async def test_list_mission_documents(client: AsyncClient):
     data=response.json()
     assert len(data)>=1
     assert data[0]["filename"]=="document.pdf"
+
+#1 happy path (200 OK - Download PDF)
+@pytest.mark.asyncio
+async def test_download_document_success(client: AsyncClient, db_session):
+    mission_id=uuid.uuid4()
+    doc_id=uuid.uuid4()
+    user_id=uuid.uuid4()
+    mission=Mission(id=mission_id, requester_id=user_id, subject="Test Mission")
+    doc=MissionDocument(id=doc_id, mission_id=mission_id, filename="receipt.pdf", file_path="test/path.pdf", created_by=user_id)
+    db_session.add_all([mission, doc])
+    await db_session.commit()
+    response=await client.get(f"/api/v1/missions/{mission_id}/documents/{doc_id}")
+    assert response.status_code==200
+    assert response.headers["content-type"]=="application/pdf"
+    assert b"%PDF-1.4 Mock PDF Content" in response.content
+
+#2 field validation (422 unprocessable entity)
+@pytest.mark.asyncio
+async def test_upload_document_missing_file_validation_error(client: AsyncClient):
+    mission_id=uuid.uuid4()
+    response=await client.post(f"/api/v1/missions/{mission_id}/documents", data={})
+    assert response.status_code==422
+
+#3 security/authorization (403 forbidden)
+@pytest.mark.asyncio
+async def test_upload_document_forbidden(client: AsyncClient, db_session):
+    normal_user=User(id=uuid.uuid4(), email="user@example.com", is_active=True, is_superuser=False)
+    app.dependency_overrides[current_active_user]=lambda: normal_user
+    mission_id=uuid.uuid4()
+    other_user_id=uuid.uuid4()
+    mission=Mission(id=mission_id, requester_id=other_user_id, subject="Someone else's mission")
+    db_session.add(mission)
+    await db_session.commit()
+    files={"file": ("test.pdf", io.BytesIO(b"%PDF-1.4"), "application/pdf")}
+    response=await client.post(f"/api/v1/missions/{mission_id}/documents", files=files)
+    assert response.status_code==403
+    assert response.json()["detail"]=="No permission."
+
+#4 business logic/not found (404 not found)
+@pytest.mark.asyncio
+async def test_download_document_not_found(client: AsyncClient, db_session):
+    mission_id=uuid.uuid4()
+    non_existent_doc_id=uuid.uuid4()
+    mission=Mission(id=mission_id, requester_id=uuid.uuid4(), subject="Test")
+    db_session.add(mission)
+    await db_session.commit()
+    response=await client.get(f"/api/v1/missions/{mission_id}/documents/{non_existent_doc_id}")
+    assert response.status_code==404
+    assert response.json()["detail"]=="Document not found."
