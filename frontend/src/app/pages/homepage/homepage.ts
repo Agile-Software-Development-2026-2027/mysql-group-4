@@ -46,7 +46,7 @@ export class Homepage implements OnInit {
       });
 
     this.missionService
-      .getMySentMissions({ status: MissionStatus.ACCEPTED, endsAtTo: now }, 1)
+      .getMySentMissions({ status: MissionStatus.COMPLETED, endsAtTo: now }, 1)
       .subscribe({
         next: (page) => this.completedMissions.set(page.totalElements),
         error: () => this.completedMissions.set(0),

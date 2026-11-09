@@ -10,6 +10,7 @@ export enum MissionStatus {
   APPROVED = 'ACCEPTED',
   REJECTED = 'REJECTED',
   CANCELLED = 'CANCELLED',
+  COMPLETED = 'COMPLETED',
 }
 
 export interface MissionCreatePayload {
