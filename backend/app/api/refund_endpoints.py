@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, status
 
 from app.api.deps import get_refund_service
 from app.db.models import User
-from app.schemas.refund import RefundRequestCreateDTO, RefundRequestDTO
+from app.schemas.refund import RefundRequestCreateDTO, RefundRequestDTO, RefundReviewDTO
 from app.security import current_active_user
 from app.services.refund_service import RefundService
 
@@ -24,6 +24,9 @@ async def create_refund_request(refund_request: RefundRequestCreateDTO, user: Cu
 async def get_refund_by_mission(mission_id: UUID, user: CurrentUser, service: RefundServiceDependency) -> RefundRequestDTO | None:
     return await service.get_refund_request_by_mission(mission_id, user)
 
+@refund_router.get("/{refund_id}/review", response_model=RefundReviewDTO, summary="Get refund request details for admin review")
+async def get_refund_for_review(refund_id: UUID, user: CurrentUser, service: RefundServiceDependency) -> RefundReviewDTO:
+    return await service.get_refund_for_review(refund_id, user)
 
 @refund_router.get("/{refund_id}", response_model=RefundRequestDTO, summary="Get refund request by ID")
 async def get_refund_by_id(refund_id: UUID, user: CurrentUser, service: RefundServiceDependency) -> RefundRequestDTO:

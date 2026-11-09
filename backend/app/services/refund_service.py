@@ -18,7 +18,7 @@ from app.crud.mission_repository import MissionRepository
 from app.crud.refund_repository import RefundRepository
 from app.db.models import User
 from app.db.refund_request import RefundRequest
-from app.schemas.refund import RefundRequestCreateDTO, RefundRequestDTO
+from app.schemas.refund import RefundRequestCreateDTO, RefundRequestDTO, RefundReviewDTO
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +71,15 @@ class RefundService:
         if mission and not user.is_superuser and mission.requester_id != user.id:
             raise AccessDeniedError("Only the requester or an administrator can view this refund request")
         return RefundRequestDTO.model_validate(refund)
+
+    async def get_refund_for_review(self, refund_id: UUID, user: User) -> RefundReviewDTO:
+        if not user.is_superuser:
+            raise AccessDeniedError("Only administrators can review refund requests")
+        refund = await self.refund_repository.find_by_id_for_review(self.session, refund_id)
+        if not refund:
+            raise RefundNotFoundError(refund_id)
+        return RefundReviewDTO.model_validate(refund)
+
 
     async def get_refund_request_by_mission(self, mission_id: UUID, user: User) -> RefundRequestDTO | None:
         mission = await self.mission_repository.find_by_id(mission_id)

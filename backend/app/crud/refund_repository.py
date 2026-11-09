@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 
 from app.db.refund_item import RefundItem
 from app.db.refund_request import RefundRequest
+from app.db.mission import Mission
 
 
 class RefundRepository:
@@ -17,6 +18,18 @@ class RefundRepository:
             .where(RefundRequest.id == refund_id)
             .options(selectinload(RefundRequest.items))
         )
+        return (await session.execute(stmt)).scalar_one_or_none()
+
+    async def find_by_id_for_review(
+        self, session: AsyncSession, refund_id: UUID
+    ) -> RefundRequest | None:
+        stmt = (
+            select(RefundRequest)
+            .where(RefundRequest.id == refund_id)
+            .options(selectinload(RefundRequest.items),
+                     selectinload(RefundRequest.mission).selectinload(Mission.requester),
+                     )
+            )
         return (await session.execute(stmt)).scalar_one_or_none()
 
     async def find_by_mission_id(

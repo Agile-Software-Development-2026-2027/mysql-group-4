@@ -12,6 +12,8 @@ from app.db.mission import Mission
 from app.db.models import User
 from app.schemas.refund import MAX_EXPENSE_AMOUNT, RefundItemCreateDTO
 from app.security import current_active_user
+from app.db.refund_item import RefundItem
+from app.db.refund_request import RefundRequest
 from main import app
 
 
@@ -317,6 +319,77 @@ async def test_fund_manager_cannot_view_refund(
     res_by_id = await client.get(f"/api/v1/refunds/{refund_id}")
     assert res_by_id.status_code == 403
 
+# TEST endpoint GET /api/v1/refunds/{refund_id}/review (admin review)
+
+#test happy path, l'admin legge la richiesta di rimborso
+@pytest.mark.asyncio
+async def test_get_refund_review_happy_path_admin(client, db_session: AsyncSession, requester: User, admin_user: User):
+    mission = await create_mission(db_session, requester.id, ended=True) #creo una missione conclusa
+    post_res = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)}) # creo una richiesta per quella missione
+    refund_id = post_res.json()["id"] #estraggo l'id
+
+    app.dependency_overrides[current_active_user] = lambda: admin_user #switcho ad admin
+    response = await client.get(f"/api/v1/refunds/{refund_id}/review") #chiamo il mio endpoint
+
+    assert response.status_code == 200 #verifico che la response sia 200
+    data = response.json() #e che i dati corrispondano effettivamente a quelli della missione creata
+    assert data["id"] == refund_id
+    assert data["mission"]["id"] == str(mission.id)
+    assert data["mission"]["subject"] == "Conferenza di Ricerca"
+    assert data["mission"]["estimatedCost"] == "250.00"
+    assert data["mission"]["requester"]["name"] == "Mario"
+    assert data["mission"]["requester"]["surname"] == "Rossi"
+    assert data["mission"]["requester"]["department"] == "Informatica"
+    assert data["items"] == []
+
+# happy path con gli items
+@pytest.mark.asyncio
+async def test_get_refund_review_includes_items(client: AsyncClient, db_session: AsyncSession, requester: User, admin_user: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund = RefundRequest(mission_id=mission.id) #creo la richiesta relativa alla missione senza salvare nel db
+    db_session.add(refund)
+    await db_session.flush()
+    #al momento aggiungo l'item a mano perchè non esiste l'endpoint specifico (lo cambierò)
+    db_session.add(RefundItem(
+        refund_request_id=refund.id,
+        category=ExpenseCategory.MEALS,
+        subtype=ExpenseSubtype.MEALS_EXPENSE,
+        starts_at=datetime(2026, 11, 1, 13, 0),
+        requested_amount=Decimal("25.50"),
+        receipt_file_path="missions/test/lunch.pdf",
+        receipt_original_filename="lunch.pdf",
+        description="Lunch",
+    ))
+    await db_session.commit()
+    #switcho ad admin
+    app.dependency_overrides[current_active_user] = lambda: admin_user
+    response = await client.get(f"/api/v1/refunds/{refund.id}/review")
+
+    #verifico tutto
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert len(items) == 1
+    assert items[0]["category"] == "MEALS"
+    assert items[0]["requestedAmount"] == "25.50"
+    assert items[0]["reimbursedAmount"] is None
+
+#test utente normale  prova a leggere la richiesta di rimborso --> 403
+@pytest.mark.asyncio
+async def test_get_refund_review_forbidden_for_non_admin(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    post_res = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = post_res.json()["id"]
+
+    response = await client.get(f"/api/v1/refunds/{refund_id}/review")
+
+    assert response.status_code == 403
+
+#se la richiesta di rimborso non esiste (generando un id random) --> 404
+@pytest.mark.asyncio
+async def test_get_refund_review_not_found(client: AsyncClient, admin_user: User):
+    app.dependency_overrides[current_active_user] = lambda: admin_user
+    response = await client.get(f"/api/v1/refunds/{uuid4()}/review")
+    assert response.status_code == 404
 
 # TEST vincoli dei campi per i subtype di spesa
 
