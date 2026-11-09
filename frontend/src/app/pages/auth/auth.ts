@@ -118,7 +118,7 @@ export class AuthComponent implements OnInit {
     this.authService.login({ email: email!, password: password! }).subscribe({
       next: () => {
         this.isSubmitting.set(false);
-        this.router.navigate(['/home']);
+        this.router.navigateByUrl(this.authService.landingUrl());
       },
       error: (err) => {
         this.isSubmitting.set(false);
@@ -158,7 +158,7 @@ export class AuthComponent implements OnInit {
           .subscribe({
             next: () => {
               this.isSubmitting.set(false);
-              this.router.navigate(['/home']);
+              this.router.navigateByUrl(this.authService.landingUrl());
             },
             error: () => {
               this.isSubmitting.set(false);
