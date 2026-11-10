@@ -1,10 +1,12 @@
 import pytest
+from datetime import date, datetime, time, timedelta
 from unittest.mock import create_autospec, patch
 from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import (
     AccessDeniedError,
     FundLockedError,
+    InvalidMissionPeriodError,
     InvalidMissionStateError,
     MissionNotFoundError,
     UserNotFoundError,
@@ -185,6 +187,15 @@ class TestMissionService:
             await self.service.create_mission(data, self.user.id)
         self.session.commit.assert_not_awaited()
         self.session.rollback.assert_awaited_once()
+
+    @pytest.mark.parametrize("days_ago", [0, 1, 365])
+    async def test_create_rejects_a_mission_starting_today_or_in_the_past(self, days_ago):
+        start = datetime.combine(date.today() - timedelta(days=days_ago), time(23, 59))
+        data = make_create_data(starts_at=start, ends_at=start + timedelta(days=2))
+        with pytest.raises(InvalidMissionPeriodError):
+            await self.service.create_mission(data, self.user.id)
+        self.repository.save.assert_not_awaited()
+        self.fund_service.lock_for_mission.assert_not_awaited()
 
     async def test_create_inactive_actor_stops_before_mapping(self):
         self.user.is_active = False

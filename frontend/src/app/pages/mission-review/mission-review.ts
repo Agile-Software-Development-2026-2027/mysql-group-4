@@ -260,6 +260,7 @@ export class MissionReview implements OnInit {
     this.selectedMission = null;
     this.associatedFundName.set(null);
     this.associatedRefund.set(null);
+    this.documents.set([]);
   }
 
   createAndGoToRefund(missionId: string): void {
@@ -275,7 +276,6 @@ export class MissionReview implements OnInit {
         this.toastService.showError(err?.error?.message ?? 'Unable to create refund request.', 'Error');
       }
     });
-    this.documents.set([]);
   }
 
   accept(id: string, note: string) {

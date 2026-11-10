@@ -33,6 +33,8 @@ class RefundItemBase(CamelModel):
     requested_amount: Decimal = Field(gt=0, le=MAX_EXPENSE_AMOUNT, decimal_places=2)
     currency: str = Field(default="EUR", min_length=3, max_length=3)
     is_traceable: bool = True
+    receipt_file_path: str = Field(min_length=1, max_length=512)
+    receipt_original_filename: str = Field(min_length=1, max_length=255)
     description: str = Field(min_length=1, max_length=255)
 
     @model_validator(mode="after")
@@ -76,6 +78,13 @@ class RefundItemBase(CamelModel):
         return self
 
 
+class RefundReceiptUploadDTO(CamelModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+
+    receipt_file_path: str = Field(min_length=1, max_length=512)
+    receipt_original_filename: str = Field(min_length=1, max_length=255)
+
+
 class RefundItemCreateDTO(RefundItemBase):
     model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
 
@@ -84,8 +93,6 @@ class RefundItemDTO(RefundItemBase):
     id: UUID
     refund_request_id: UUID
     reimbursed_amount: Decimal | None = None
-    receipt_file_path: str
-    receipt_original_filename: str
     admin_notes: str | None = None
     created_at: datetime
     updated_at: datetime

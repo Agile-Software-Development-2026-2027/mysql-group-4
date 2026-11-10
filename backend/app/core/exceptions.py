@@ -46,6 +46,8 @@ class InvalidMissionPeriodError(ValueError):
 class InvalidRefundRequestDateError(InvalidMissionPeriodError):
     pass
 
+class RefundItemCreateError(ValueError):
+    pass
 
 class InvalidRefundStateError(ValueError):
     pass
