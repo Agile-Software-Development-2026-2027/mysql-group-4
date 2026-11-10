@@ -1,5 +1,6 @@
 import io
 import uuid
+from datetime import datetime, timezone
 from unittest.mock import patch, MagicMock
 import pytest
 from httpx import AsyncClient
@@ -25,8 +26,22 @@ def mock_auth_and_minio():
     app.dependency_overrides.clear()
 
 @pytest.mark.asyncio
-async def test_upload_pdf_document_success(client: AsyncClient):
+async def test_upload_pdf_document_success(client: AsyncClient, db_session):
     mission_id=uuid.uuid4()
+    user_id=uuid.uuid4()
+    mission=Mission(
+        id=mission_id, 
+        requester_id=user_id, 
+        subject="Test Mission", 
+        mission_type="RESEARCH", 
+        destination="Test Destination", 
+        estimated_cost=100.0, 
+        starts_at=datetime(2024, 1, 1, 0, 0, tzinfo=timezone.utc), 
+        ends_at=datetime(2024, 1, 2, 0, 0, tzinfo=timezone.utc), 
+        fund_manager_id=user_id
+    )
+    db_session.add(mission)
+    await db_session.commit()
     pdf_content=b"%PDF-1.4 Fake PDF Content"
     files={"file": ("document.pdf", io.BytesIO(pdf_content), "application/pdf")}
     response=await client.post(f"/api/v1/missions/{mission_id}/documents", files=files)
@@ -39,8 +54,22 @@ async def test_upload_pdf_document_success(client: AsyncClient):
     assert "created_by" in data
 
 @pytest.mark.asyncio
-async def test_upload_non_pdf_fails(client: AsyncClient):
+async def test_upload_non_pdf_fails(client: AsyncClient, db_session):
     mission_id=uuid.uuid4()
+    user_id=uuid.uuid4()
+    mission=Mission(
+        id=mission_id, 
+        requester_id=user_id, 
+        subject="Test Mission", 
+        mission_type="RESEARCH", 
+        destination="Test Destination", 
+        estimated_cost=100.0, 
+        starts_at=datetime(2024, 1, 1, 0, 0, tzinfo=timezone.utc), 
+        ends_at=datetime(2024, 1, 2, 0, 0, tzinfo=timezone.utc), 
+        fund_manager_id=user_id
+    )
+    db_session.add(mission)
+    await db_session.commit()
     txt_content=b"Invalid file."
     files={"file": ("document.txt", io.BytesIO(txt_content), "text/plain")}
     response=await client.post(f"/api/v1/missions/{mission_id}/documents", files=files)
@@ -48,8 +77,22 @@ async def test_upload_non_pdf_fails(client: AsyncClient):
     assert response.json()["detail"]=="Only PDFs accepted."
 
 @pytest.mark.asyncio
-async def test_list_mission_documents(client: AsyncClient):
+async def test_list_mission_documents(client: AsyncClient, db_session):
     mission_id=uuid.uuid4()
+    user_id=uuid.uuid4()
+    mission=Mission(
+        id=mission_id, 
+        requester_id=user_id, 
+        subject="Test Mission", 
+        mission_type="RESEARCH", 
+        destination="Test Destination", 
+        estimated_cost=100.0, 
+        starts_at=datetime(2024, 1, 1, 0, 0, tzinfo=timezone.utc), 
+        ends_at=datetime(2024, 1, 2, 0, 0, tzinfo=timezone.utc), 
+        fund_manager_id=user_id
+    )
+    db_session.add(mission)
+    await db_session.commit()
     pdf_content=b"%PDF-1.4 Fake PDF Content"
     files={"file": ("document.pdf", io.BytesIO(pdf_content), "application/pdf")}
     await client.post(f"/api/v1/missions/{mission_id}/documents", files=files)
@@ -65,7 +108,17 @@ async def test_download_document_success(client: AsyncClient, db_session):
     mission_id=uuid.uuid4()
     doc_id=uuid.uuid4()
     user_id=uuid.uuid4()
-    mission=Mission(id=mission_id, requester_id=user_id, subject="Test Mission")
+    mission=Mission(
+        id=mission_id, 
+        requester_id=user_id, 
+        subject="Test Mission", 
+        mission_type="RESEARCH", 
+        destination="Test Destination", 
+        estimated_cost=100.0, 
+        starts_at=datetime(2024, 1, 1, 0, 0, tzinfo=timezone.utc), 
+        ends_at=datetime(2024, 1, 2, 0, 0, tzinfo=timezone.utc), 
+        fund_manager_id=user_id
+    )
     doc=MissionDocument(id=doc_id, mission_id=mission_id, filename="receipt.pdf", file_path="test/path.pdf", created_by=user_id)
     db_session.add_all([mission, doc])
     await db_session.commit()
@@ -88,7 +141,17 @@ async def test_upload_document_forbidden(client: AsyncClient, db_session):
     app.dependency_overrides[current_active_user]=lambda: normal_user
     mission_id=uuid.uuid4()
     other_user_id=uuid.uuid4()
-    mission=Mission(id=mission_id, requester_id=other_user_id, subject="Someone else's mission")
+    mission=Mission(
+        id=mission_id, 
+        requester_id=other_user_id, 
+        subject="Someone else's mission", 
+        mission_type="RESEARCH", 
+        destination="Test Destination", 
+        estimated_cost=100.00, 
+        starts_at=datetime(2024, 1, 1, 0, 0, tzinfo=timezone.utc), 
+        ends_at=datetime(2024, 1, 2, 0, 0, tzinfo=timezone.utc), 
+        fund_manager_id=uuid.uuid4()
+    )
     db_session.add(mission)
     await db_session.commit()
     files={"file": ("test.pdf", io.BytesIO(b"%PDF-1.4"), "application/pdf")}
@@ -101,7 +164,17 @@ async def test_upload_document_forbidden(client: AsyncClient, db_session):
 async def test_download_document_not_found(client: AsyncClient, db_session):
     mission_id=uuid.uuid4()
     non_existent_doc_id=uuid.uuid4()
-    mission=Mission(id=mission_id, requester_id=uuid.uuid4(), subject="Test")
+    mission=Mission(
+        id=mission_id, 
+        requester_id=uuid.uuid4(), 
+        subject="Test", 
+        mission_type="RESEARCH", 
+        destination="Test Destination", 
+        estimated_cost=100.00, 
+        starts_at=datetime(2024, 1, 1, 0, 0, tzinfo=timezone.utc), 
+        ends_at=datetime(2024, 1, 2, 0, 0, tzinfo=timezone.utc), 
+        fund_manager_id=uuid.uuid4()
+    )
     db_session.add(mission)
     await db_session.commit()
     response=await client.get(f"/api/v1/missions/{mission_id}/documents/{non_existent_doc_id}")
