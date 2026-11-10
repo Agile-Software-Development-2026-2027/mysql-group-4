@@ -3,3 +3,4 @@ export * from './auth.model';
 export * from './mission.model';
 export * from './page';
 export * from './fund.model';
+export * from './refund.model';
