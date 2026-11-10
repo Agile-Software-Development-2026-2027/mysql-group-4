@@ -1,11 +1,12 @@
 import { Component, OnInit, ChangeDetectorRef, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink, ActivatedRoute } from '@angular/router';
+import { RouterLink, ActivatedRoute, Router } from '@angular/router';
 import { MissionService } from '../../services/mission.service';
 import { FundService } from '../../services/fund.service';
+import { RefundService } from '../../services/refund.service';
 import { AuthService } from '../../services/auth.service';
 import { ToastService } from '../../services/toast.service';
-import { FundDTO, MissionDTO } from '../../core/models';
+import { FundDTO, MissionDTO, RefundRequestDTO } from '../../core/models';
 import { Topbar } from '../../components/topbar/topbar';
 
 @Component({
@@ -22,12 +23,21 @@ export class MissionReview implements OnInit {
 
   pendingMissions: MissionDTO[] = [];
   approvedMissions: MissionDTO[] = [];
+  completedMissions: MissionDTO[] = [];
   rejectedMissions: MissionDTO[] = [];
 
   private fundService = inject(FundService);
+  private refundService = inject(RefundService);
   private authService = inject(AuthService);
   private toastService = inject(ToastService);
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
+
+  associatedRefund = signal<RefundRequestDTO | null>(null);
+  isCreatingRefund = signal<boolean>(false);
+
+  documents = signal<any[]>([]);
+  isLoadingDocuments = signal(false);
 
   myFunds = signal<FundDTO[]>([]);
   selectedFundId = signal('');
@@ -78,6 +88,10 @@ export class MissionReview implements OnInit {
         this.approvedMissions = page.content || [];
         this.cdr.detectChanges();
       });
+      this.missionService.getCompletedMissions(myId).subscribe(page => {
+        this.completedMissions = page.content || [];
+        this.cdr.detectChanges();
+      });
       this.missionService.getRejectedMissions(myId).subscribe(page => {
         this.rejectedMissions = page.content || [];
         this.cdr.detectChanges();
@@ -91,6 +105,10 @@ export class MissionReview implements OnInit {
         this.approvedMissions = page.content || [];
         this.cdr.detectChanges();
       });
+      this.missionService.getMyCompletedMissions().subscribe(page => {
+        this.completedMissions = page.content || [];
+        this.cdr.detectChanges();
+      });
       this.missionService.getMyRejectedMissions().subscribe(page => {
         this.rejectedMissions = page.content || [];
         this.cdr.detectChanges();
@@ -102,6 +120,11 @@ export class MissionReview implements OnInit {
     this.activeSection = this.activeSection === section ? '' : section;
   }
 
+  isMissionEnded(mission: MissionDTO | null): boolean {
+    if (!mission) return false;
+    return new Date(mission.endsAt) <= new Date();
+  }
+
   openDetail(mission: MissionDTO) {
     this.selectedMission = mission;
     this.isDetailView = true;
@@ -109,8 +132,10 @@ export class MissionReview implements OnInit {
     this.fundQuery.set('');
     this.showFundSuggestions.set(false);
     this.associatedFundName.set(null);
+    this.associatedRefund.set(null);
+    this.loadMissionDocuments(mission.id);
 
-    if (mission.status === 'ACCEPTED') {
+    if (mission.status === 'ACCEPTED' || mission.status === 'COMPLETED') {
       this.fundService.getByMissionId(mission.id).subscribe({
         next: (fund) => {
           if (fund) {
@@ -121,11 +146,54 @@ export class MissionReview implements OnInit {
           this.associatedFundName.set(null);
         }
       });
+
+      this.refundService.getByMissionId(mission.id).subscribe({
+        next: (refund) => {
+          this.associatedRefund.set(refund);
+          this.cdr.detectChanges();
+        },
+        error: () => {
+          this.associatedRefund.set(null);
+          this.cdr.detectChanges();
+        }
+      });
     }
 
     if (this.canDecide(mission)) {
       this.loadMyFunds();
     }
+  }
+
+  private loadMissionDocuments(missionId: string) {
+    this.isLoadingDocuments.set(true);
+    this.missionService.getDocuments(missionId).subscribe({
+      next: (docs) => {
+        this.documents.set(docs || []);
+        this.isLoadingDocuments.set(false);
+      },
+      error: () => {
+        this.isLoadingDocuments.set(false);
+        this.documents.set([]);
+        this.toastService.showError('Unable to load attached documents.', 'Documents');
+      }
+    });
+  }
+
+  viewDocument(doc: any) {
+    if (!this.selectedMission?.id) {
+      this.toastService.showError('No mission selected.', 'View Error');
+      return;
+    }
+    this.missionService.downloadDocument(this.selectedMission.id, doc.id).subscribe({
+      next: (blob: Blob) => {
+        const pdfBlob = new Blob([blob], { type: 'application/pdf' });
+        const fileURL = URL.createObjectURL(pdfBlob);
+        window.open(fileURL, '_blank');
+      },
+      error: () => {
+        this.toastService.showError('Could not open the PDF document.', 'View Error');
+      }
+    });
   }
 
   canDecide(mission: MissionDTO): boolean {
@@ -191,6 +259,23 @@ export class MissionReview implements OnInit {
     this.isDetailView = false;
     this.selectedMission = null;
     this.associatedFundName.set(null);
+    this.associatedRefund.set(null);
+  }
+
+  createAndGoToRefund(missionId: string): void {
+    this.isCreatingRefund.set(true);
+    this.refundService.createRefundRequest(missionId).subscribe({
+      next: (refund) => {
+        this.isCreatingRefund.set(false);
+        this.toastService.showSuccess('Refund request created successfully.', 'Refund Created');
+        this.router.navigate(['/refund', refund.id]);
+      },
+      error: (err) => {
+        this.isCreatingRefund.set(false);
+        this.toastService.showError(err?.error?.message ?? 'Unable to create refund request.', 'Error');
+      }
+    });
+    this.documents.set([]);
   }
 
   accept(id: string, note: string) {

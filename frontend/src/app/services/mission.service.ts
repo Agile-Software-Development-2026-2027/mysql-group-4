@@ -41,6 +41,18 @@ export class MissionService {
     );
   }
 
+  getCompletedMissions(fundManagerId?: string): Observable<Page<MissionDTO>> {
+    const filters: Record<string, unknown> = { status: MissionStatus.COMPLETED };
+    if (fundManagerId) {
+      filters['fund_manager_id'] = fundManagerId;
+    }
+    return this.http.post<Page<MissionDTO>>(
+      `${this.baseUrl}/filter`,
+      filters,
+      { withCredentials: true }
+    );
+  }
+
   getRejectedMissions(fundManagerId?: string): Observable<Page<MissionDTO>> {
     const filters = fundManagerId ? { fund_manager_id: fundManagerId } : {};
     return this.http.post<Page<MissionDTO>>(
@@ -84,6 +96,14 @@ export class MissionService {
     );
   }
 
+  getMyCompletedMissions(): Observable<Page<MissionDTO>> {
+    return this.http.post<Page<MissionDTO>>(
+      `${this.baseUrl}/sent/filter`,
+      { status: MissionStatus.COMPLETED },
+      { withCredentials: true }
+    );
+  }
+
   getMyRejectedMissions(): Observable<Page<MissionDTO>> {
     return this.http.post<Page<MissionDTO>>(
       `${this.baseUrl}/sent/filter`,
@@ -106,6 +126,16 @@ export class MissionService {
     return this.http.get<any[]>(
       `${this.baseUrl}/${missionId}/documents`,
       { withCredentials: true }
+    );
+  }
+
+  downloadDocument(missionId: string, documentId: string): Observable<Blob> {
+    return this.http.get(
+      `${this.baseUrl}/${missionId}/documents/${documentId}`,
+      {
+        responseType: 'blob',
+        withCredentials: true
+      }
     );
   }
 
