@@ -132,10 +132,14 @@
             type="date"
             formControlName="startDate"
             class="form-control"
-            [class.is-invalid]="isFieldInvalid('startDate')"
+            [min]="firstAvailableDate"
+            max="9999-12-31"
+            [class.is-invalid]="isFieldInvalid('startDate') || (pastStartError() && (missionForm.get('startDate')?.dirty || missionForm.get('startDate')?.touched || isSubmitted()))"
           />
           @if (isFieldInvalid('startDate')) {
             <div class="form-error">Departure date is required.</div>
+          } @else if (pastStartError() && (missionForm.get('startDate')?.dirty || missionForm.get('startDate')?.touched || isSubmitted())) {
+            <div class="form-error">{{ pastStartError() }}</div>
           }
         </div>
         <div class="form-group time-col">
@@ -157,7 +161,9 @@
             type="date"
             formControlName="endDate"
             class="form-control"
-            [class.is-invalid]="isFieldInvalid('endDate') || missionForm.hasError('invalidPeriod')"
+            [min]="missionForm.get('startDate')?.value || firstAvailableDate"
+            max="9999-12-31"
+            [class.is-invalid]="isFieldInvalid('endDate') || periodError()"
           />
           @if (isFieldInvalid('endDate')) {
             <div class="form-error">Return date is required.</div>
@@ -174,9 +180,9 @@
         </div>
       </div>
 
-      @if (missionForm.hasError('invalidPeriod') && (missionForm.get('endDate')?.touched || isSubmitted())) {
+      @if (periodError() && (missionForm.get('endDate')?.touched || isSubmitted())) {
         <div class="form-error" style="margin-bottom: 16px;">
-          {{ missionForm.getError('invalidPeriod') }}
+          {{ periodError() }}
         </div>
       }
 
@@ -397,6 +403,39 @@
     </form>
     </div>
   </div>
+
+  @if (formErrors().length > 0) {
+    <div class="summary-overlay" (click)="closeFormErrors()">
+      <div class="summary-modal error-modal card" role="alertdialog" aria-labelledby="formErrorsTitle" (click)="$event.stopPropagation()">
+        <div class="summary-modal__header">
+          <div class="summary-modal__title">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <h3 id="formErrorsTitle">Invalid Mission Request</h3>
+          </div>
+          <button type="button" class="close-btn" (click)="closeFormErrors()" aria-label="Close">
+            ✕
+          </button>
+        </div>
+
+        <p class="error-modal__intro">The request cannot be submitted yet. Please fix the following:</p>
+        <ul class="error-modal__list">
+          @for (error of formErrors(); track error) {
+            <li>{{ error }}</li>
+          }
+        </ul>
+
+        <div class="summary-modal__footer">
+          <button type="button" class="btn btn--primary" (click)="closeFormErrors()">
+            Fix the Form
+          </button>
+        </div>
+      </div>
+    </div>
+  }
 
   @if (showSummaryModal()) {
     <div class="summary-overlay" (click)="closeSummary()">

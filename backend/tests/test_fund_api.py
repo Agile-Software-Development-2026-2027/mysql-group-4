@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from decimal import Decimal
 from uuid import UUID, uuid4
 
@@ -191,9 +192,10 @@ async def test_fund_manager_disappears_when_all_funds_are_assigned(
 
 async def test_mission_on_own_fund_locks_it_at_creation(client: AsyncClient, teacher: User):
     fund_id = (await client.post("/api/v1/funds", json={"name": "Mio", "amount": "500"})).json()["id"]
+    start = (datetime.now() + timedelta(days=30)).replace(hour=8, minute=0, second=0, microsecond=0)
     body = {
         "missionType": "RESEARCH", "subject": "Convegno", "destination": "Roma",
-        "estimatedCost": "100", "startsAt": "2026-12-01T08:00:00", "endsAt": "2026-12-02T20:00:00",
+        "estimatedCost": "100", "startsAt": start.isoformat(), "endsAt": (start + timedelta(days=1, hours=12)).isoformat(),
         "fundManagerId": str(teacher.id), "fundId": fund_id,
     }
     created = await client.post("/api/v1/missions", json=body)
@@ -268,3 +270,15 @@ async def test_my_funds_show_who_requested_a_locked_fund_and_force_delete_it(
     assert (await client.delete(f"/api/v1/funds/{fund_id}", params={"force": "true"})).status_code == 204
     assert (await client.get(f"/api/v1/funds/{fund_id}")).status_code == 404
     assert (await client.get(f"/api/v1/missions/{mission_id}")).status_code == 200
+
+
+async def test_mission_in_the_past_is_rejected(client: AsyncClient, teacher: User):
+    start = datetime.now() - timedelta(days=1)
+    response = await client.post("/api/v1/missions", json={
+        "missionType": "RESEARCH", "subject": "Convegno", "destination": "Roma",
+        "estimatedCost": "100", "startsAt": start.replace(microsecond=0).isoformat(),
+        "endsAt": (start + timedelta(days=3)).replace(microsecond=0).isoformat(),
+        "fundManagerId": str(teacher.id),
+    })
+    assert response.status_code == 400
+    assert "future" in response.json()["message"]

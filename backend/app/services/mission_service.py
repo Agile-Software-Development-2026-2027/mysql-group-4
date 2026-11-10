@@ -1,12 +1,14 @@
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import date
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import (
     AccessDeniedError,
+    InvalidMissionPeriodError,
     InvalidMissionStateError,
     MissionNotFoundError,
     UserNotFoundError,
@@ -102,11 +104,11 @@ class MissionService:
         return await self._find_missions(user, selected, page_request)
 
     async def create_mission(self, data: MissionCreateDTO, user_id: UUID) -> MissionDTO:
+        if data.starts_at.date() <= date.today():
+            raise InvalidMissionPeriodError("Mission must start after today (in the future)")
         async with self._transaction():
             user = await self._get_active_user_or_throw(user_id)
             manager = await self._get_active_user_or_throw(data.fund_manager_id)
-            # Se il richiedente è anche il responsabile non serve approvazione:
-            # sceglie subito uno dei suoi fondi e la missione nasce già accettata.
             self_managed = manager.id == user.id
             if data.fund_id is not None and not self_managed:
                 raise InvalidMissionStateError(
