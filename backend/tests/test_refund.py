@@ -403,6 +403,74 @@ async def test_get_refund_review_draft_not_visible_to_admin(client: AsyncClient,
     response = await client.get(f"/api/v1/refunds/{refund_id}/review")
 
     assert response.status_code == 404
+
+# TEST endpoint PATCH /api/v1/refunds/{refund_id}/approve (admin approval)
+
+async def create_submitted_refund(db_session: AsyncSession, mission_id: UUID) -> tuple[RefundRequest, RefundItem]:
+    refund = RefundRequest(mission_id=mission_id, status=RefundStatus.SUBMITTED)
+    db_session.add(refund)
+    await db_session.flush()
+    item = RefundItem(
+        refund_request_id=refund.id,
+        category=ExpenseCategory.MEALS,
+        subtype=ExpenseSubtype.MEALS_EXPENSE,
+        starts_at=datetime(2026, 11, 1, 13, 0),
+        requested_amount=Decimal("25.50"),
+        receipt_file_path="missions/test/lunch.pdf",
+        receipt_original_filename="lunch.pdf",
+        description="Lunch",
+    )
+    db_session.add(item)
+    await db_session.commit()
+    return refund, item
+
+
+def approve_payload(item_id: UUID) -> dict:
+    return {"items": [{"itemId": str(item_id), "reimbursedAmount": "20.00", "adminNotes": "Max 20 EUR per meal"}]}
+
+#happy path: l'admin approva, la richiesta diventa APPROVED e la missione COMPLETED
+@pytest.mark.asyncio
+async def test_approve_refund_happy_path(client: AsyncClient, db_session: AsyncSession, requester: User, admin_user: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund, item = await create_submitted_refund(db_session, mission.id)
+
+    app.dependency_overrides[current_active_user] = lambda: admin_user
+    response = await client.patch(f"/api/v1/refunds/{refund.id}/approve", json=approve_payload(item.id))
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "APPROVED"
+    assert data["totalReimbursedAmount"] == "20.00"
+    assert data["items"][0]["reimbursedAmount"] == "20.00"
+    assert data["items"][0]["adminNotes"] == "Max 20 EUR per meal"
+
+    await db_session.refresh(mission)
+    assert mission.status == MissionStatus.COMPLETED
+
+
+#una richiesta già approvata non si può approvare di nuovo --> 400
+@pytest.mark.asyncio
+async def test_approve_refund_already_approved(client: AsyncClient, db_session: AsyncSession, requester: User, admin_user: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund, item = await create_submitted_refund(db_session, mission.id)
+
+    app.dependency_overrides[current_active_user] = lambda: admin_user
+    first = await client.patch(f"/api/v1/refunds/{refund.id}/approve", json=approve_payload(item.id))
+    assert first.status_code == 200
+
+    second = await client.patch(f"/api/v1/refunds/{refund.id}/approve", json=approve_payload(item.id))
+    assert second.status_code == 400
+
+
+#un utente normale non può approvare --> 403
+@pytest.mark.asyncio
+async def test_approve_refund_forbidden_for_non_admin(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund, item = await create_submitted_refund(db_session, mission.id)
+
+    response = await client.patch(f"/api/v1/refunds/{refund.id}/approve", json=approve_payload(item.id))
+
+    assert response.status_code == 403
 # TEST vincoli dei campi per i subtype di spesa
 
 def test_refund_item_transport_validation():

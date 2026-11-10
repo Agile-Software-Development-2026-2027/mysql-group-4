@@ -26,7 +26,12 @@
             <tr class="expense-row" (click)="toggle(item.id)">
               <td>{{ item.category }}</td>
               <td>{{ item.description }}</td>
-              <td>{{ item.startsAt | date:'dd/MM/yyyy' }}</td>
+              <td>
+                {{ item.startsAt | date:(item.category === 'TRANSPORT' ? 'dd/MM/yyyy HH:mm' : 'dd/MM/yyyy') }}
+                @if (item.endsAt) {
+                  → {{ item.endsAt | date:(item.category === 'TRANSPORT' ? 'dd/MM/yyyy HH:mm' : 'dd/MM/yyyy') }}
+                }
+              </td>
               <td>{{ item.requestedAmount | number:'1.2-2' }} {{ item.currency }}</td>
               <td>{{ (refundableAmounts()[item.id] ?? 0) | number:'1.2-2' }} {{ item.currency }}</td>
               <td>{{ expandedId() === item.id ? '▲' : '▼' }}</td>
@@ -49,13 +54,17 @@
                       <label>Refundable amount ({{ item.currency }})</label>
                       <input
                         type="number" min="0" step="0.01" placeholder="0.00"
+                        [max]="item.requestedAmount"
                         [value]="refundableAmounts()[item.id] ?? ''"
                         (input)="setRefundable(item.id, $any($event.target).value)"
                       />
                     </div>
                     <div class="form-group">
                       <label>Note</label>
-                      <textarea></textarea>
+                      <textarea
+                        [value]="notes()[item.id] ?? ''"
+                        (input)="setNote(item.id, $any($event.target).value)"
+                      ></textarea>
                     </div>
                   } @else {
                     <p><strong>Note:</strong> {{ item.adminNotes || '—' }}</p>
@@ -72,7 +81,7 @@
 
     @if (isEditable()) {
       <div class="actions">
-        <button class="btn" type="button">Approve refund</button>
+                <button class="btn" type="button" [disabled]="!canApprove()" (click)="approve()">Approve refund</button>
       </div>
     }
   } @else if (loadError()) {

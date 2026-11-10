@@ -108,6 +108,8 @@ class RefundService:
             refund.status = RefundStatus.APPROVED
             refund.approved_at = datetime.now(timezone.utc)
             refund.updated_by = user.id
+            mission = await self.mission_repository.find_by_id(refund.mission_id)
+            mission.status = MissionStatus.COMPLETED
 
         logger.info("Refund request %s approved by admin %s", refund_id, user.id)
         return await self.get_refund_for_review(refund_id, user)

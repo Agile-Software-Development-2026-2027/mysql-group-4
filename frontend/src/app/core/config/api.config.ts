@@ -26,6 +26,7 @@ export const API_CONFIG = {
       byMission: (missionId: string) => `${environment.apiBaseUrl}/api/v1/refunds/by-mission/${missionId}`,
       byId: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}`,
       review: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/review`,
+      approve: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/approve`,
     },
   },
 } as const;

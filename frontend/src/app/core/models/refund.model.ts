@@ -86,3 +86,13 @@ export interface RefundMissionDTO {
 export interface RefundReviewDTO extends RefundRequestDTO {
   mission: RefundMissionDTO;
 }
+
+export interface RefundItemDecision {
+  itemId: string;
+  reimbursedAmount: string;
+  adminNotes: string | null;
+}
+
+export interface RefundApprovePayload {
+  items: RefundItemDecision[];
+}
