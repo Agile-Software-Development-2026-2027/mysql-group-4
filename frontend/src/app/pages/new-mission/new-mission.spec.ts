@@ -9,6 +9,12 @@ import { EmploymentLevel, User } from '../../core/models';
 import { AuthService } from '../../services/auth.service';
 import { ToastService } from '../../services/toast.service';
 
+const dateFromToday = (days: number): string => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');
+};
+
 const makeUser = (id: string, surname: string, department: string): User => ({
   id, email: `${surname}@example.com`, name: 'Simone', surname, fiscalCode: `FC-${surname}`,
   department, employmentLevel: EmploymentLevel.RICERCATORE,
@@ -74,7 +80,7 @@ describe('NewMissionComponent fund manager selection', () => {
     loadManagers();
     component.selectManager(component.managerOptions()[0]);
     component.missionForm.patchValue({
-      subject: 'Conference', destination: 'Rome', startDate: '2026-12-01', endDate: '2026-12-03',
+      subject: 'Conference', destination: 'Rome', startDate: dateFromToday(30), endDate: dateFromToday(32),
       estimatedCost: 300,
     });
     component.confirmSubmit();
@@ -109,7 +115,7 @@ describe('NewMissionComponent fund manager selection', () => {
     loadOwnFunds();
     component.selectOwnFund(component.myFunds()[1]);
     component.missionForm.patchValue({
-      subject: 'Conference', destination: 'Rome', startDate: '2026-12-01', endDate: '2026-12-03',
+      subject: 'Conference', destination: 'Rome', startDate: dateFromToday(30), endDate: dateFromToday(32),
       estimatedCost: 300,
     });
     component.confirmSubmit();
@@ -120,5 +126,85 @@ describe('NewMissionComponent fund manager selection', () => {
 
     req.flush({ id: 'mission-id', status: 'ACCEPTED' });
     expect(TestBed.inject(ToastService).toasts()[0]).toMatchObject({ type: 'success', title: 'Mission Approved' });
+  });
+
+  it('should reject a departure today or in the past and accept one from tomorrow', () => {
+    const form = component.missionForm;
+    form.patchValue({ startDate: dateFromToday(-1), endDate: dateFromToday(2) });
+    expect(form.hasError('pastStart')).toBe(true);
+
+    form.patchValue({ startDate: dateFromToday(0), startTime: '23:59' });
+    expect(form.hasError('pastStart')).toBe(true);
+
+    form.patchValue({ startDate: dateFromToday(1), startTime: '' });
+    expect(form.hasError('pastStart')).toBe(false);
+    expect(form.hasError('invalidPeriod')).toBe(false);
+  });
+
+  it('should not treat a year with more than 4 digits as a past date', () => {
+    const form = component.missionForm;
+    form.patchValue({ startDate: '202027-01-01' });
+    expect(form.getError('pastStart')).toBe('Please enter a valid departure date.');
+
+    form.patchValue({ startDate: dateFromToday(3), endDate: '202027-01-01' });
+    expect(form.getError('invalidPeriod')).toBe('Please enter a valid return date.');
+
+    form.patchValue({ endDate: dateFromToday(4) });
+    expect(form.errors).toBeNull();
+  });
+
+  it('should let the date pickers start from tomorrow', () => {
+    const start: HTMLInputElement = fixture.nativeElement.querySelector('#startDate');
+    const end: HTMLInputElement = fixture.nativeElement.querySelector('#endDate');
+    expect(component.firstAvailableDate).toBe(dateFromToday(1));
+    expect(start.min).toBe(dateFromToday(1));
+    expect(end.min).toBe(dateFromToday(1));
+
+    component.missionForm.patchValue({ startDate: dateFromToday(5) });
+    fixture.detectChanges();
+    expect(end.min).toBe(dateFromToday(5));
+  });
+
+  it('should open a popup with the date error first when submitting a past departure', () => {
+    component.missionForm.patchValue({ startDate: dateFromToday(-1), endDate: dateFromToday(2) });
+    component.onSubmit();
+    fixture.detectChanges();
+
+    expect(component.showSummaryModal()).toBe(false);
+    expect(component.formErrors()[0]).toBe('Departure date must be after today.');
+    const popup: HTMLElement = fixture.nativeElement.querySelector('.error-modal');
+    expect(popup.textContent).toContain('Invalid Mission Request');
+    expect(popup.querySelectorAll('li')[0].textContent).toContain('Departure date must be after today.');
+  });
+
+  it('should list the missing fields in the popup and close it', () => {
+    component.missionForm.patchValue({ startDate: dateFromToday(3), endDate: dateFromToday(4) });
+    component.onSubmit();
+
+    expect(component.formErrors()).toContain('Subject / Purpose Details is required.');
+    expect(component.formErrors()).toContain('Location is required.');
+    expect(component.formErrors()).not.toContain('Departure Date is required.');
+
+    component.closeFormErrors();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.error-modal')).toBeNull();
+  });
+
+  it('should clear the date error when a past departure is changed to a future one', () => {
+    const form = component.missionForm;
+    form.patchValue({ startDate: dateFromToday(-1), endDate: dateFromToday(5) });
+    component.onSubmit();
+    expect(form.hasError('pastStart')).toBe(true);
+
+    fixture.detectChanges();
+    const startField = (): HTMLElement => fixture.nativeElement.querySelector('#startDate').parentElement;
+    expect(startField().textContent).toContain('Departure date must be after today.');
+
+    form.patchValue({ startDate: dateFromToday(3) });
+    fixture.detectChanges();
+    expect(form.hasError('pastStart')).toBe(false);
+    expect(component.pastStartError()).toBeNull();
+    expect(startField().textContent).not.toContain('Departure date must be after today.');
+    expect(fixture.nativeElement.querySelector('#startDate').classList).not.toContain('is-invalid');
   });
 });

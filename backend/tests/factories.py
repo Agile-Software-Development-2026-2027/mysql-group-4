@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
@@ -23,10 +23,11 @@ def make_mission(**overrides):
 
 
 def make_create_data(**overrides):
+    start = (datetime.now() + timedelta(days=30)).replace(hour=9, minute=0, second=0, microsecond=0)
     return MissionCreateDTO(**(dict(
         mission_type=MissionType.RESEARCH, subject="Research", destination="Rome",
-        estimated_cost=Decimal("120.50"), starts_at=datetime(2026, 11, 1, 9),
-        ends_at=datetime(2026, 11, 3, 18), fund_manager_id=uuid4(),
+        estimated_cost=Decimal("120.50"), starts_at=start,
+        ends_at=start + timedelta(days=2, hours=9), fund_manager_id=uuid4(),
     ) | overrides))
 
 
