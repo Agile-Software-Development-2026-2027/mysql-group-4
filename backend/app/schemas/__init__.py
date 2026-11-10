@@ -4,6 +4,7 @@ from app.schemas.refund import (
     MAX_EXPENSE_AMOUNT,
     RefundItemCreateDTO,
     RefundItemDTO,
+    RefundReceiptUploadDTO,
     RefundRequestCreateDTO,
     RefundRequestDTO,
 )
@@ -21,4 +22,5 @@ __all__ = [
     "RefundRequestDTO",
     "RefundItemCreateDTO",
     "RefundItemDTO",
+    "RefundReceiptUploadDTO",
 ]
