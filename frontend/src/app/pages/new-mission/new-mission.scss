@@ -344,6 +344,24 @@ $text-muted: #5b6f82;
   }
 }
 
+/* Popup errori: stesso stile del riepilogo, più compatto e con bordo rosso */
+.error-modal {
+  max-width: 480px;
+  border-top: 4px solid $primary;
+
+  &__intro { margin: 0 0 10px; color: #17324d; font-size: 0.92rem; }
+
+  &__list {
+    margin: 0 0 18px;
+    padding: 10px 14px 10px 32px;
+    background: #fdf2f2;
+    border-radius: 4px;
+    color: $primary;
+    font-size: 0.9rem;
+    li + li { margin-top: 4px; }
+  }
+}
+
 @keyframes dropDownIn {
   from { opacity: 0; transform: translateY(-20px); }
   to { opacity: 1; transform: translateY(0); }
@@ -417,4 +435,7 @@ $text-muted: #5b6f82;
       color: $primary;
     }
   }
+}
+.form-control::-webkit-calendar-picker-indicator {
+  cursor: pointer;
 }

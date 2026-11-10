@@ -19,6 +19,13 @@ interface ManagerOption {
   department: string;
 }
 
+const VALID_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function toLocalIsoDate(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 @Component({
   selector: 'app-new-mission',
   standalone: true,
@@ -39,6 +46,7 @@ export class NewMissionComponent implements OnDestroy {
   isSubmitted = signal(false);
   isSubmitting = signal(false);
   showSummaryModal = signal(false);
+  formErrors = signal<string[]>([]);
 
   currentUser = this.authService.currentUser;
 
@@ -74,10 +82,14 @@ export class NewMissionComponent implements OnDestroy {
   });
 
   showMapPanel = signal(false);
+  readonly firstAvailableDate = toLocalIsoDate(new Date(new Date().setDate(new Date().getDate() + 1)));
+  pastStartError = signal<string | null>(null);
+  periodError = signal<string | null>(null);
   locationSuggestions = signal<LocationResponse[]>([]);
   isSearchingLocation = signal(false);
   private searchSubject = new Subject<string>();
   private searchSub?: Subscription;
+  private dateSub?: Subscription;
   private map?: L.Map;
   private marker?: L.Marker;
   private lastSelectedLocation?: { lat: number; lon: number; label: string };
@@ -105,6 +117,8 @@ export class NewMissionComponent implements OnDestroy {
   constructor() {
     this.setFundSource('self');
 
+    this.dateSub = this.missionForm.valueChanges.subscribe(() => this.refreshDateErrors());
+
     this.searchSub = this.searchSubject
       .pipe(
         debounceTime(350),
@@ -126,6 +140,7 @@ export class NewMissionComponent implements OnDestroy {
 
   ngOnDestroy(): void {
     this.searchSub?.unsubscribe();
+    this.dateSub?.unsubscribe();
     this.destroyMap();
   }
 
@@ -398,17 +413,69 @@ export class NewMissionComponent implements OnDestroy {
     const startTimeVal = control.get('startTime')?.value || '08:00';
     const endTimeVal = control.get('endTime')?.value || '20:00';
 
-    if (!startDateVal || !endDateVal) {
+    if (!startDateVal) {
       return null;
     }
 
+    if (!VALID_DATE.test(startDateVal)) {
+      return { pastStart: 'Please enter a valid departure date.' };
+    }
+
+    if (startDateVal <= toLocalIsoDate(new Date())) {
+      return { pastStart: 'Departure date must be after today.' };
+    }
+
     const start = new Date(`${startDateVal}T${this.normalizeTime(startTimeVal)}`);
+
+    if (!endDateVal) {
+      return null;
+    }
+    if (!VALID_DATE.test(endDateVal)) {
+      return { invalidPeriod: 'Please enter a valid return date.' };
+    }
+
     const end = new Date(`${endDateVal}T${this.normalizeTime(endTimeVal)}`);
 
     if (end <= start) {
       return { invalidPeriod: 'End date and time must be after the start date and time.' };
     }
     return null;
+  }
+
+  private refreshDateErrors(): void {
+    this.pastStartError.set(this.missionForm.getError('pastStart') ?? null);
+    this.periodError.set(this.missionForm.getError('invalidPeriod') ?? null);
+  }
+
+  private collectFormErrors(): string[] {
+    const errors: string[] = [];
+    const dateError = this.pastStartError() ?? this.periodError();
+    if (dateError) {
+      errors.push(dateError);
+    }
+
+    const labels: Record<string, string> = {
+      missionType: 'Mission Type',
+      subject: 'Subject / Purpose Details',
+      destination: 'Location',
+      startDate: 'Departure Date',
+      endDate: 'Return Date',
+      documentFile: 'Mission Documents (PDF)',
+      estimatedCost: 'Estimated Cost',
+      fundId: 'Fund',
+      fundManagerId: 'Fund Manager',
+    };
+    for (const [name, label] of Object.entries(labels)) {
+      const control = this.missionForm.get(name);
+      if (control?.invalid) {
+        errors.push(control.hasError('required') ? `${label} is required.` : `${label} is not valid.`);
+      }
+    }
+    return errors.length > 0 ? errors : ['Please fill in all required fields before submitting.'];
+  }
+
+  closeFormErrors(): void {
+    this.formErrors.set([]);
   }
 
   private normalizeTime(timeVal?: string): string {
@@ -446,6 +513,7 @@ export class NewMissionComponent implements OnDestroy {
 
     if (this.missionForm.invalid) {
       this.missionForm.markAllAsTouched();
+      this.formErrors.set(this.collectFormErrors());
       return;
     }
 
