@@ -36,6 +36,9 @@ export class MissionReview implements OnInit {
   associatedRefund = signal<RefundRequestDTO | null>(null);
   isCreatingRefund = signal<boolean>(false);
 
+  documents = signal<any[]>([]);
+  isLoadingDocuments = signal(false);
+
   myFunds = signal<FundDTO[]>([]);
   selectedFundId = signal('');
   hasFreeFunds = computed(() => this.myFunds().some((fund) => this.isFundFree(fund)));
@@ -130,6 +133,7 @@ export class MissionReview implements OnInit {
     this.showFundSuggestions.set(false);
     this.associatedFundName.set(null);
     this.associatedRefund.set(null);
+    this.loadMissionDocuments(mission.id);
 
     if (mission.status === 'ACCEPTED' || mission.status === 'COMPLETED') {
       this.fundService.getByMissionId(mission.id).subscribe({
@@ -158,6 +162,38 @@ export class MissionReview implements OnInit {
     if (this.canDecide(mission)) {
       this.loadMyFunds();
     }
+  }
+
+  private loadMissionDocuments(missionId: string) {
+    this.isLoadingDocuments.set(true);
+    this.missionService.getDocuments(missionId).subscribe({
+      next: (docs) => {
+        this.documents.set(docs || []);
+        this.isLoadingDocuments.set(false);
+      },
+      error: () => {
+        this.isLoadingDocuments.set(false);
+        this.documents.set([]);
+        this.toastService.showError('Unable to load attached documents.', 'Documents');
+      }
+    });
+  }
+
+  viewDocument(doc: any) {
+    if (!this.selectedMission?.id) {
+      this.toastService.showError('No mission selected.', 'View Error');
+      return;
+    }
+    this.missionService.downloadDocument(this.selectedMission.id, doc.id).subscribe({
+      next: (blob: Blob) => {
+        const pdfBlob = new Blob([blob], { type: 'application/pdf' });
+        const fileURL = URL.createObjectURL(pdfBlob);
+        window.open(fileURL, '_blank');
+      },
+      error: () => {
+        this.toastService.showError('Could not open the PDF document.', 'View Error');
+      }
+    });
   }
 
   canDecide(mission: MissionDTO): boolean {
@@ -239,6 +275,7 @@ export class MissionReview implements OnInit {
         this.toastService.showError(err?.error?.message ?? 'Unable to create refund request.', 'Error');
       }
     });
+    this.documents.set([]);
   }
 
   accept(id: string, note: string) {
