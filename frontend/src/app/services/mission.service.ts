@@ -109,6 +109,16 @@ export class MissionService {
     );
   }
 
+  downloadDocument(missionId: string, documentId: string): Observable<Blob> {
+    return this.http.get(
+      `${this.baseUrl}/${missionId}/documents/${documentId}`,
+      {
+        responseType: 'blob',
+        withCredentials: true
+      }
+    );
+  }
+
   // Missioni inviate dall'utente filtrate lato server (date nel formato YYYY-MM-DDTHH:mm:ss).
   getMySentMissions(
     filters: { status?: MissionStatus; endsAtFrom?: string; endsAtTo?: string },
