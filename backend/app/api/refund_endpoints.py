@@ -1,11 +1,17 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, File, UploadFile, status
 
 from app.api.deps import get_refund_service
 from app.db.models import User
-from app.schemas.refund import RefundRequestCreateDTO, RefundRequestDTO
+from app.schemas.refund import (
+    RefundItemCreateDTO,
+    RefundItemDTO,
+    RefundReceiptUploadDTO,
+    RefundRequestCreateDTO,
+    RefundRequestDTO,
+)
 from app.security import current_active_user
 from app.services.refund_service import RefundService
 
@@ -28,3 +34,13 @@ async def get_refund_by_mission(mission_id: UUID, user: CurrentUser, service: Re
 @refund_router.get("/{refund_id}", response_model=RefundRequestDTO, summary="Get refund request by ID")
 async def get_refund_by_id(refund_id: UUID, user: CurrentUser, service: RefundServiceDependency) -> RefundRequestDTO:
     return await service.get_refund_request_by_id(refund_id, user)
+
+
+@refund_router.post("/{refund_id}/receipts", response_model=RefundReceiptUploadDTO, status_code=status.HTTP_201_CREATED, summary="Upload receipt file to MinIO")
+async def upload_receipt(refund_id: UUID, user: CurrentUser, service: RefundServiceDependency, file: UploadFile = File(...)) -> RefundReceiptUploadDTO:
+    return await service.upload_receipt(refund_request_id=refund_id, file=file, user=user)
+
+
+@refund_router.post("/{refund_id}/items", response_model=RefundItemDTO, status_code=status.HTTP_201_CREATED, summary="Create refund item")
+async def create_refund_item(refund_id: UUID, user: CurrentUser, service: RefundServiceDependency, data: RefundItemCreateDTO) -> RefundItemDTO:
+    return await service.create_refund_item(refund_request_id=refund_id, user=user, data=data)

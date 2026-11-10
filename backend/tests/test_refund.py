@@ -1,5 +1,7 @@
+import io
 from datetime import datetime, timedelta
 from decimal import Decimal
+from unittest.mock import patch
 from uuid import UUID, uuid4
 
 import pytest
@@ -7,10 +9,14 @@ from httpx import AsyncClient
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.enums import RefundStatus
+from app.db.refund_request import RefundRequest
+from sqlalchemy import select
+
 from app.core.enums import (EmploymentLevel,ExpenseCategory,ExpenseSubtype,MissionStatus,MissionType)
 from app.db.mission import Mission
 from app.db.models import User
-from app.schemas.refund import MAX_EXPENSE_AMOUNT, RefundItemCreateDTO
+from app.schemas.refund import MAX_EXPENSE_AMOUNT, RefundItemCreateDTO, RefundRequestDTO
 from app.security import current_active_user
 from main import app
 
@@ -318,13 +324,210 @@ async def test_fund_manager_cannot_view_refund(
     assert res_by_id.status_code == 403
 
 
-# TEST vincoli dei campi per i subtype di spesa
+# TEST endpoint POST /api/v1/refunds/{refund_id}/items
+
+def make_valid_transport_item_payload(starts_at: datetime | None = None) -> dict:
+    start = starts_at or datetime.now()
+    end = start + timedelta(hours=3)
+    return {
+        "category": "TRANSPORT",
+        "subtype": "TRAIN",
+        "itineraryFrom": "Paola",
+        "itineraryTo": "Roma Termini",
+        "startsAt": start.isoformat(),
+        "endsAt": end.isoformat(),
+        "requestedAmount": 55.50,
+        "currency": "EUR",
+        "isTraceable": True,
+        "receiptFilePath": "refunds/123/receipts/test_rec.pdf",
+        "receiptOriginalFilename": "test_rec.pdf",
+        "description": "Viaggio di andata in treno",
+    }
+
+@pytest.mark.asyncio
+async def test_create_refund_item_happy_path_requester(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    post_refund = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    assert post_refund.status_code == 201
+    refund_id = post_refund.json()["id"]
+
+    payload = make_valid_transport_item_payload()
+    response = await client.post(f"/api/v1/refunds/{refund_id}/items", json=payload)
+
+    assert response.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_create_refund_item_invalid_payload(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    post_refund = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = post_refund.json()["id"]
+
+    payload = make_valid_transport_item_payload()
+    payload["requestedAmount"] = -10.00
+    response = await client.post(f"/api/v1/refunds/{refund_id}/items", json=payload)
+    assert response.status_code == 422
+
+@pytest.mark.asyncio
+async def test_create_refund_item_not_found(client: AsyncClient, requester: User):
+    payload = make_valid_transport_item_payload()
+    response = await client.post(f"/api/v1/refunds/{uuid4()}/items", json=payload)
+    assert response.status_code == 404
+
+@pytest.mark.asyncio
+async def test_create_refund_item_forbidden_for_other_user(client: AsyncClient, db_session: AsyncSession, requester: User, other_user: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    post_refund = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = post_refund.json()["id"]
+
+    app.dependency_overrides[current_active_user] = lambda: other_user
+    payload = make_valid_transport_item_payload()
+    response = await client.post(f"/api/v1/refunds/{refund_id}/items", json=payload)
+    assert response.status_code == 403
+
+@pytest.mark.asyncio
+async def test_create_refund_item_error_when_submitted(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    post_refund = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = UUID(post_refund.json()["id"])
+
+    res = await db_session.execute(select(RefundRequest).where(RefundRequest.id == refund_id))
+    db_refund = res.scalar_one()
+    db_refund.status = RefundStatus.SUBMITTED
+    await db_session.commit()
+
+    payload = make_valid_transport_item_payload()
+    response = await client.post(f"/api/v1/refunds/{refund_id}/items", json=payload)
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_create_refund_item_error_when_approved(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    post_refund = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = UUID(post_refund.json()["id"])
+
+    res = await db_session.execute(select(RefundRequest).where(RefundRequest.id == refund_id))
+    db_refund = res.scalar_one()
+    db_refund.status = RefundStatus.APPROVED
+    await db_session.commit()
+
+    payload = make_valid_transport_item_payload()
+    response = await client.post(f"/api/v1/refunds/{refund_id}/items", json=payload)
+    assert response.status_code == 400
+
+
+def make_refund_item(**kwargs) -> RefundItemCreateDTO:
+    kwargs.setdefault("receipt_file_path", "refunds/123/receipts/test.pdf")
+    kwargs.setdefault("receipt_original_filename", "test.pdf")
+    return RefundItemCreateDTO(**kwargs)
+
+
+def test_refund_item_receipt_fields_validation():
+    now = datetime.now()
+    base_kwargs = {
+        "category": ExpenseCategory.OTHER,
+        "starts_at": now,
+        "requested_amount": Decimal("10.00"),
+        "description": "Test spesa",
+    }
+
+    with pytest.raises(ValidationError):
+        RefundItemCreateDTO(**base_kwargs)
+
+    with pytest.raises(ValidationError):
+        RefundItemCreateDTO(**base_kwargs, receipt_file_path="", receipt_original_filename="rec.pdf")
+
+    with pytest.raises(ValidationError):
+        RefundItemCreateDTO(**base_kwargs, receipt_file_path="refunds/1/rec.pdf", receipt_original_filename="")
+
+    valid = RefundItemCreateDTO(
+        **base_kwargs,
+        receipt_file_path="refunds/1/rec.pdf",
+        receipt_original_filename="rec.pdf",
+    )
+    assert valid.receipt_file_path == "refunds/1/rec.pdf"
+    assert valid.receipt_original_filename == "rec.pdf"
+
+# TEST endpoint POST /api/v1/refunds/{refund_id}/receipts
+
+@pytest.mark.asyncio
+async def test_upload_receipt_happy_path(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    post_refund = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = post_refund.json()["id"]
+
+    with patch("app.services.refund_service.minio_client") as mock_minio:
+        mock_minio.put_object.return_value = None
+        pdf_bytes = io.BytesIO(b"%PDF-1.4 Fake PDF Receipt Content")
+        files = {"file": ("biglietto_treno.pdf", pdf_bytes, "application/pdf")}
+        response = await client.post(f"/api/v1/refunds/{refund_id}/receipts", files=files)
+
+        assert response.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_upload_receipt_invalid_file_extension(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    post_refund = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = post_refund.json()["id"]
+
+    files = {"file": ("malware.exe", io.BytesIO(b"binary"), "application/octet-stream")}
+    response = await client.post(f"/api/v1/refunds/{refund_id}/receipts", files=files)
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_upload_receipt_empty_file(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    post_refund = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = post_refund.json()["id"]
+
+    files = {"file": ("vuoto.pdf", io.BytesIO(b""), "application/pdf")}
+    response = await client.post(f"/api/v1/refunds/{refund_id}/receipts", files=files)
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_upload_receipt_forbidden_for_other_user(client: AsyncClient, db_session: AsyncSession, requester: User, other_user: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    post_refund = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = post_refund.json()["id"]
+
+    app.dependency_overrides[current_active_user] = lambda: other_user
+    files = {"file": ("scontrino.pdf", io.BytesIO(b"fake pdf"), "application/pdf")}
+    response = await client.post(f"/api/v1/refunds/{refund_id}/receipts", files=files)
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_upload_receipt_not_found(client: AsyncClient, requester: User):
+    files = {"file": ("scontrino.pdf", io.BytesIO(b"fake pdf"), "application/pdf")}
+    response = await client.post(f"/api/v1/refunds/{uuid4()}/receipts", files=files)
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_upload_receipt_error_when_submitted(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    post_refund = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = UUID(post_refund.json()["id"])
+
+    res = await db_session.execute(select(RefundRequest).where(RefundRequest.id == refund_id))
+    db_refund = res.scalar_one()
+    db_refund.status = RefundStatus.SUBMITTED
+    await db_session.commit()
+
+    files = {"file": ("scontrino.pdf", io.BytesIO(b"fake pdf"), "application/pdf")}
+    response = await client.post(f"/api/v1/refunds/{refund_id}/receipts", files=files)
+    assert response.status_code == 400
+
 
 def test_refund_item_transport_validation():
     now = datetime.now()
 
     #valido
-    item = RefundItemCreateDTO(
+    item = make_refund_item(
         category=ExpenseCategory.TRANSPORT,
         subtype=ExpenseSubtype.TRAIN,
         itinerary_from="Paola",
@@ -339,7 +542,7 @@ def test_refund_item_transport_validation():
 
     # errore per trasporto senza itinerario
     with pytest.raises(ValueError):
-        RefundItemCreateDTO(
+        make_refund_item(
             category=ExpenseCategory.TRANSPORT,
             subtype=ExpenseSubtype.TRAIN,
             starts_at=now,
@@ -350,7 +553,7 @@ def test_refund_item_transport_validation():
 
     # Trasporto senza orario di arrivo
     with pytest.raises(ValueError):
-        RefundItemCreateDTO(
+        make_refund_item(
             category=ExpenseCategory.TRANSPORT,
             subtype=ExpenseSubtype.TRAIN,
             itinerary_from="Paola",
@@ -363,7 +566,7 @@ def test_refund_item_transport_validation():
 
     # Trasporto con data arrivo precedente a partenza
     with pytest.raises(ValueError):
-        RefundItemCreateDTO(
+        make_refund_item(
             category=ExpenseCategory.TRANSPORT,
             subtype=ExpenseSubtype.TRAIN,
             itinerary_from="Paola",
@@ -379,7 +582,7 @@ def test_refund_item_accommodation_validation():
     now = datetime.now()
 
     # Alloggio valido
-    item = RefundItemCreateDTO(
+    item = make_refund_item(
         category=ExpenseCategory.ACCOMMODATION,
         subtype=ExpenseSubtype.ACCOMMODATION_EXPENSE,
         starts_at=now,
@@ -391,7 +594,7 @@ def test_refund_item_accommodation_validation():
 
     # Alloggio con itinerario
     with pytest.raises(ValueError, match="Itinerary is not allowed for accommodation"):
-        RefundItemCreateDTO(
+        make_refund_item(
             category=ExpenseCategory.ACCOMMODATION,
             subtype=ExpenseSubtype.ACCOMMODATION_EXPENSE,
             itinerary_from="Roma",
@@ -403,7 +606,7 @@ def test_refund_item_accommodation_validation():
 
     # Alloggio senza data di fine: errore
     with pytest.raises(ValueError, match="Check-out time .* is required for accommodation"):
-        RefundItemCreateDTO(
+        make_refund_item(
             category=ExpenseCategory.ACCOMMODATION,
             subtype=ExpenseSubtype.ACCOMMODATION_EXPENSE,
             starts_at=now,
@@ -414,7 +617,7 @@ def test_refund_item_accommodation_validation():
 
     # Alloggio con check-out precedente a check-in
     with pytest.raises(ValueError, match="Check-out time must be after check-in time"):
-        RefundItemCreateDTO(
+        make_refund_item(
             category=ExpenseCategory.ACCOMMODATION,
             subtype=ExpenseSubtype.ACCOMMODATION_EXPENSE,
             starts_at=now,
@@ -428,7 +631,7 @@ def test_refund_item_meals_validation():
     now = datetime.now()
 
     # Vitto valido
-    item = RefundItemCreateDTO(
+    item = make_refund_item(
         category=ExpenseCategory.MEALS,
         subtype=ExpenseSubtype.MEALS_EXPENSE,
         starts_at=now,
@@ -440,7 +643,7 @@ def test_refund_item_meals_validation():
 
     # Vitto con itinerario: errore
     with pytest.raises(ValueError, match="Itinerary is not allowed for MEALS"):
-        RefundItemCreateDTO(
+        make_refund_item(
             category=ExpenseCategory.MEALS,
             subtype=ExpenseSubtype.MEALS_EXPENSE,
             itinerary_from="Roma",
@@ -451,7 +654,7 @@ def test_refund_item_meals_validation():
 
     # Vitto con data fine: errore
     with pytest.raises(ValueError, match="End time .* is not allowed for MEALS"):
-        RefundItemCreateDTO(
+        make_refund_item(
             category=ExpenseCategory.MEALS,
             subtype=ExpenseSubtype.MEALS_EXPENSE,
             starts_at=now,
@@ -465,7 +668,7 @@ def test_refund_item_other_validation():
     now = datetime.now()
 
     # Spesa "Altro" valida
-    item = RefundItemCreateDTO(
+    item = make_refund_item(
         category=ExpenseCategory.OTHER,
         starts_at=now,
         requested_amount=Decimal("150.00"),
@@ -477,7 +680,7 @@ def test_refund_item_other_validation():
 
     # "Altro" con subtype fornito: errore
     with pytest.raises(ValueError, match="Subtype is not allowed for OTHER"):
-        RefundItemCreateDTO(
+        make_refund_item(
             category=ExpenseCategory.OTHER,
             subtype=ExpenseSubtype.TRAIN,
             starts_at=now,
@@ -486,7 +689,7 @@ def test_refund_item_other_validation():
         )
 
     with pytest.raises(ValueError, match="Itinerary is not allowed for OTHER"):
-        RefundItemCreateDTO(
+        make_refund_item(
             category=ExpenseCategory.OTHER,
             itinerary_from="Roma",
             starts_at=now,
@@ -495,7 +698,7 @@ def test_refund_item_other_validation():
         )
 
     with pytest.raises(ValueError, match="End time .* is not allowed for OTHER"):
-        RefundItemCreateDTO(
+        make_refund_item(
             category=ExpenseCategory.OTHER,
             starts_at=now,
             ends_at=now + timedelta(hours=2),
@@ -504,7 +707,7 @@ def test_refund_item_other_validation():
         )
 
     with pytest.raises(ValueError, match="Valid transport subtype is required"):
-        RefundItemCreateDTO(
+        make_refund_item(
             category=ExpenseCategory.TRANSPORT,
             itinerary_from="Paola",
             itinerary_to="Roma",
@@ -520,7 +723,7 @@ def test_refund_item_amount_and_description_validation():
 
     # Richiesto 0€
     with pytest.raises(ValidationError):
-        RefundItemCreateDTO(
+        make_refund_item(
             category=ExpenseCategory.MEALS,
             subtype=ExpenseSubtype.MEALS_EXPENSE,
             starts_at=now,
@@ -530,7 +733,7 @@ def test_refund_item_amount_and_description_validation():
 
     # Importo negativo
     with pytest.raises(ValidationError):
-        RefundItemCreateDTO(
+        make_refund_item(
             category=ExpenseCategory.MEALS,
             subtype=ExpenseSubtype.MEALS_EXPENSE,
             starts_at=now,
@@ -540,7 +743,7 @@ def test_refund_item_amount_and_description_validation():
 
     # Descrizione vuota non consentita
     with pytest.raises(ValidationError):
-        RefundItemCreateDTO(
+        make_refund_item(
             category=ExpenseCategory.MEALS,
             subtype=ExpenseSubtype.MEALS_EXPENSE,
             starts_at=now,
@@ -552,7 +755,7 @@ def test_refund_item_amount_and_description_validation():
 def test_refund_item_boundary_cases_amounts():
     now = datetime.now()
 
-    min_item = RefundItemCreateDTO(
+    min_item = make_refund_item(
         category=ExpenseCategory.MEALS,
         subtype=ExpenseSubtype.MEALS_EXPENSE,
         starts_at=now,
@@ -561,7 +764,7 @@ def test_refund_item_boundary_cases_amounts():
     )
     assert min_item.requested_amount == Decimal("0.01")
 
-    max_item = RefundItemCreateDTO(
+    max_item = make_refund_item(
         category=ExpenseCategory.MEALS,
         subtype=ExpenseSubtype.MEALS_EXPENSE,
         starts_at=now,
@@ -571,7 +774,7 @@ def test_refund_item_boundary_cases_amounts():
     assert max_item.requested_amount == Decimal("10000.00")
 
     with pytest.raises(ValidationError):
-        RefundItemCreateDTO(
+        make_refund_item(
             category=ExpenseCategory.MEALS,
             subtype=ExpenseSubtype.MEALS_EXPENSE,
             starts_at=now,
@@ -580,7 +783,7 @@ def test_refund_item_boundary_cases_amounts():
         )
 
     with pytest.raises(ValidationError):
-        RefundItemCreateDTO(
+        make_refund_item(
             category=ExpenseCategory.MEALS,
             subtype=ExpenseSubtype.MEALS_EXPENSE,
             starts_at=now,
@@ -592,7 +795,7 @@ def test_refund_item_boundary_cases_amounts():
 def test_refund_item_boundary_cases_lengths():
     now = datetime.now()
 
-    item_min_desc = RefundItemCreateDTO(
+    item_min_desc = make_refund_item(
         category=ExpenseCategory.MEALS,
         subtype=ExpenseSubtype.MEALS_EXPENSE,
         starts_at=now,
@@ -601,7 +804,7 @@ def test_refund_item_boundary_cases_lengths():
     )
     assert len(item_min_desc.description) == 1
 
-    item_max_desc = RefundItemCreateDTO(
+    item_max_desc = make_refund_item(
         category=ExpenseCategory.MEALS,
         subtype=ExpenseSubtype.MEALS_EXPENSE,
         starts_at=now,
@@ -611,7 +814,7 @@ def test_refund_item_boundary_cases_lengths():
     assert len(item_max_desc.description) == 255
 
     with pytest.raises(ValidationError):
-        RefundItemCreateDTO(
+        make_refund_item(
             category=ExpenseCategory.MEALS,
             subtype=ExpenseSubtype.MEALS_EXPENSE,
             starts_at=now,
@@ -620,7 +823,7 @@ def test_refund_item_boundary_cases_lengths():
         )
 
     with pytest.raises(ValidationError):
-        RefundItemCreateDTO(
+        make_refund_item(
             category=ExpenseCategory.MEALS,
             subtype=ExpenseSubtype.MEALS_EXPENSE,
             starts_at=now,
@@ -628,7 +831,7 @@ def test_refund_item_boundary_cases_lengths():
             description="    ",
         )
 
-    item_max_itinerary = RefundItemCreateDTO(
+    item_max_itinerary = make_refund_item(
         category=ExpenseCategory.TRANSPORT,
         subtype=ExpenseSubtype.TRAIN,
         itinerary_from="A" * 255,
@@ -642,7 +845,7 @@ def test_refund_item_boundary_cases_lengths():
     assert len(item_max_itinerary.itinerary_to) == 255
 
     with pytest.raises(ValidationError):
-        RefundItemCreateDTO(
+        make_refund_item(
             category=ExpenseCategory.TRANSPORT,
             subtype=ExpenseSubtype.TRAIN,
             itinerary_from="A" * 256,
@@ -653,7 +856,7 @@ def test_refund_item_boundary_cases_lengths():
             description="Itinerario troppo lungo",
         )
 
-    item_curr = RefundItemCreateDTO(
+    item_curr = make_refund_item(
         category=ExpenseCategory.MEALS,
         subtype=ExpenseSubtype.MEALS_EXPENSE,
         starts_at=now,
@@ -664,7 +867,7 @@ def test_refund_item_boundary_cases_lengths():
     assert item_curr.currency == "USD"
 
     with pytest.raises(ValidationError):
-        RefundItemCreateDTO(
+        make_refund_item(
             category=ExpenseCategory.MEALS,
             subtype=ExpenseSubtype.MEALS_EXPENSE,
             starts_at=now,
@@ -674,7 +877,7 @@ def test_refund_item_boundary_cases_lengths():
         )
 
     with pytest.raises(ValidationError):
-        RefundItemCreateDTO(
+        make_refund_item(
             category=ExpenseCategory.MEALS,
             subtype=ExpenseSubtype.MEALS_EXPENSE,
             starts_at=now,
