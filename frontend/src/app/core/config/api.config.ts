@@ -21,5 +21,10 @@ export const API_CONFIG = {
     funds: {
       base: `${environment.apiBaseUrl}/api/v1/funds`,
     },
+    refunds: {
+      base: `${environment.apiBaseUrl}/api/v1/refunds`,
+      byMission: (missionId: string) => `${environment.apiBaseUrl}/api/v1/refunds/by-mission/${missionId}`,
+      byId: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}`,
+    },
   },
 } as const;

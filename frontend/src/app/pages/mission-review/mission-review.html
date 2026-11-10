@@ -61,6 +61,32 @@
         </div>
       </div>
 
+      <div class="accordion-section" [class.is-open]="activeSection === 'completed'">
+        <button class="accordion-header completed" (click)="toggleSection('completed')">
+          <div class="header-title">
+            <h2>Completed Missions</h2>
+            <span class="count-badge completed">{{ completedMissions.length }}</span>
+          </div>
+          <span class="chevron"></span>
+        </button>
+
+        <div class="accordion-content">
+          <div class="list-container">
+            @for (mission of completedMissions; track mission.id) {
+              <div class="list-card status-completed" (click)="openDetail(mission)">
+                <div class="card-info">
+                  <div class="title-row">
+                    <span class="badge completed">Completed</span>
+                    <h3>{{ mission.subject }}</h3>
+                  </div>
+                  <p><strong>Requester ID:</strong> {{ mission.requesterId }} &nbsp;&bull;&nbsp; <strong>Date:</strong> {{ mission.startsAt | date:'dd/MM/yyyy' }} &nbsp;&bull;&nbsp; <strong>Estimated cost:</strong> € {{ mission.estimatedCost | number:'1.2-2' }}</p>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+
       <div class="accordion-section" [class.is-open]="activeSection === 'rejected'">
         <button class="accordion-header rejected" (click)="toggleSection('rejected')">
           <div class="header-title">
@@ -153,6 +179,66 @@
               }
             </div>
           </div>
+
+          @if (viewMode === 'requester' && (selectedMission.status === 'ACCEPTED' || selectedMission.status === 'COMPLETED')) {
+            <div class="refund-section">
+              @if (selectedMission.status === 'ACCEPTED' && !isMissionEnded(selectedMission)) {
+                <div class="refund-banner info">
+                  <div class="refund-banner__text">
+                    <strong>Refund Request</strong>
+                    <p>You can request a refund once the mission has ended (after {{ selectedMission.endsAt | date:'dd/MM/yyyy HH:mm' }}).</p>
+                  </div>
+                </div>
+              } @else if (selectedMission.status === 'ACCEPTED' && isMissionEnded(selectedMission)) {
+                @if (associatedRefund(); as refund) {
+                  <div class="refund-card">
+                    <div class="refund-card__info">
+                      <div class="title-row">
+                        <strong>Refund Request</strong>
+                        <span class="status status--{{ refund.status.toLowerCase() }}">{{ refund.status }}</span>
+                      </div>
+                      <p>Total requested: <strong>€ {{ refund.totalRequestedAmount | number:'1.2-2' }}</strong></p>
+                    </div>
+                    <a class="btn btn--outline" [routerLink]="['/refund', refund.id]">
+                      Go to Refund &rarr;
+                    </a>
+                  </div>
+                } @else {
+                  <div class="refund-banner action">
+                    <div class="refund-banner__text">
+                      <strong>Refund Request</strong>
+                      <p>The mission has concluded. You can now initiate your reimbursement request.</p>
+                    </div>
+                    <button
+                      class="btn btn--primary"
+                      type="button"
+                      [disabled]="isCreatingRefund()"
+                      (click)="createAndGoToRefund(selectedMission.id)"
+                    >
+                      {{ isCreatingRefund() ? 'Creating...' : 'Request Refund' }}
+                    </button>
+                  </div>
+                }
+              } @else if (selectedMission.status === 'COMPLETED') {
+                <div class="refund-card completed">
+                  <div class="refund-card__info">
+                    <div class="title-row">
+                      <strong>Mission Completed &amp; Reimbursed</strong>
+                      <span class="badge completed">Completed</span>
+                    </div>
+                    @if (associatedRefund(); as refund) {
+                      <p>Total reimbursed: <strong>€ {{ refund.totalReimbursedAmount | number:'1.2-2' }}</strong></p>
+                    }
+                  </div>
+                  @if (associatedRefund(); as refund) {
+                    <a class="btn btn--outline" [routerLink]="['/refund', refund.id]">
+                      View Refund &rarr;
+                    </a>
+                  }
+                </div>
+              }
+            </div>
+          }
 
           <hr class="divider">
 
