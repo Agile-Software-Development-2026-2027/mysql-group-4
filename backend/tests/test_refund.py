@@ -7,7 +7,7 @@ from httpx import AsyncClient
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.enums import (EmploymentLevel,ExpenseCategory,ExpenseSubtype,MissionStatus,MissionType)
+from app.core.enums import (EmploymentLevel,ExpenseCategory,ExpenseSubtype,MissionStatus,MissionType,RefundStatus)
 from app.db.mission import Mission
 from app.db.models import User
 from app.schemas.refund import MAX_EXPENSE_AMOUNT, RefundItemCreateDTO
@@ -327,7 +327,8 @@ async def test_get_refund_review_happy_path_admin(client, db_session: AsyncSessi
     mission = await create_mission(db_session, requester.id, ended=True) #creo una missione conclusa
     post_res = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)}) # creo una richiesta per quella missione
     refund_id = post_res.json()["id"] #estraggo l'id
-
+    refund = await db_session.get(RefundRequest,UUID(refund_id))  # la porto in SUBMITTED: le DRAFT non sono visibili all'admin
+    refund.status = RefundStatus.SUBMITTED
     app.dependency_overrides[current_active_user] = lambda: admin_user #switcho ad admin
     response = await client.get(f"/api/v1/refunds/{refund_id}/review") #chiamo il mio endpoint
 
@@ -346,7 +347,7 @@ async def test_get_refund_review_happy_path_admin(client, db_session: AsyncSessi
 @pytest.mark.asyncio
 async def test_get_refund_review_includes_items(client: AsyncClient, db_session: AsyncSession, requester: User, admin_user: User):
     mission = await create_mission(db_session, requester.id, ended=True)
-    refund = RefundRequest(mission_id=mission.id) #creo la richiesta relativa alla missione senza salvare nel db
+    refund = RefundRequest(mission_id=mission.id, status=RefundStatus.SUBMITTED) #creo la richiesta relativa alla missione senza salvare nel db
     db_session.add(refund)
     await db_session.flush()
     #al momento aggiungo l'item a mano perchè non esiste l'endpoint specifico (lo cambierò)
@@ -391,6 +392,17 @@ async def test_get_refund_review_not_found(client: AsyncClient, admin_user: User
     response = await client.get(f"/api/v1/refunds/{uuid4()}/review")
     assert response.status_code == 404
 
+#se la richiesta è ancora in bozza (DRAFT) l'admin non la vede --> 404
+@pytest.mark.asyncio
+async def test_get_refund_review_draft_not_visible_to_admin(client: AsyncClient, db_session: AsyncSession, requester: User, admin_user: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    post_res = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = post_res.json()["id"]
+
+    app.dependency_overrides[current_active_user] = lambda: admin_user
+    response = await client.get(f"/api/v1/refunds/{refund_id}/review")
+
+    assert response.status_code == 404
 # TEST vincoli dei campi per i subtype di spesa
 
 def test_refund_item_transport_validation():

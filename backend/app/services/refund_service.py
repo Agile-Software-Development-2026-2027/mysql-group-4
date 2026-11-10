@@ -1,16 +1,19 @@
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
+from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.enums import MissionStatus
+from app.core.enums import MissionStatus, RefundStatus
 from app.core.exceptions import (
     AccessDeniedError,
     InvalidMissionStateError,
+    InvalidRefundDecisionError,
     InvalidRefundRequestDateError,
+    InvalidRefundStateError,
     MissionNotFoundError,
     RefundNotFoundError,
 )
@@ -18,7 +21,7 @@ from app.crud.mission_repository import MissionRepository
 from app.crud.refund_repository import RefundRepository
 from app.db.models import User
 from app.db.refund_request import RefundRequest
-from app.schemas.refund import RefundRequestCreateDTO, RefundRequestDTO, RefundReviewDTO
+from app.schemas.refund import RefundApproveDTO, RefundRequestCreateDTO, RefundRequestDTO, RefundReviewDTO
 
 logger = logging.getLogger(__name__)
 
@@ -76,10 +79,38 @@ class RefundService:
         if not user.is_superuser:
             raise AccessDeniedError("Only administrators can review refund requests")
         refund = await self.refund_repository.find_by_id_for_review(self.session, refund_id)
-        if not refund:
+        if not refund or refund.status == RefundStatus.DRAFT:
             raise RefundNotFoundError(refund_id)
         return RefundReviewDTO.model_validate(refund)
 
+    async def approve_refund(self, refund_id: UUID, data: RefundApproveDTO, user: User) -> RefundReviewDTO:
+        if not user.is_superuser:
+            raise AccessDeniedError("Only administrators can approve refund requests")
+
+        async with self.transaction():
+            refund = await self.refund_repository.find_by_id(self.session, refund_id)
+            if not refund or refund.status == RefundStatus.DRAFT:
+                raise RefundNotFoundError(refund_id)
+            if refund.status != RefundStatus.SUBMITTED:
+                raise InvalidRefundStateError("Only submitted refund requests can be approved")
+
+            items_by_id = {item.id: item for item in refund.items}
+            for decision in data.items:
+                item = items_by_id.get(decision.item_id)
+                if item is None:
+                    raise InvalidRefundDecisionError(f"Item {decision.item_id} does not belong to this refund request")
+                item.reimbursed_amount = decision.reimbursed_amount
+                item.admin_notes = decision.admin_notes
+                item.updated_by = user.id
+
+            refund.total_reimbursed_amount = sum(
+                (item.reimbursed_amount or Decimal("0.00") for item in refund.items), Decimal("0.00"))
+            refund.status = RefundStatus.APPROVED
+            refund.approved_at = datetime.now(timezone.utc)
+            refund.updated_by = user.id
+
+        logger.info("Refund request %s approved by admin %s", refund_id, user.id)
+        return await self.get_refund_for_review(refund_id, user)
 
     async def get_refund_request_by_mission(self, mission_id: UUID, user: User) -> RefundRequestDTO | None:
         mission = await self.mission_repository.find_by_id(mission_id)

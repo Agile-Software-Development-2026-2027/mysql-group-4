@@ -133,3 +133,14 @@ class RefundMissionDTO(CamelModel):
 
 class RefundReviewDTO(RefundRequestDTO):
     mission: RefundMissionDTO
+
+class RefundItemDecisionDTO(CamelModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+    item_id: UUID
+    reimbursed_amount: Decimal = Field(ge=0, decimal_places=2)
+    admin_notes: str | None = Field(default=None, max_length=1000)
+
+
+class RefundApproveDTO(CamelModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    items: list[RefundItemDecisionDTO] = Field(min_length=1)

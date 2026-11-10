@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, status
 
 from app.api.deps import get_refund_service
 from app.db.models import User
-from app.schemas.refund import RefundRequestCreateDTO, RefundRequestDTO, RefundReviewDTO
+from app.schemas.refund import RefundApproveDTO, RefundRequestCreateDTO, RefundRequestDTO, RefundReviewDTO
 from app.security import current_active_user
 from app.services.refund_service import RefundService
 
@@ -31,3 +31,7 @@ async def get_refund_for_review(refund_id: UUID, user: CurrentUser, service: Ref
 @refund_router.get("/{refund_id}", response_model=RefundRequestDTO, summary="Get refund request by ID")
 async def get_refund_by_id(refund_id: UUID, user: CurrentUser, service: RefundServiceDependency) -> RefundRequestDTO:
     return await service.get_refund_request_by_id(refund_id, user)
+
+@refund_router.patch("/{refund_id}/approve", response_model=RefundReviewDTO, summary="Approve a submitted refund request (admin only)")
+async def approve_refund(refund_id: UUID, decisions: RefundApproveDTO, user: CurrentUser, service: RefundServiceDependency) -> RefundReviewDTO:
+    return await service.approve_refund(refund_id, decisions, user)
