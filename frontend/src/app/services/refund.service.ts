@@ -48,4 +48,11 @@ export class RefundService {
       { withCredentials: true }
     );
   }
+
+  downloadReceipt(refundId: string, itemId: string): Observable<Blob> {
+    return this.http.get(API_CONFIG.endpoints.refunds.receipt(refundId, itemId), {
+      responseType: 'blob',
+      withCredentials: true,
+    });
+  }
 }

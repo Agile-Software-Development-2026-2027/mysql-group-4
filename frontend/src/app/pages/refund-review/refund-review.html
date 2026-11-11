@@ -1,6 +1,6 @@
 <app-topbar></app-topbar>
 
-<main class="container">
+<main class="container" [class.has-receipt]="receipt()">
   @if (refund(); as refund) {
     <h1>Refund request <span class="status">{{ refund.status }}</span></h1>
 
@@ -23,7 +23,7 @@
         </thead>
         <tbody>
           @for (item of refund.items; track item.id) {
-            <tr class="expense-row" (click)="toggle(item.id)">
+            <tr class="expense-row" [class.is-active]="receipt()?.itemId === item.id" (click)="toggle(item.id)">
               <td>{{ item.category }}</td>
               <td>{{ item.description }}</td>
               <td>
@@ -46,10 +46,11 @@
                       <div><strong>Itinerary:</strong> {{ item.itineraryFrom }} → {{ item.itineraryTo }}</div>
                     }
                     <div><strong>Traceable:</strong> {{ item.isTraceable ? 'Yes' : 'No' }}</div>
-                    <div><strong>Receipt:</strong> <a href="#" [title]="item.receiptOriginalFilename" (click)="$event.preventDefault()"> View</a></div>
+                    <div><strong>Receipt:</strong> <a href="#" [title]="item.receiptOriginalFilename" (click)="viewReceipt(item); $event.preventDefault()"> View</a></div>
                   </div>
 
                   @if (isEditable()) {
+
                     <div class="form-group">
                       <label>Refundable amount ({{ item.currency }})</label>
                       <input
@@ -79,9 +80,23 @@
       </table>
     </section>
 
-    @if (isEditable()) {
+        @if (isEditable()) {
       <div class="actions">
-                <button class="btn" type="button" [disabled]="!canApprove()" (click)="approve()">Approve refund</button>
+        <button class="btn" type="button" [disabled]="!canApprove()" (click)="confirmOpen.set(true)">Approve refund</button>
+      </div>
+    }
+
+    @if (confirmOpen()) {
+      <div class="overlay is-open" (click)="confirmOpen.set(false)"></div>
+      <div class="confirm-modal card" role="dialog" aria-modal="true">
+        <h3>Confirm refund approval</h3>
+        <p>Total requested: <strong>€ {{ totalRequested() | number:'1.2-2' }}</strong></p>
+        <p>Total refund: <strong>€ {{ totalRefund() | number:'1.2-2' }}</strong></p>
+        <p>This action cannot be undone.</p>
+        <div class="actions">
+          <button class="btn btn--outline" type="button" (click)="confirmOpen.set(false)">Cancel</button>
+          <button class="btn" type="button" (click)="approve()">Confirm approval</button>
+        </div>
       </div>
     }
   } @else if (loadError()) {
@@ -90,3 +105,17 @@
     <p>Loading…</p>
   }
 </main>
+
+@if (receipt(); as receipt) {
+  <aside class="receipt-panel">
+    <div class="receipt-panel__header">
+      <strong>{{ receipt.filename }}</strong>
+      <button class="btn btn--outline" type="button" (click)="closeReceipt()">Close</button>
+    </div>
+    @if (receipt.isPdf) {
+      <iframe [src]="receipt.url" title="Receipt"></iframe>
+    } @else {
+      <img [src]="receipt.url" [alt]="receipt.filename" />
+    }
+  </aside>
+}

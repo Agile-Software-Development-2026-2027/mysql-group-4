@@ -2,8 +2,10 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { Topbar } from '../../components/topbar/topbar';
-import { RefundApprovePayload, RefundReviewDTO, RefundStatus } from '../../core/models';
+import { RefundApprovePayload, RefundItemDTO, RefundReviewDTO, RefundStatus } from '../../core/models';
 import { RefundService } from '../../services/refund.service';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
+import { ToastService } from '../../services/toast.service';
 
 @Component({
   selector: 'app-refund-review',
@@ -14,12 +16,16 @@ import { RefundService } from '../../services/refund.service';
 export class RefundReview {
   private route = inject(ActivatedRoute);
   private refundService = inject(RefundService);
+  private toastService = inject(ToastService);
+  private sanitizer = inject(DomSanitizer);
 
   readonly refund = signal<RefundReviewDTO | null>(null);
   readonly loadError = signal(false);
   readonly expandedId = signal<string | null>(null);
   readonly refundableAmounts = signal<Record<string, number>>({});
   readonly notes = signal<Record<string, string>>({});
+  readonly receipt = signal<{ itemId: string; url: SafeResourceUrl; fileURL: string; isPdf: boolean; filename: string } | null>(null);
+  readonly confirmOpen = signal(false);
 
   readonly isEditable = computed(() => this.refund()?.status === RefundStatus.SUBMITTED);
 
@@ -75,7 +81,7 @@ export class RefundReview {
   approve(): void {
     const refund = this.refund();
     if (!refund) return;
-    if (!confirm(`Approve a refund of € ${this.totalRefund().toFixed(2)}? This cannot be undone.`)) return;
+    this.confirmOpen.set(false);
 
     const payload: RefundApprovePayload = {
       items: refund.items.map((item) => ({
@@ -89,5 +95,32 @@ export class RefundReview {
       this.refund.set(updated);
       this.expandedId.set(null);
     });
+  }
+
+  viewReceipt(item: RefundItemDTO): void {
+    const refund = this.refund();
+    if (!refund) return;
+    this.refundService.downloadReceipt(refund.id, item.id).subscribe({
+      next: (blob) => {
+        const fileURL = URL.createObjectURL(blob);
+        this.closeReceipt();
+        this.receipt.set({
+          itemId: item.id,
+          url: this.sanitizer.bypassSecurityTrustResourceUrl(fileURL),
+          fileURL,
+          isPdf: blob.type === 'application/pdf',
+          filename: item.receiptOriginalFilename,
+        });
+      },
+      error: () => {
+        this.toastService.showError('Could not open the receipt.', 'View Error');
+      },
+    });
+  }
+
+  closeReceipt(): void {
+    const receipt = this.receipt();
+    if (receipt) URL.revokeObjectURL(receipt.fileURL);
+    this.receipt.set(null);
   }
 }
