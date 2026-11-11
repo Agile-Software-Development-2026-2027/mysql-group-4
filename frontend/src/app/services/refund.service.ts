@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
 import { API_CONFIG } from '../core/config/api.config';
-import { RefundRequestCreatePayload, RefundRequestDTO } from '../core/models';
+import {RefundApprovePayload, RefundRequestCreatePayload, RefundRequestDTO, RefundReviewDTO} from '../core/models';
 
 @Injectable({
   providedIn: 'root',
@@ -30,6 +30,21 @@ export class RefundService {
   getById(refundId: string): Observable<RefundRequestDTO> {
     return this.http.get<RefundRequestDTO>(
       API_CONFIG.endpoints.refunds.byId(refundId),
+      { withCredentials: true }
+    );
+  }
+
+  getReview(refundId: string): Observable<RefundReviewDTO> {
+    return this.http.get<RefundReviewDTO>(
+      API_CONFIG.endpoints.refunds.review(refundId),
+      { withCredentials: true }
+    );
+  }
+
+  approve(refundId: string, payload: RefundApprovePayload): Observable<RefundReviewDTO> {
+    return this.http.patch<RefundReviewDTO>(
+      API_CONFIG.endpoints.refunds.approve(refundId),
+      payload,
       { withCredentials: true }
     );
   }

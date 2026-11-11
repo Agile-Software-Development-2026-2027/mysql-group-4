@@ -119,3 +119,35 @@ class RefundRequestDTO(CamelModel):
     created_by: UUID | None = None
     updated_by: UUID | None = None
     items: list[RefundItemDTO] = Field(default_factory=list)
+
+
+class RefundRequesterDTO(CamelModel):
+    id: UUID
+    name: str
+    surname: str
+    department: str
+
+
+class RefundMissionDTO(CamelModel):
+    id: UUID
+    subject: str
+    destination: str
+    starts_at: datetime
+    ends_at: datetime
+    estimated_cost: Decimal
+    requester: RefundRequesterDTO
+
+
+class RefundReviewDTO(RefundRequestDTO):
+    mission: RefundMissionDTO
+
+class RefundItemDecisionDTO(CamelModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+    item_id: UUID
+    reimbursed_amount: Decimal = Field(ge=0, decimal_places=2)
+    admin_notes: str | None = Field(default=None, max_length=1000)
+
+
+class RefundApproveDTO(CamelModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    items: list[RefundItemDecisionDTO] = Field(min_length=1)

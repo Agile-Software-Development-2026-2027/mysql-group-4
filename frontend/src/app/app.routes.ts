@@ -3,7 +3,7 @@ import { Homepage } from './pages/homepage/homepage';
 import { Landingpage } from './pages/landingpage/landingpage';
 import { AuthComponent } from './pages/auth/auth';
 import { NewMissionComponent } from './pages/new-mission/new-mission';
-import { authGuard, guestGuard } from './core/guards';
+import { adminGuard, authGuard, guestGuard } from './core/guards';
 import { MissionReview } from './pages/mission-review/mission-review';
 import { SettingsComponent } from './pages/settings/settings';
 import { AddFund } from './pages/add-fund/add-fund';
@@ -24,6 +24,6 @@ export const routes: Routes = [
   { path: 'fund', component: MyFunds, canActivate: [authGuard] },
   { path: 'fund/add', component: AddFund, canActivate: [authGuard] },
   { path: 'refund/:id', component: RefundRequestComponent, canActivate: [authGuard] },
-  { path: 'refundreview/:id', component: RefundReview, canActivate: [authGuard] },
+  { path: 'refundreview/:id', component: RefundReview, canActivate: [authGuard, adminGuard] },
   { path: '**', redirectTo: '' }
 ];

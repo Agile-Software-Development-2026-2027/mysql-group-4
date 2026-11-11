@@ -65,3 +65,34 @@ export interface RefundRequestDTO {
 export interface RefundRequestCreatePayload {
   missionId: string;
 }
+
+export interface RefundRequesterDTO {
+  id: string;
+  name: string;
+  surname: string;
+  department: string;
+}
+
+export interface RefundMissionDTO {
+  id: string;
+  subject: string;
+  destination: string;
+  startsAt: string;
+  endsAt: string;
+  estimatedCost: number | string;
+  requester: RefundRequesterDTO;
+}
+
+export interface RefundReviewDTO extends RefundRequestDTO {
+  mission: RefundMissionDTO;
+}
+
+export interface RefundItemDecision {
+  itemId: string;
+  reimbursedAmount: string;
+  adminNotes: string | null;
+}
+
+export interface RefundApprovePayload {
+  items: RefundItemDecision[];
+}
