@@ -25,7 +25,7 @@ class TestMissionService:
 
     @pytest.fixture(autouse=True)
     def setup_dependencies(self):
-        self.user = make_user()
+        self.user = make_user(name="Mario", surname="Rossi", email="mario.rossi@example.com")
         self.manager = make_user()
         self.mission = make_mission(requester_id=self.user.id, fund_manager_id=self.manager.id)
         self.data = make_create_data(fund_manager_id=self.manager.id)
@@ -51,7 +51,11 @@ class TestMissionService:
             return m
 
         self.repository.save.side_effect = fake_save
-        self.dto = MissionDTO.model_validate(self.mission)
+        self.dto = MissionDTO.model_validate(self.mission).model_copy(update={
+            "requester_name": "Mario",
+            "requester_surname": "Rossi",
+            "requester_email": "mario.rossi@example.com",
+        })
         self.fund_service = create_autospec(FundService, instance=True)
         self.fund_id = uuid4()
         self.service = MissionService(

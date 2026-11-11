@@ -60,7 +60,8 @@ class TestMissionModelIntegration:
         assert payload['fundManagerId'] == str(mission.fund_manager_id)
         assert 'requester' not in payload
         assert 'fundManager' not in payload
-        assert set(dto.model_dump()) == set(mission.__table__.columns.keys())
+        requester_fields = {'requester_name', 'requester_surname', 'requester_email'}
+        assert set(dto.model_dump()) == set(mission.__table__.columns.keys()) | requester_fields
 
     def test_creation_maps_editable_fields(self):
         data = make_create_data()

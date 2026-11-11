@@ -27,7 +27,7 @@
                     <span class="badge pending">Pending</span>
                     <h3>{{ mission.subject }}</h3>
                   </div>
-                  <p><strong>Requester ID:</strong> {{ mission.requesterId }} &nbsp;&bull;&nbsp; <strong>Date:</strong> {{ mission.startsAt | date:'dd/MM/yyyy' }} &nbsp;&bull;&nbsp; <strong>Estimated cost:</strong> € {{ mission.estimatedCost | number:'1.2-2' }}</p>
+                  <p><strong>Requester:</strong> {{ mission.requesterName }} {{ mission.requesterSurname }} ({{ mission.requesterEmail }}) &nbsp;&bull;&nbsp; <strong>Date:</strong> {{ mission.startsAt | date:'dd/MM/yyyy' }} &nbsp;&bull;&nbsp; <strong>Estimated cost:</strong> € {{ mission.estimatedCost | number:'1.2-2' }}</p>
                 </div>
               </div>
             }
@@ -53,7 +53,7 @@
                     <span class="badge approved">Approved</span>
                     <h3>{{ mission.subject }}</h3>
                   </div>
-                  <p><strong>Requester ID:</strong> {{ mission.requesterId }} &nbsp;&bull;&nbsp; <strong>Date:</strong> {{ mission.startsAt | date:'dd/MM/yyyy' }} &nbsp;&bull;&nbsp; <strong>Estimated cost:</strong> € {{ mission.estimatedCost | number:'1.2-2' }}</p>
+                  <p><strong>Requester:</strong> {{ mission.requesterName }} {{ mission.requesterSurname }} ({{ mission.requesterEmail }}) &nbsp;&bull;&nbsp; <strong>Date:</strong> {{ mission.startsAt | date:'dd/MM/yyyy' }} &nbsp;&bull;&nbsp; <strong>Estimated cost:</strong> € {{ mission.estimatedCost | number:'1.2-2' }}</p>
                 </div>
               </div>
             }
@@ -79,7 +79,7 @@
                     <span class="badge completed">Completed</span>
                     <h3>{{ mission.subject }}</h3>
                   </div>
-                  <p><strong>Requester ID:</strong> {{ mission.requesterId }} &nbsp;&bull;&nbsp; <strong>Date:</strong> {{ mission.startsAt | date:'dd/MM/yyyy' }} &nbsp;&bull;&nbsp; <strong>Estimated cost:</strong> € {{ mission.estimatedCost | number:'1.2-2' }}</p>
+                  <p><strong>Requester:</strong> {{ mission.requesterName }} {{ mission.requesterSurname }} ({{ mission.requesterEmail }}) &nbsp;&bull;&nbsp; <strong>Date:</strong> {{ mission.startsAt | date:'dd/MM/yyyy' }} &nbsp;&bull;&nbsp; <strong>Estimated cost:</strong> € {{ mission.estimatedCost | number:'1.2-2' }}</p>
                 </div>
               </div>
             }
@@ -105,7 +105,7 @@
                     <span class="badge rejected">Rejected</span>
                     <h3>{{ mission.subject }}</h3>
                   </div>
-                  <p><strong>Requester ID:</strong> {{ mission.requesterId }} &nbsp;&bull;&nbsp; <strong>Date:</strong> {{ mission.startsAt | date:'dd/MM/yyyy' }} &nbsp;&bull;&nbsp; <strong>Estimated cost:</strong> € {{ mission.estimatedCost | number:'1.2-2' }}</p>
+                  <p><strong>Requester:</strong> {{ mission.requesterName }} {{ mission.requesterSurname }} ({{ mission.requesterEmail }}) &nbsp;&bull;&nbsp; <strong>Date:</strong> {{ mission.startsAt | date:'dd/MM/yyyy' }} &nbsp;&bull;&nbsp; <strong>Estimated cost:</strong> € {{ mission.estimatedCost | number:'1.2-2' }}</p>
                 </div>
               </div>
             }
@@ -129,8 +129,12 @@
                 <span class="value">{{ selectedMission.subject }}</span>
               </div>
               <div class="detail-item">
-                <span class="label">Requester ID</span>
-                <span class="value">{{ selectedMission.requesterId }}</span>
+                <span class="label">Requester</span>
+                <span class="value">{{ selectedMission.requesterName }} {{ selectedMission.requesterSurname }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="label">Requester Email</span>
+                <span class="value">{{ selectedMission.requesterEmail }}</span>
               </div>
               <div class="detail-item">
                 <span class="label">Destination</span>

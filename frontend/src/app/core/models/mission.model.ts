@@ -35,6 +35,9 @@ export interface MissionDTO {
   endsAt: string;
   response?: string | null;
   requesterId: string;
+  requesterName?: string | null;
+  requesterSurname?: string | null;
+  requesterEmail?: string | null;
   fundManagerId: string;
   createdAt: string;
   updatedAt: string;
