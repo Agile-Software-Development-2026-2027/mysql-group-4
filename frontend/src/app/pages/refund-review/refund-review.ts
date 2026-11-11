@@ -42,6 +42,10 @@ export class RefundReview {
     return !!refund && this.totalRequested() > Number(refund.mission.estimatedCost);
   });
 
+  isNegative(item: RefundItemDTO): boolean {
+    return (this.refundableAmounts()[item.id] ?? 0) < 0;
+  }
+
   exceedsRequested(item: RefundItemDTO): boolean {
     return (this.refundableAmounts()[item.id] ?? 0) > Number(item.requestedAmount);
   }
@@ -49,7 +53,7 @@ export class RefundReview {
   readonly canApprove = computed(() =>
     (this.refund()?.items ?? []).every((item) => {
       const amount = this.refundableAmounts()[item.id] ?? 0;
-      return amount >= 0 && !this.exceedsRequested(item);
+      return !this.isNegative(item) && !this.exceedsRequested(item);
     })
   );
 
