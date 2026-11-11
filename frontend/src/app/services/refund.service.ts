@@ -3,7 +3,15 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
 import { API_CONFIG } from '../core/config/api.config';
-import {RefundApprovePayload, RefundRequestCreatePayload, RefundRequestDTO, RefundReviewDTO} from '../core/models';
+import {
+  RefundApprovePayload,
+  RefundItemCreatePayload,
+  RefundItemDTO,
+  RefundReceiptUploadDTO,
+  RefundRequestCreatePayload,
+  RefundRequestDTO,
+  RefundReviewDTO,
+} from '../core/models';
 
 @Injectable({
   providedIn: 'root',
@@ -44,6 +52,24 @@ export class RefundService {
   approve(refundId: string, payload: RefundApprovePayload): Observable<RefundReviewDTO> {
     return this.http.patch<RefundReviewDTO>(
       API_CONFIG.endpoints.refunds.approve(refundId),
+      payload,
+      { withCredentials: true }
+    );
+  }
+
+  uploadReceipt(refundId: string, file: File): Observable<RefundReceiptUploadDTO> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<RefundReceiptUploadDTO>(
+      API_CONFIG.endpoints.refunds.receipts(refundId),
+      formData,
+      { withCredentials: true }
+    );
+  }
+
+  createRefundItem(refundId: string, payload: RefundItemCreatePayload): Observable<RefundItemDTO> {
+    return this.http.post<RefundItemDTO>(
+      API_CONFIG.endpoints.refunds.items(refundId),
       payload,
       { withCredentials: true }
     );
