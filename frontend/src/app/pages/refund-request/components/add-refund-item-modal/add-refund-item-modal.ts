@@ -199,10 +199,13 @@ export class AddRefundItemModal implements OnInit {
     }
   }
 
+  private static readonly MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+
   onFileInputChange(event: Event): void {
     const input = event.target as HTMLInputElement;
     if (input.files && input.files.length > 0) {
       this.handleFileSelected(input.files[0]);
+      input.value = '';
     }
   }
 
@@ -220,6 +223,12 @@ export class AddRefundItemModal implements OnInit {
     if (file.size === 0) {
       this.uploadError.set('The selected file is empty.');
       this.toastService.showError(this.uploadError()!, 'Empty File');
+      return;
+    }
+
+    if (file.size > AddRefundItemModal.MAX_FILE_SIZE_BYTES) {
+      this.uploadError.set('File size exceeds the 10MB limit.');
+      this.toastService.showError(this.uploadError()!, 'File Too Large');
       return;
     }
 
