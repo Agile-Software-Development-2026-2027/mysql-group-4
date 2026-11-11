@@ -96,3 +96,23 @@ export interface RefundItemDecision {
 export interface RefundApprovePayload {
   items: RefundItemDecision[];
 }
+
+export interface RefundReceiptUploadDTO {
+  receiptFilePath: string;
+  receiptOriginalFilename: string;
+}
+
+export interface RefundItemCreatePayload {
+  category: ExpenseCategory;
+  subtype?: ExpenseSubtype | null;
+  itineraryFrom?: string | null;
+  itineraryTo?: string | null;
+  startsAt: string;
+  endsAt?: string | null;
+  requestedAmount: number;
+  currency?: string;
+  isTraceable?: boolean;
+  receiptFilePath: string;
+  receiptOriginalFilename: string;
+  description: string;
+}

@@ -43,6 +43,8 @@ from app.schemas.refund import (
 
 logger = logging.getLogger(__name__)
 
+MAX_RECEIPT_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+
 minio_client = Minio(
     endpoint=settings.MINIO_ENDPOINT,
     access_key=settings.MINIO_ACCESS_KEY,
@@ -177,6 +179,8 @@ class RefundService:
         content = await file.read()
         if not content:
             raise RefundItemCreateError("Receipt file cannot be empty.")
+        if len(content) > MAX_RECEIPT_FILE_SIZE:
+            raise RefundItemCreateError("Receipt file exceeds the maximum allowed size of 10MB.")
 
         object_name = f"refunds/{refund_request_id}/receipts/{uuid4()}_{safe_original_filename}"
         file_stream = io.BytesIO(content)

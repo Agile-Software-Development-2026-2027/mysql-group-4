@@ -640,6 +640,17 @@ async def test_upload_receipt_empty_file(client: AsyncClient, db_session: AsyncS
 
 
 @pytest.mark.asyncio
+async def test_upload_receipt_file_too_large(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    post_refund = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = post_refund.json()["id"]
+
+    large_content = b"a" * (10 * 1024 * 1024 + 1)
+    files = {"file": ("scontrino_enorme.pdf", io.BytesIO(large_content), "application/pdf")}
+    response = await client.post(f"/api/v1/refunds/{refund_id}/receipts", files=files)
+    assert response.status_code == 400
+
+@pytest.mark.asyncio
 async def test_upload_receipt_forbidden_for_other_user(client: AsyncClient, db_session: AsyncSession, requester: User, other_user: User):
     mission = await create_mission(db_session, requester.id, ended=True)
     post_refund = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
