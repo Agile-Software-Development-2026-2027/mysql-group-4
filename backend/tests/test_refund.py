@@ -1,14 +1,13 @@
 import io
 from datetime import datetime, timedelta
 from decimal import Decimal
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from uuid import UUID, uuid4
 
 import pytest
 from httpx import AsyncClient
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from sqlalchemy import select
 
 from app.core.enums import (EmploymentLevel,ExpenseCategory,ExpenseSubtype,MissionStatus,MissionType,RefundStatus)
@@ -684,6 +683,53 @@ async def test_upload_receipt_error_when_submitted(client: AsyncClient, db_sessi
     files = {"file": ("scontrino.pdf", io.BytesIO(b"fake pdf"), "application/pdf")}
     response = await client.post(f"/api/v1/refunds/{refund_id}/receipts", files=files)
     assert response.status_code == 400
+
+# TEST endpoint GET /api/v1/refunds/{refund_id}/items/{item_id}/receipt (receipt download)
+
+def mock_minio_file(content: bytes) -> MagicMock:
+    response = MagicMock()
+    response.read.return_value = content
+    return response
+
+
+#happy path: l'admin scarica lo scontrino di una voce
+@pytest.mark.asyncio
+async def test_download_receipt_success(client: AsyncClient, db_session: AsyncSession, requester: User, admin_user: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund, item = await create_submitted_refund(db_session, mission.id)
+
+    app.dependency_overrides[current_active_user] = lambda: admin_user
+    with patch("app.services.refund_service.minio_client") as mock_minio:
+        mock_minio.get_object.return_value = mock_minio_file(b"%PDF-1.4 Mock receipt")
+        response = await client.get(f"/api/v1/refunds/{refund.id}/items/{item.id}/receipt")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.content == b"%PDF-1.4 Mock receipt"
+
+
+#un utente che non è né admin né il richiedente --> 403
+@pytest.mark.asyncio
+async def test_download_receipt_forbidden_for_other_user(client: AsyncClient, db_session: AsyncSession, requester: User, other_user: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund, item = await create_submitted_refund(db_session, mission.id)
+
+    app.dependency_overrides[current_active_user] = lambda: other_user
+    response = await client.get(f"/api/v1/refunds/{refund.id}/items/{item.id}/receipt")
+
+    assert response.status_code == 403
+
+
+#voce che non appartiene alla richiesta --> 404
+@pytest.mark.asyncio
+async def test_download_receipt_item_not_found(client: AsyncClient, db_session: AsyncSession, requester: User, admin_user: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund, _ = await create_submitted_refund(db_session, mission.id)
+
+    app.dependency_overrides[current_active_user] = lambda: admin_user
+    response = await client.get(f"/api/v1/refunds/{refund.id}/items/{uuid4()}/receipt")
+
+    assert response.status_code == 404
 
 # TEST vincoli dei campi per i subtype di spesa
 

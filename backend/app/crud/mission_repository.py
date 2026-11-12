@@ -2,6 +2,7 @@ from uuid import UUID
 
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.crud.pagination import paginate
 from app.db.mission import Mission
@@ -32,7 +33,7 @@ class MissionRepository:
         page_request: PageRequest | None = None,
     ) -> Page[Mission]:
         request = page_request if page_request is not None else PageRequest()
-        query = select(Mission)
+        query = select(Mission).options(selectinload(Mission.requester))
 
         if user_id is not None:
             query = query.where(

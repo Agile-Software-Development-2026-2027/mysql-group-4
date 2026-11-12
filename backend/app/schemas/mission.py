@@ -21,6 +21,9 @@ class MissionDTO(CamelModel):
     ends_at: datetime
     response: str | None = None
     requester_id: UUID
+    requester_name: str | None = None
+    requester_surname: str | None = None
+    requester_email: str | None = None
     fund_manager_id: UUID
     created_at: datetime
     updated_at: datetime

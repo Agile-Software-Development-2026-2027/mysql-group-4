@@ -1,7 +1,8 @@
+import mimetypes
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, UploadFile, status
+from fastapi import APIRouter, Depends, File, Response, UploadFile, status
 
 from app.api.deps import get_refund_service
 from app.db.models import User
@@ -51,6 +52,16 @@ async def approve_refund(refund_id: UUID, decisions: RefundApproveDTO, user: Cur
 @refund_router.post("/{refund_id}/receipts", response_model=RefundReceiptUploadDTO, status_code=status.HTTP_201_CREATED, summary="Upload receipt file to MinIO")
 async def upload_receipt(refund_id: UUID, user: CurrentUser, service: RefundServiceDependency, file: UploadFile = File(...)) -> RefundReceiptUploadDTO:
     return await service.upload_receipt(refund_request_id=refund_id, file=file, user=user)
+
+@refund_router.get("/{refund_id}/items/{item_id}/receipt", summary="Download the receipt of a refund item")
+async def download_receipt(refund_id: UUID, item_id: UUID, user: CurrentUser, service: RefundServiceDependency) -> Response:
+    content, filename = await service.download_receipt(refund_request_id=refund_id, item_id=item_id, user=user)
+    media_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
 
 
 @refund_router.post("/{refund_id}/items", response_model=RefundItemDTO, status_code=status.HTTP_201_CREATED, summary="Create refund item")
