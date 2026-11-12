@@ -2,7 +2,8 @@ import io
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -17,10 +18,13 @@ from app.core.enums import MissionStatus, RefundStatus
 from app.core.exceptions import (
     AccessDeniedError,
     InvalidMissionStateError,
+    InvalidRefundDecisionError,
     InvalidRefundRequestDateError,
+    InvalidRefundStateError,
     MissionNotFoundError,
     RefundItemCreateError,
     RefundNotFoundError,
+    ResourceNotFoundError,
 )
 from app.crud.mission_repository import MissionRepository
 from app.crud.refund_repository import RefundRepository
@@ -28,14 +32,18 @@ from app.db.models import User
 from app.db.refund_item import RefundItem
 from app.db.refund_request import RefundRequest
 from app.schemas.refund import (
+    RefundApproveDTO,
     RefundItemCreateDTO,
     RefundItemDTO,
     RefundReceiptUploadDTO,
     RefundRequestCreateDTO,
     RefundRequestDTO,
+    RefundReviewDTO,
 )
 
 logger = logging.getLogger(__name__)
+
+MAX_RECEIPT_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 minio_client = Minio(
     endpoint=settings.MINIO_ENDPOINT,
@@ -105,6 +113,45 @@ class RefundService:
             raise AccessDeniedError("Only the requester or an administrator can view this refund request")
         return RefundRequestDTO.model_validate(refund)
 
+    async def get_refund_for_review(self, refund_id: UUID, user: User) -> RefundReviewDTO:
+        if not user.is_superuser:
+            raise AccessDeniedError("Only administrators can review refund requests")
+        refund = await self.refund_repository.find_by_id_for_review(self.session, refund_id)
+        if not refund or refund.status == RefundStatus.DRAFT:
+            raise RefundNotFoundError(refund_id)
+        return RefundReviewDTO.model_validate(refund)
+
+    async def approve_refund(self, refund_id: UUID, data: RefundApproveDTO, user: User) -> RefundReviewDTO:
+        if not user.is_superuser:
+            raise AccessDeniedError("Only administrators can approve refund requests")
+
+        async with self.transaction():
+            refund = await self.refund_repository.find_by_id(self.session, refund_id)
+            if not refund or refund.status == RefundStatus.DRAFT:
+                raise RefundNotFoundError(refund_id)
+            if refund.status != RefundStatus.SUBMITTED:
+                raise InvalidRefundStateError("Only submitted refund requests can be approved")
+
+            items_by_id = {item.id: item for item in refund.items}
+            for decision in data.items:
+                item = items_by_id.get(decision.item_id)
+                if item is None:
+                    raise InvalidRefundDecisionError(f"Item {decision.item_id} does not belong to this refund request")
+                item.reimbursed_amount = decision.reimbursed_amount
+                item.admin_notes = decision.admin_notes
+                item.updated_by = user.id
+
+            refund.total_reimbursed_amount = sum(
+                (item.reimbursed_amount or Decimal("0.00") for item in refund.items), Decimal("0.00"))
+            refund.status = RefundStatus.APPROVED
+            refund.approved_at = datetime.now(timezone.utc)
+            refund.updated_by = user.id
+            mission = await self.mission_repository.find_by_id(refund.mission_id)
+            mission.status = MissionStatus.COMPLETED
+
+        logger.info("Refund request %s approved by admin %s", refund_id, user.id)
+        return await self.get_refund_for_review(refund_id, user)
+
     async def get_refund_request_by_mission(self, mission_id: UUID, user: User) -> RefundRequestDTO | None:
         mission = await self.mission_repository.find_by_id(mission_id)
         if not mission:
@@ -132,6 +179,8 @@ class RefundService:
         content = await file.read()
         if not content:
             raise RefundItemCreateError("Receipt file cannot be empty.")
+        if len(content) > MAX_RECEIPT_FILE_SIZE:
+            raise RefundItemCreateError("Receipt file exceeds the maximum allowed size of 10MB.")
 
         object_name = f"refunds/{refund_request_id}/receipts/{uuid4()}_{safe_original_filename}"
         file_stream = io.BytesIO(content)
@@ -154,6 +203,28 @@ class RefundService:
             receipt_file_path=object_name,
             receipt_original_filename=safe_original_filename,
         )
+
+    async def download_receipt(self, refund_request_id: UUID, item_id: UUID, user: User) -> tuple[bytes, str]:
+        refund_request = await self.refund_repository.find_by_id(self.session, refund_request_id)
+        if not refund_request:
+            raise RefundNotFoundError(refund_request_id)
+        if not user.is_superuser and refund_request.created_by != user.id:
+            raise AccessDeniedError("Only the requester or an administrator can view this receipt")
+
+        item = next((item for item in refund_request.items if item.id == item_id), None)
+        if item is None:
+            raise ResourceNotFoundError("RefundItem", item_id)
+
+        try:
+            response = await anyio.to_thread.run_sync(
+                lambda: minio_client.get_object(settings.MINIO_BUCKET_NAME, item.receipt_file_path)
+            )
+            content = response.read()
+            response.close()
+            response.release_conn()
+            return content, item.receipt_original_filename
+        except S3Error:
+            raise ResourceNotFoundError("Receipt", item_id)
 
     async def create_refund_item(self, refund_request_id: UUID, user: User, data: RefundItemCreateDTO) -> RefundItemDTO:
         async with self.transaction():

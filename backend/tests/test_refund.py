@@ -1,23 +1,22 @@
 import io
 from datetime import datetime, timedelta
 from decimal import Decimal
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from uuid import UUID, uuid4
 
 import pytest
 from httpx import AsyncClient
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.core.enums import RefundStatus
-from app.db.refund_request import RefundRequest
 from sqlalchemy import select
 
-from app.core.enums import (EmploymentLevel,ExpenseCategory,ExpenseSubtype,MissionStatus,MissionType)
+from app.core.enums import (EmploymentLevel,ExpenseCategory,ExpenseSubtype,MissionStatus,MissionType,RefundStatus)
 from app.db.mission import Mission
 from app.db.models import User
 from app.schemas.refund import MAX_EXPENSE_AMOUNT, RefundItemCreateDTO, RefundRequestDTO
 from app.security import current_active_user
+from app.db.refund_item import RefundItem
+from app.db.refund_request import RefundRequest
 from main import app
 
 
@@ -323,6 +322,158 @@ async def test_fund_manager_cannot_view_refund(
     res_by_id = await client.get(f"/api/v1/refunds/{refund_id}")
     assert res_by_id.status_code == 403
 
+# TEST endpoint GET /api/v1/refunds/{refund_id}/review (admin review)
+
+#test happy path, l'admin legge la richiesta di rimborso
+@pytest.mark.asyncio
+async def test_get_refund_review_happy_path_admin(client, db_session: AsyncSession, requester: User, admin_user: User):
+    mission = await create_mission(db_session, requester.id, ended=True) #creo una missione conclusa
+    post_res = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)}) # creo una richiesta per quella missione
+    refund_id = post_res.json()["id"] #estraggo l'id
+    refund = await db_session.get(RefundRequest,UUID(refund_id))  # la porto in SUBMITTED: le DRAFT non sono visibili all'admin
+    refund.status = RefundStatus.SUBMITTED
+    app.dependency_overrides[current_active_user] = lambda: admin_user #switcho ad admin
+    response = await client.get(f"/api/v1/refunds/{refund_id}/review") #chiamo il mio endpoint
+
+    assert response.status_code == 200 #verifico che la response sia 200
+    data = response.json() #e che i dati corrispondano effettivamente a quelli della missione creata
+    assert data["id"] == refund_id
+    assert data["mission"]["id"] == str(mission.id)
+    assert data["mission"]["subject"] == "Conferenza di Ricerca"
+    assert data["mission"]["estimatedCost"] == "250.00"
+    assert data["mission"]["requester"]["name"] == "Mario"
+    assert data["mission"]["requester"]["surname"] == "Rossi"
+    assert data["mission"]["requester"]["department"] == "Informatica"
+    assert data["items"] == []
+
+# happy path con gli items
+@pytest.mark.asyncio
+async def test_get_refund_review_includes_items(client: AsyncClient, db_session: AsyncSession, requester: User, admin_user: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund = RefundRequest(mission_id=mission.id, status=RefundStatus.SUBMITTED) #creo la richiesta relativa alla missione senza salvare nel db
+    db_session.add(refund)
+    await db_session.flush()
+    #al momento aggiungo l'item a mano perchè non esiste l'endpoint specifico (lo cambierò)
+    db_session.add(RefundItem(
+        refund_request_id=refund.id,
+        category=ExpenseCategory.MEALS,
+        subtype=ExpenseSubtype.MEALS_EXPENSE,
+        starts_at=datetime(2026, 11, 1, 13, 0),
+        requested_amount=Decimal("25.50"),
+        receipt_file_path="missions/test/lunch.pdf",
+        receipt_original_filename="lunch.pdf",
+        description="Lunch",
+    ))
+    await db_session.commit()
+    #switcho ad admin
+    app.dependency_overrides[current_active_user] = lambda: admin_user
+    response = await client.get(f"/api/v1/refunds/{refund.id}/review")
+
+    #verifico tutto
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert len(items) == 1
+    assert items[0]["category"] == "MEALS"
+    assert items[0]["requestedAmount"] == "25.50"
+    assert items[0]["reimbursedAmount"] is None
+
+#test utente normale  prova a leggere la richiesta di rimborso --> 403
+@pytest.mark.asyncio
+async def test_get_refund_review_forbidden_for_non_admin(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    post_res = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = post_res.json()["id"]
+
+    response = await client.get(f"/api/v1/refunds/{refund_id}/review")
+
+    assert response.status_code == 403
+
+#se la richiesta di rimborso non esiste (generando un id random) --> 404
+@pytest.mark.asyncio
+async def test_get_refund_review_not_found(client: AsyncClient, admin_user: User):
+    app.dependency_overrides[current_active_user] = lambda: admin_user
+    response = await client.get(f"/api/v1/refunds/{uuid4()}/review")
+    assert response.status_code == 404
+
+#se la richiesta è ancora in bozza (DRAFT) l'admin non la vede --> 404
+@pytest.mark.asyncio
+async def test_get_refund_review_draft_not_visible_to_admin(client: AsyncClient, db_session: AsyncSession, requester: User, admin_user: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    post_res = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = post_res.json()["id"]
+
+    app.dependency_overrides[current_active_user] = lambda: admin_user
+    response = await client.get(f"/api/v1/refunds/{refund_id}/review")
+
+    assert response.status_code == 404
+
+# TEST endpoint PATCH /api/v1/refunds/{refund_id}/approve (admin approval)
+
+async def create_submitted_refund(db_session: AsyncSession, mission_id: UUID) -> tuple[RefundRequest, RefundItem]:
+    refund = RefundRequest(mission_id=mission_id, status=RefundStatus.SUBMITTED)
+    db_session.add(refund)
+    await db_session.flush()
+    item = RefundItem(
+        refund_request_id=refund.id,
+        category=ExpenseCategory.MEALS,
+        subtype=ExpenseSubtype.MEALS_EXPENSE,
+        starts_at=datetime(2026, 11, 1, 13, 0),
+        requested_amount=Decimal("25.50"),
+        receipt_file_path="missions/test/lunch.pdf",
+        receipt_original_filename="lunch.pdf",
+        description="Lunch",
+    )
+    db_session.add(item)
+    await db_session.commit()
+    return refund, item
+
+
+def approve_payload(item_id: UUID) -> dict:
+    return {"items": [{"itemId": str(item_id), "reimbursedAmount": "20.00", "adminNotes": "Max 20 EUR per meal"}]}
+
+#happy path: l'admin approva, la richiesta diventa APPROVED e la missione COMPLETED
+@pytest.mark.asyncio
+async def test_approve_refund_happy_path(client: AsyncClient, db_session: AsyncSession, requester: User, admin_user: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund, item = await create_submitted_refund(db_session, mission.id)
+
+    app.dependency_overrides[current_active_user] = lambda: admin_user
+    response = await client.patch(f"/api/v1/refunds/{refund.id}/approve", json=approve_payload(item.id))
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "APPROVED"
+    assert data["totalReimbursedAmount"] == "20.00"
+    assert data["items"][0]["reimbursedAmount"] == "20.00"
+    assert data["items"][0]["adminNotes"] == "Max 20 EUR per meal"
+
+    await db_session.refresh(mission)
+    assert mission.status == MissionStatus.COMPLETED
+
+
+#una richiesta già approvata non si può approvare di nuovo --> 400
+@pytest.mark.asyncio
+async def test_approve_refund_already_approved(client: AsyncClient, db_session: AsyncSession, requester: User, admin_user: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund, item = await create_submitted_refund(db_session, mission.id)
+
+    app.dependency_overrides[current_active_user] = lambda: admin_user
+    first = await client.patch(f"/api/v1/refunds/{refund.id}/approve", json=approve_payload(item.id))
+    assert first.status_code == 200
+
+    second = await client.patch(f"/api/v1/refunds/{refund.id}/approve", json=approve_payload(item.id))
+    assert second.status_code == 400
+
+
+#un utente normale non può approvare --> 403
+@pytest.mark.asyncio
+async def test_approve_refund_forbidden_for_non_admin(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund, item = await create_submitted_refund(db_session, mission.id)
+
+    response = await client.patch(f"/api/v1/refunds/{refund.id}/approve", json=approve_payload(item.id))
+
+    assert response.status_code == 403
 
 # TEST endpoint POST /api/v1/refunds/{refund_id}/items
 
@@ -489,6 +640,17 @@ async def test_upload_receipt_empty_file(client: AsyncClient, db_session: AsyncS
 
 
 @pytest.mark.asyncio
+async def test_upload_receipt_file_too_large(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    post_refund = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = post_refund.json()["id"]
+
+    large_content = b"a" * (10 * 1024 * 1024 + 1)
+    files = {"file": ("scontrino_enorme.pdf", io.BytesIO(large_content), "application/pdf")}
+    response = await client.post(f"/api/v1/refunds/{refund_id}/receipts", files=files)
+    assert response.status_code == 400
+
+@pytest.mark.asyncio
 async def test_upload_receipt_forbidden_for_other_user(client: AsyncClient, db_session: AsyncSession, requester: User, other_user: User):
     mission = await create_mission(db_session, requester.id, ended=True)
     post_refund = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
@@ -522,6 +684,54 @@ async def test_upload_receipt_error_when_submitted(client: AsyncClient, db_sessi
     response = await client.post(f"/api/v1/refunds/{refund_id}/receipts", files=files)
     assert response.status_code == 400
 
+# TEST endpoint GET /api/v1/refunds/{refund_id}/items/{item_id}/receipt (receipt download)
+
+def mock_minio_file(content: bytes) -> MagicMock:
+    response = MagicMock()
+    response.read.return_value = content
+    return response
+
+
+#happy path: l'admin scarica lo scontrino di una voce
+@pytest.mark.asyncio
+async def test_download_receipt_success(client: AsyncClient, db_session: AsyncSession, requester: User, admin_user: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund, item = await create_submitted_refund(db_session, mission.id)
+
+    app.dependency_overrides[current_active_user] = lambda: admin_user
+    with patch("app.services.refund_service.minio_client") as mock_minio:
+        mock_minio.get_object.return_value = mock_minio_file(b"%PDF-1.4 Mock receipt")
+        response = await client.get(f"/api/v1/refunds/{refund.id}/items/{item.id}/receipt")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.content == b"%PDF-1.4 Mock receipt"
+
+
+#un utente che non è né admin né il richiedente --> 403
+@pytest.mark.asyncio
+async def test_download_receipt_forbidden_for_other_user(client: AsyncClient, db_session: AsyncSession, requester: User, other_user: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund, item = await create_submitted_refund(db_session, mission.id)
+
+    app.dependency_overrides[current_active_user] = lambda: other_user
+    response = await client.get(f"/api/v1/refunds/{refund.id}/items/{item.id}/receipt")
+
+    assert response.status_code == 403
+
+
+#voce che non appartiene alla richiesta --> 404
+@pytest.mark.asyncio
+async def test_download_receipt_item_not_found(client: AsyncClient, db_session: AsyncSession, requester: User, admin_user: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund, _ = await create_submitted_refund(db_session, mission.id)
+
+    app.dependency_overrides[current_active_user] = lambda: admin_user
+    response = await client.get(f"/api/v1/refunds/{refund.id}/items/{uuid4()}/receipt")
+
+    assert response.status_code == 404
+
+# TEST vincoli dei campi per i subtype di spesa
 
 def test_refund_item_transport_validation():
     now = datetime.now()

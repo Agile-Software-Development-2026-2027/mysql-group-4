@@ -49,6 +49,14 @@ class InvalidRefundRequestDateError(InvalidMissionPeriodError):
 class RefundItemCreateError(ValueError):
     pass
 
+class InvalidRefundStateError(ValueError):
+    pass
+
+
+class InvalidRefundDecisionError(ValueError):
+    pass
+
+
 class FundLockedError(Exception):
     def __init__(self, fund_id: UUID):
         self.fund_id = fund_id

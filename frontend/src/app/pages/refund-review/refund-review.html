@@ -1,65 +1,128 @@
 <app-topbar></app-topbar>
 
-<main class="container">
-  <h1>Refund request <span class="status">{{ refund().status }}</span></h1>
+<main class="container" [class.has-receipt]="receipt()">
+  @if (refund(); as refund) {
+    <h1>Refund request <span class="status">{{ refund.status }}</span></h1>
 
-  @if (exceedsEstimatedCost()) {
-    <div class="warning">⚠ The requested total exceeds the estimated cost declared in the mission authorization.</div>
-  }
+    @if (exceedsEstimatedCost()) {
+      <div class="warning">⚠ The requested total exceeds the estimated cost declared in the mission authorization.</div>
+    }
 
-  <section class="card">
-    <p><strong>Requester:</strong> {{ refund().requester.name }} {{ refund().requester.surname }} ({{ refund().requester.department }})</p>
-    <p><strong>Mission:</strong> {{ refund().mission.subject }} – {{ refund().mission.destination }}</p>
-    <p><strong>Estimated cost:</strong> € {{ refund().mission.estimatedCost | number:'1.2-2' }}</p>
-    <p><strong>Total requested:</strong> € {{ totalRequested() | number:'1.2-2' }}</p>
-    <p class="total-refund"><strong>Total refund:</strong> € {{ totalRefund() | number:'1.2-2' }}</p>
-  </section>
+    <section class="card">
+      <p><strong>Requester:</strong> {{ refund.mission.requester.name }} {{ refund.mission.requester.surname }} ({{ refund.mission.requester.department }})</p>
+      <p><strong>Mission:</strong> {{ refund.mission.subject }} – {{ refund.mission.destination }}</p>
+      <p><strong>Estimated cost:</strong> € {{ refund.mission.estimatedCost | number:'1.2-2' }}</p>
+      <p><strong>Total requested:</strong> € {{ totalRequested() | number:'1.2-2' }}</p>
+      <p class="total-refund"><strong>Total refund:</strong> € {{ totalRefund() | number:'1.2-2' }}</p>
+    </section>
 
-  <section class="card">
-    <table>
-      <thead>
-        <tr><th>Type</th><th>Description</th><th>Date</th><th>Amount</th><th>Refundable</th><th></th></tr>
-      </thead>
-      <tbody>
-        @for (expense of refund().expenses; track expense.id) {
-          <tr class="expense-row" (click)="toggle(expense.id)">
-            <td>{{ expense.category }}</td>
-            <td>{{ expense.description }}</td>
-            <td>{{ expense.date | date:'dd/MM/yyyy' }}</td>
-            <td>{{ expense.amount | number:'1.2-2' }} {{ expense.currency }}</td>
-            <td>{{ (refundableAmounts()[expense.id] ?? 0) | number:'1.2-2' }} {{ expense.currency }}</td>
-            <td>{{ expandedId() === expense.id ? '▲' : '▼' }}</td>
-          </tr>
-
-          @if (expandedId() === expense.id) {
-            <tr class="expense-details">
-              <td colspan="6">
-                <div class="details-grid">
-                  <div><strong>Type:</strong> {{ expense.category }} {{ expense.transportMode }}</div>
-                  <div><strong>Traceable:</strong> {{ expense.traceable ? 'Yes' : 'No' }}</div>
-                  <div><strong>Receipt: </strong> <a [href]="expense.receiptUrl" target="_blank">View</a></div>
-                </div>
-
-                <div class="form-group">
-                  <label>Refundable amount ({{ expense.currency }})</label>
-                  <input
-                    type="number" min="0" step="0.01" placeholder="0.00"
-                    [value]="refundableAmounts()[expense.id] ?? ''"
-                    (input)="setRefundable(expense.id, $any($event.target).value)"
-                  />
-                </div>
-                <div class="form-group">
-                  <label>Note</label>
-                  <textarea></textarea>
-                </div>
+    <section class="card">
+      <table>
+        <thead>
+          <tr><th>Type</th><th>Description</th><th>Date</th><th>Amount</th><th>Refundable</th><th></th></tr>
+        </thead>
+        <tbody>
+          @for (item of refund.items; track item.id) {
+            <tr class="expense-row" [class.is-active]="receipt()?.itemId === item.id" (click)="toggle(item.id)">
+              <td>{{ item.category }}</td>
+              <td>{{ item.description }}</td>
+              <td>
+                {{ item.startsAt | date:(item.category === 'TRANSPORT' ? 'dd/MM/yyyy HH:mm' : 'dd/MM/yyyy') }}
+                @if (item.endsAt) {
+                  → {{ item.endsAt | date:(item.category === 'TRANSPORT' ? 'dd/MM/yyyy HH:mm' : 'dd/MM/yyyy') }}
+                }
               </td>
+              <td>{{ item.requestedAmount | number:'1.2-2' }} {{ item.currency }}</td>
+              <td>{{ (refundableAmounts()[item.id] ?? 0) | number:'1.2-2' }} {{ item.currency }}</td>
+              <td>{{ expandedId() === item.id ? '▲' : '▼' }}</td>
             </tr>
+
+            @if (expandedId() === item.id) {
+              <tr class="expense-details">
+                <td colspan="6">
+                  <div class="details-grid">
+                    <div><strong>Type:</strong> {{ item.subtype ?? item.category }}</div>
+                    @if (item.itineraryFrom) {
+                      <div><strong>Itinerary:</strong> {{ item.itineraryFrom }} → {{ item.itineraryTo }}</div>
+                    }
+                    <div><strong>Traceable:</strong> {{ item.isTraceable ? 'Yes' : 'No' }}</div>
+                    <div><strong>Receipt:</strong> <a href="#" [title]="item.receiptOriginalFilename" (click)="viewReceipt(item); $event.preventDefault()"> View</a></div>
+                  </div>
+
+                  @if (isEditable()) {
+
+                    <div class="form-group">
+                      <label>Refundable amount ({{ item.currency }})</label>
+                      <input
+                        type="number" min="0" step="0.01" placeholder="0.00"
+                        [max]="item.requestedAmount"
+                        [class.is-invalid]="exceedsRequested(item) || isNegative(item)"
+                        [value]="refundableAmounts()[item.id] ?? ''"
+                        (input)="setRefundable(item.id, $any($event.target).value)"
+                      />
+                       @if (exceedsRequested(item)) {
+                        <p class="form-error">The refundable amount cannot exceed the requested amount ({{ item.requestedAmount | number:'1.2-2' }} {{ item.currency }}).</p>
+                      }
+                       @if (isNegative(item)) {
+                        <p class="form-error">The refundable amount cannot be negative.</p>
+                      }
+                    </div>
+                    <div class="form-group">
+                      <label>Note</label>
+                      <textarea
+                        [value]="notes()[item.id] ?? ''"
+                        (input)="setNote(item.id, $any($event.target).value)"
+                      ></textarea>
+                    </div>
+                  } @else {
+                    <p><strong>Note:</strong> {{ item.adminNotes || '—' }}</p>
+                  }
+                </td>
+              </tr>
+            }
+          } @empty {
+            <tr><td colspan="6">No expenses in this refund request.</td></tr>
           }
-        }
-      </tbody>
-    </table>
-  </section>
-  <div class="actions">
-    <button class="btn" type="button">Approve refund</button>
-  </div>
+        </tbody>
+      </table>
+    </section>
+
+        @if (isEditable()) {
+      <div class="actions">
+        <button class="btn" type="button" [disabled]="!canApprove()" (click)="confirmOpen.set(true)">Approve refund</button>
+      </div>
+    }
+
+    @if (confirmOpen()) {
+      <div class="overlay is-open" (click)="confirmOpen.set(false)"></div>
+      <div class="confirm-modal card" role="dialog" aria-modal="true">
+        <h3>Confirm refund approval</h3>
+        <p>Total requested: <strong>€ {{ totalRequested() | number:'1.2-2' }}</strong></p>
+        <p>Total refund: <strong>€ {{ totalRefund() | number:'1.2-2' }}</strong></p>
+        <p>This action cannot be undone.</p>
+        <div class="actions">
+          <button class="btn btn--outline" type="button" (click)="confirmOpen.set(false)">Cancel</button>
+          <button class="btn" type="button" (click)="approve()">Confirm approval</button>
+        </div>
+      </div>
+    }
+  } @else if (loadError()) {
+    <p>Could not load this refund request.</p>
+  } @else {
+    <p>Loading…</p>
+  }
 </main>
+
+@if (receipt(); as receipt) {
+  <aside class="receipt-panel">
+    <div class="receipt-panel__header">
+      <strong>{{ receipt.filename }}</strong>
+      <button class="btn btn--outline" type="button" (click)="closeReceipt()">Close</button>
+    </div>
+    @if (receipt.isPdf) {
+      <iframe [src]="receipt.url" title="Receipt"></iframe>
+    } @else {
+      <img [src]="receipt.url" [alt]="receipt.filename" />
+    }
+  </aside>
+}

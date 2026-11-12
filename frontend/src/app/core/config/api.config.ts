@@ -25,6 +25,12 @@ export const API_CONFIG = {
       base: `${environment.apiBaseUrl}/api/v1/refunds`,
       byMission: (missionId: string) => `${environment.apiBaseUrl}/api/v1/refunds/by-mission/${missionId}`,
       byId: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}`,
+      review: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/review`,
+      approve: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/approve`,
+      receipt: (refundId: string, itemId: string) =>
+        `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/items/${itemId}/receipt`,
+      receipts: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/receipts`,
+      items: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/items`,
     },
   },
 } as const;

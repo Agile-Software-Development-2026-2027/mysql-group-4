@@ -1,5 +1,17 @@
 <app-topbar></app-topbar>
 
 <main class="container">
+  <div class="actions-bar">
+    <button class="btn" type="button" (click)="openAddModal()">
+      + Add Item
+    </button>
+  </div>
 
+  @if (isAddModalOpen() && refundId()) {
+    <app-add-refund-item-modal
+      [refundId]="refundId()!"
+      (itemCreated)="onItemAdded($event)"
+      (closed)="closeAddModal()"
+    ></app-add-refund-item-modal>
+  }
 </main>
