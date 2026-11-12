@@ -24,6 +24,7 @@ from app.core.exceptions import (
     MissionNotFoundError,
     RefundItemCreateError,
     RefundNotFoundError,
+    ResourceNotFoundError,
 )
 from app.crud.mission_repository import MissionRepository
 from app.crud.refund_repository import RefundRepository
@@ -202,6 +203,28 @@ class RefundService:
             receipt_file_path=object_name,
             receipt_original_filename=safe_original_filename,
         )
+
+    async def download_receipt(self, refund_request_id: UUID, item_id: UUID, user: User) -> tuple[bytes, str]:
+        refund_request = await self.refund_repository.find_by_id(self.session, refund_request_id)
+        if not refund_request:
+            raise RefundNotFoundError(refund_request_id)
+        if not user.is_superuser and refund_request.created_by != user.id:
+            raise AccessDeniedError("Only the requester or an administrator can view this receipt")
+
+        item = next((item for item in refund_request.items if item.id == item_id), None)
+        if item is None:
+            raise ResourceNotFoundError("RefundItem", item_id)
+
+        try:
+            response = await anyio.to_thread.run_sync(
+                lambda: minio_client.get_object(settings.MINIO_BUCKET_NAME, item.receipt_file_path)
+            )
+            content = response.read()
+            response.close()
+            response.release_conn()
+            return content, item.receipt_original_filename
+        except S3Error:
+            raise ResourceNotFoundError("Receipt", item_id)
 
     async def create_refund_item(self, refund_request_id: UUID, user: User, data: RefundItemCreateDTO) -> RefundItemDTO:
         async with self.transaction():

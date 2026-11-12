@@ -57,6 +57,12 @@ export class RefundService {
     );
   }
 
+  downloadReceipt(refundId: string, itemId: string): Observable<Blob> {
+    return this.http.get(API_CONFIG.endpoints.refunds.receipt(refundId, itemId), {
+      responseType: 'blob',
+      withCredentials: true,
+    });
+  }
   uploadReceipt(refundId: string, file: File): Observable<RefundReceiptUploadDTO> {
     const formData = new FormData();
     formData.append('file', file);
