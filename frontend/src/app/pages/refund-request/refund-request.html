@@ -7,9 +7,25 @@
     </button>
   </div>
 
+  @if (items().length === 0) {
+    <p>No expense items added yet.</p>
+  } @else {
+    <ul class="expense-list">
+      @for (item of items(); track item.id) {
+        <li class="expense-item card">
+          <strong>{{ item.category }}</strong> — {{ item.description }}
+          <span>({{ item.startsAt | date:'short' }})</span>
+          <span>€ {{ item.requestedAmount | number:'1.2-2' }}</span>
+        </li>
+      }
+    </ul>
+  }
+
   @if (isAddModalOpen() && refundId()) {
     <app-add-refund-item-modal
       [refundId]="refundId()!"
+      [missionStartsAt]="refund()?.mission?.startsAt ?? null"
+      [missionEndsAt]="refund()?.mission?.endsAt ?? null"
       (itemCreated)="onItemAdded($event)"
       (closed)="closeAddModal()"
     ></app-add-refund-item-modal>

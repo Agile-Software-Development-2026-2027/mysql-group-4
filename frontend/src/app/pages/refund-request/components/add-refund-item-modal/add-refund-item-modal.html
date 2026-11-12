@@ -102,6 +102,11 @@
 
       <!-- Form -->
       <section class="form-pane">
+        @if (isOcrPrefilled()) {
+          <div class="upload-error-alert" role="status">
+            Fields were auto-filled from your receipt. Please review and correct any inaccurate values before saving.
+          </div>
+        }
         <form [formGroup]="form" (ngSubmit)="submit()">
 
           <!-- Category -->
@@ -152,10 +157,15 @@
                   formControlName="itineraryTo"
                   class="form-control"
                   placeholder="e.g. Rome Termini"
-                  [class.is-invalid]="form.get('itineraryTo')?.invalid && form.get('itineraryTo')?.touched"
+                  [class.is-invalid]="
+                    (form.get('itineraryTo')?.invalid || form.hasError('sameLocation')) &&
+                    form.get('itineraryTo')?.touched
+                  "
                 />
                 @if (form.get('itineraryTo')?.invalid && form.get('itineraryTo')?.touched) {
                   <span class="form-error">Destination is required.</span>
+                } @else if (form.hasError('sameLocation') && form.get('itineraryTo')?.touched) {
+                  <span class="form-error">Destination must be different from departure.</span>
                 }
               </div>
             </div>
@@ -177,10 +187,19 @@
                 type="datetime-local"
                 formControlName="startsAt"
                 class="form-control"
-                [class.is-invalid]="form.get('startsAt')?.invalid && form.get('startsAt')?.touched"
+                [min]="minDateTime()"
+                [max]="maxDateTime()"
+                [class.is-invalid]="
+                  (form.get('startsAt')?.invalid || form.hasError('startInFuture') || form.hasError('startOutsideMission')) &&
+                  form.get('startsAt')?.touched
+                "
               />
               @if (form.get('startsAt')?.invalid && form.get('startsAt')?.touched) {
                 <span class="form-error">Start date and time is required.</span>
+              } @else if (form.hasError('startInFuture') && form.get('startsAt')?.touched) {
+                <span class="form-error">Date and time cannot be in the future.</span>
+              } @else if (form.hasError('startOutsideMission') && form.get('startsAt')?.touched) {
+                <span class="form-error">Must be within the mission period ({{ missionPeriodLabel() }}).</span>
               }
             </div>
 
@@ -194,10 +213,25 @@
                   type="datetime-local"
                   formControlName="endsAt"
                   class="form-control"
-                  [class.is-invalid]="form.get('endsAt')?.invalid && form.get('endsAt')?.touched"
+                  [min]="minDateTime()"
+                  [max]="maxDateTime()"
+                  [class.is-invalid]="
+                    (form.get('endsAt')?.invalid || form.hasError('endBeforeStart') || form.hasError('endInFuture') || form.hasError('endOutsideMission')) &&
+                    form.get('endsAt')?.touched
+                  "
                 />
                 @if (form.get('endsAt')?.invalid && form.get('endsAt')?.touched) {
                   <span class="form-error">End date and time is required.</span>
+                } @else if (form.hasError('endInFuture') && form.get('endsAt')?.touched) {
+                  <span class="form-error">Date and time cannot be in the future.</span>
+                } @else if (form.hasError('endOutsideMission') && form.get('endsAt')?.touched) {
+                  <span class="form-error">Must be within the mission period ({{ missionPeriodLabel() }}).</span>
+                } @else if (form.hasError('endBeforeStart') && form.get('endsAt')?.touched) {
+                  <span class="form-error">
+                    {{ form.get('category')?.value === ExpenseCategory.TRANSPORT
+                      ? 'Arrival time must be after departure time.'
+                      : 'Check-out time must be after check-in time.' }}
+                  </span>
                 }
               </div>
             }
