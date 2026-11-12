@@ -50,7 +50,7 @@ class MissionService:
         user = await self._get_active_user_or_throw(user_id)
         mission = await self._get_mission_or_throw(mission_id)
         self._validate_user_can_read(mission, user)
-        return MissionDTO.model_validate(mission)
+        return await self._to_dto(mission)
 
     async def get_missions(
         self,
@@ -131,7 +131,7 @@ class MissionService:
                 await self._fund_service.lock_for_mission(
                     data.fund_id, saved.id, responsible_fc=user.fiscal_code
                 )
-            result = MissionDTO.model_validate(saved)
+            result = await self._to_dto(saved)
         logger.info("Mission %s created by user %s with status %s", result.id, user_id, result.status.value)
         return result
 
@@ -151,7 +151,7 @@ class MissionService:
             mission.fund_manager = manager
             mission.updated_by = user.id
             saved = await self._repository.save(mission)
-            result = MissionDTO.model_validate(saved)
+            result = await self._to_dto(saved)
         logger.info("Mission %s updated by user %s", mission_id, user_id)
         return result
 
@@ -200,7 +200,7 @@ class MissionService:
 
             mission.updated_by = user.id
             saved = await self._repository.save(mission)
-            result = MissionDTO.model_validate(saved)
+            result = await self._to_dto(saved)
         logger.info("Mission %s set to %s by user %s", mission_id, status.value, user_id)
         return result
 
@@ -259,7 +259,19 @@ class MissionService:
             page_request=page_request,
         )
         logger.debug("Found %s missions for user %s", missions.total_elements, user.id)
-        return missions.map(MissionDTO.model_validate)
+        dtos = {mission.id: await self._to_dto(mission) for mission in missions.content}
+        return missions.map(lambda mission: dtos[mission.id])
+
+    async def _to_dto(self, mission: Mission) -> MissionDTO:
+        dto = MissionDTO.model_validate(mission)
+        requester = await self._user_repository.get_user_by_id(self._session, mission.requester_id)
+        if requester is None:
+            return dto
+        return dto.model_copy(update={
+            "requester_name": requester.name,
+            "requester_surname": requester.surname,
+            "requester_email": requester.email,
+        })
 
     @staticmethod
     def _with_filters(filters: MissionFilterDTO | None, **overrides: object) -> MissionFilterDTO:
