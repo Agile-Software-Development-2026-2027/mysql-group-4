@@ -122,7 +122,8 @@ export class MissionReview implements OnInit {
 
   isMissionEnded(mission: MissionDTO | null): boolean {
     if (!mission) return false;
-    return new Date(mission.endsAt) <= new Date();
+    // TODO: temporary bypass to allow accessing refund pages before mission end date
+    return true;
   }
 
   openDetail(mission: MissionDTO) {
