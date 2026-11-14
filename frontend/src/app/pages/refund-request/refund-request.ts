@@ -1,8 +1,8 @@
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
-import { CommonModule, DatePipe, DecimalPipe } from '@angular/common';
+import { CommonModule, DatePipe, DecimalPipe, Location } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 
 import { Topbar } from '../../components/topbar/topbar';
@@ -21,6 +21,8 @@ import { ToastService } from '../../services/toast.service';
 })
 export class RefundRequestComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
+  private location = inject(Location);
   private http = inject(HttpClient);
   private fb = inject(FormBuilder);
   private refundService = inject(RefundService);
@@ -30,15 +32,20 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
   readonly ExpenseCategory = ExpenseCategory;
   readonly subtypeMap: Record<ExpenseCategory, { value: ExpenseSubtype; label: string }[]> = {
     [ExpenseCategory.TRANSPORT]: [
-      { value: ExpenseSubtype.TRAIN, label: 'Train' }, { value: ExpenseSubtype.PLANE, label: 'Plane' },
-      { value: ExpenseSubtype.SHIP, label: 'Ship / Ferry' }, { value: ExpenseSubtype.PUBLIC_TRANSPORT, label: 'Public Transit' },
-      { value: ExpenseSubtype.TAXI_RENTAL, label: 'Taxi / Car Rental' }, { value: ExpenseSubtype.OWN_VEHICLE, label: 'Personal Vehicle' },
+      { value: ExpenseSubtype.TRAIN, label: 'Train' },
+      { value: ExpenseSubtype.PLANE, label: 'Plane' },
+      { value: ExpenseSubtype.SHIP, label: 'Ship / Ferry' },
+      { value: ExpenseSubtype.PUBLIC_TRANSPORT, label: 'Public Transit' },
+      { value: ExpenseSubtype.TAXI_RENTAL, label: 'Taxi / Car Rental' },
+      { value: ExpenseSubtype.OWN_VEHICLE, label: 'Personal Vehicle' },
     ],
     [ExpenseCategory.ACCOMMODATION]: [
-      { value: ExpenseSubtype.ACCOMMODATION_EXPENSE, label: 'Hotel / Lodging' }, { value: ExpenseSubtype.OTHER_ACCOMMODATION_EXPENSE, label: 'Other Accommodation' },
+      { value: ExpenseSubtype.ACCOMMODATION_EXPENSE, label: 'Hotel / Lodging' },
+      { value: ExpenseSubtype.OTHER_ACCOMMODATION_EXPENSE, label: 'Other Accommodation' },
     ],
     [ExpenseCategory.MEALS]: [
-      { value: ExpenseSubtype.MEALS_EXPENSE, label: 'Restaurant / Meal' }, { value: ExpenseSubtype.OTHER_MEALS_EXPENSE, label: 'Other Meal' },
+      { value: ExpenseSubtype.MEALS_EXPENSE, label: 'Restaurant / Meal' },
+      { value: ExpenseSubtype.OTHER_MEALS_EXPENSE, label: 'Other Meal' },
     ],
     [ExpenseCategory.OTHER]: [],
   };
@@ -74,15 +81,57 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
 
   readonly categoryTotals = computed(() => {
     const totals: Record<ExpenseCategory, number> = {
+      [ExpenseCategory.TRANSPORT]: 0, [ExpenseCategory.ACCOMMODATION]: 0,
+      [ExpenseCategory.MEALS]: 0, [ExpenseCategory.OTHER]: 0,
+    };
+    for (const item of this.items()) {
+      totals[item.category] = (totals[item.category] ?? 0) + Number(item.requestedAmount);
+    }
+    return totals;
+  });
+
+  readonly exceedsEstimatedCost = computed(() => {
+    const est = this.mission()?.estimatedCost;
+    return est != null && this.totalRequested() > Number(est);
+  });
+
+  readonly categories: ExpenseCategory[] = [
+    ExpenseCategory.TRANSPORT,
+    ExpenseCategory.ACCOMMODATION,
+    ExpenseCategory.MEALS,
+    ExpenseCategory.OTHER,
+  ];
+  readonly selectedCategories = signal<Set<ExpenseCategory>>(new Set(this.categories));
+  readonly priceSort = signal<'none' | 'asc' | 'desc'>('none');
+
+  readonly categoryCounts = computed(() => {
+    const counts: Record<ExpenseCategory, number> = {
       [ExpenseCategory.TRANSPORT]: 0,
       [ExpenseCategory.ACCOMMODATION]: 0,
       [ExpenseCategory.MEALS]: 0,
       [ExpenseCategory.OTHER]: 0,
     };
     for (const item of this.items()) {
-      totals[item.category] = (totals[item.category] ?? 0) + Number(item.requestedAmount);
+      counts[item.category] = (counts[item.category] ?? 0) + 1;
     }
-    return totals;
+    return counts;
+  });
+
+  readonly isAllCategoriesSelected = computed(
+    () => this.selectedCategories().size === this.categories.length
+  );
+
+  selectAllCategories(): void {
+    this.selectedCategories.set(new Set(this.categories));
+  }
+
+  readonly filteredItems = computed(() => {
+    const active = this.selectedCategories();
+    const list = this.items().filter((item) => active.has(item.category));
+    const sort = this.priceSort();
+    if (sort === 'asc') return [...list].sort((a, b) => Number(a.requestedAmount) - Number(b.requestedAmount));
+    if (sort === 'desc') return [...list].sort((a, b) => Number(b.requestedAmount) - Number(a.requestedAmount));
+    return list;
   });
 
   ngOnInit(): void {
@@ -224,16 +273,54 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
     return val ? val.slice(0, 16) : '';
   }
 
+  isCategorySelected(cat: ExpenseCategory): boolean {
+    return this.selectedCategories().has(cat);
+  }
+
+  toggleCategory(cat: ExpenseCategory): void {
+    this.selectedCategories.update((prev) => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
+    });
+  }
+
+  setPriceSort(order: string): void {
+    this.priceSort.set(order === 'asc' || order === 'desc' ? order : 'none');
+  }
+
+  resetFilters(): void {
+    this.selectedCategories.set(new Set(this.categories));
+    this.priceSort.set('none');
+  }
+
+  deleteItem(item: RefundItemDTO, event: Event): void {
+    event.stopPropagation();
+    this.items.update((list) => list.filter((it) => it.id !== item.id));
+    if (this.selectedItem()?.id === item.id) this.closeItemModal();
+    this.toastService.showSuccess('Expense item removed.', 'Deleted');
+  }
+
+  goBack(): void {
+    if (window.history.length > 1) {
+      this.location.back();
+    } else {
+      this.router.navigate(['/']);
+    }
+  }
+
   openAddModal(): void { this.isAddModalOpen.set(true); }
   closeAddModal(): void { this.isAddModalOpen.set(false); }
-  onItemAdded(item: RefundItemDTO): void { this.items.update((c) => [...c, item]); this.closeAddModal(); }
+  onItemAdded(item: RefundItemDTO): void {
+    this.items.update((current) => [...current, item]);
+    this.closeAddModal();
+  }
 
   formatCategory(cat: ExpenseCategory): string {
     const labels: Record<ExpenseCategory, string> = {
-      [ExpenseCategory.TRANSPORT]: 'Transport',
-      [ExpenseCategory.ACCOMMODATION]: 'Accommodation',
-      [ExpenseCategory.MEALS]: 'Meals',
-      [ExpenseCategory.OTHER]: 'Other',
+      [ExpenseCategory.TRANSPORT]: 'Transport', [ExpenseCategory.ACCOMMODATION]: 'Accommodation',
+      [ExpenseCategory.MEALS]: 'Meals', [ExpenseCategory.OTHER]: 'Other',
     };
     return labels[cat] ?? cat;
   }
