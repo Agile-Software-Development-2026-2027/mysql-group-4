@@ -39,6 +39,8 @@ from app.schemas.refund import (
     RefundRequestCreateDTO,
     RefundRequestDTO,
     RefundReviewDTO,
+    RefundFilterDTO,
+    RefundOverviewDTO
 )
 
 logger = logging.getLogger(__name__)
@@ -249,3 +251,25 @@ class RefundService:
 
             return RefundItemDTO.model_validate(saved)
 
+    async def get_filtered_refunds(self, user: User, filters: RefundFilterDTO | None = None) -> list[RefundOverviewDTO]:
+        if not user.is_superuser:
+            raise AccessDeniedError("Only administrators can filter and view the refund overview.")
+
+        if filters is None:
+            filters = RefundFilterDTO()
+
+        refunds = await self.refund_repository.get_filtered_refunds(self.session, filters)
+
+        return [
+            RefundOverviewDTO(
+                id=r.id,
+                status=r.status,
+                requester_name=r.mission.requester.name,
+                requester_surname=r.mission.requester.surname,
+                subject=r.mission.subject,
+                total_requested=r.total_requested_amount,
+                total_reimbursed=r.total_reimbursed_amount,
+                submitted_at=r.submitted_at,
+                approved_at=r.approved_at
+            ) for r in refunds
+        ]
