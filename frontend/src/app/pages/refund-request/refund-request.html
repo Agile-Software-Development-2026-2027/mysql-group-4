@@ -1,31 +1,126 @@
 <app-topbar></app-topbar>
 
-<main class="container">
-  <div class="actions-bar">
-    <button class="btn" type="button" (click)="openAddModal()">
-      + Add Item
-    </button>
-  </div>
+<main class="container refund-page" [class.has-receipt]="activeReceipt()">
+  @if (isLoading()) {
+    <section class="card empty-state"><p>Loading refund request...</p></section>
+  } @else if (loadError()) {
+    <section class="card empty-state">
+      <h2>Unable to load refund request</h2>
+      <p>The refund request could not be retrieved or you do not have permission to view it.</p>
+    </section>
+  } @else if (refund(); as ref) {
+    <header class="page-header">
+      <div class="page-header__title">
+        <h1>Refund Receipts</h1>
+        <span class="status-pill status-pill--{{ ref.status.toLowerCase() }}">{{ ref.status }}</span>
+      </div>
+      <button class="btn" type="button" (click)="openAddModal()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+          <line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        Add Receipt
+      </button>
+    </header>
 
-  @if (items().length === 0) {
-    <p>No expense items added yet.</p>
-  } @else {
-    <ul class="expense-list">
-      @for (item of items(); track item.id) {
-        <li class="expense-item card">
-          <strong>{{ item.category }}</strong> — {{ item.description }}
-          <span>({{ item.startsAt | date:'short' }})</span>
-          <span>€ {{ item.requestedAmount | number:'1.2-2' }}</span>
-        </li>
+    <section class="card summary-card" aria-label="Refund summary">
+      <div class="summary-top">
+        <div class="summary-totals">
+          <div class="total-block total-block--primary">
+            <span class="meta-label">Total Requested</span>
+            <span class="total-value">€ {{ totalRequested() | number:'1.2-2' }}</span>
+          </div>
+          <div class="total-block">
+            <span class="meta-label">Receipts</span>
+            <span class="total-value">{{ items().length }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="category-strip">
+        <div class="category-chip"><span>Transport</span><strong>€ {{ categoryTotals().TRANSPORT | number:'1.2-2' }}</strong></div>
+        <div class="category-chip"><span>Accommodation</span><strong>€ {{ categoryTotals().ACCOMMODATION | number:'1.2-2' }}</strong></div>
+        <div class="category-chip"><span>Meals</span><strong>€ {{ categoryTotals().MEALS | number:'1.2-2' }}</strong></div>
+        <div class="category-chip"><span>Other</span><strong>€ {{ categoryTotals().OTHER | number:'1.2-2' }}</strong></div>
+      </div>
+    </section>
+
+    <section class="card">
+      @if (items().length === 0) {
+        <div class="empty-state">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline><line x1="9" y1="15" x2="15" y2="15"></line>
+          </svg>
+          <h3>No receipts uploaded yet</h3>
+          <p>There are no expense receipts attached to this refund request yet. Add your first receipt to get started.</p>
+          <button class="btn btn--outline" type="button" (click)="openAddModal()">Add your first receipt</button>
+        </div>
+      } @else {
+        <div tabindex="0" role="region" aria-labelledby="receipts-table-caption" class="table-wrapper">
+          <table>
+            <caption id="receipts-table-caption" class="sr-only">Uploaded refund receipts</caption>
+            <thead>
+              <tr><th>Category</th><th>Description</th><th>Date</th><th>Amount</th><th>Receipt</th></tr>
+            </thead>
+            <tbody>
+              @for (item of items(); track item.id) {
+                <tr class="expense-row" [class.is-active]="activeReceipt()?.item?.id === item.id" (click)="toggleExpand(item.id)">
+                  <td data-label="Category"><span class="cat-badge">{{ formatCategory(item.category) }}</span></td>
+                  <td data-label="Description">{{ item.description }}</td>
+                  <td data-label="Date">
+                    {{ item.startsAt | date:'dd/MM/yyyy' }}
+                    @if (item.endsAt) { → {{ item.endsAt | date:'dd/MM/yyyy' }} }
+                  </td>
+                  <td data-label="Amount" class="amount-cell">€ {{ item.requestedAmount | number:'1.2-2' }}</td>
+                  <td data-label="Receipt">
+                    <button type="button" class="link-btn" [title]="item.receiptOriginalFilename" (click)="viewReceipt(item, $event)">
+                      {{ activeReceipt()?.item?.id === item.id ? 'Hide' : 'View file' }}
+                    </button>
+                  </td>
+                </tr>
+
+                @if (expandedId() === item.id) {
+                  <tr class="expense-details">
+                    <td colspan="5">
+                      <div class="details-grid">
+                        <div><strong>Subtype:</strong> {{ item.subtype || '—' }}</div>
+                        @if (item.itineraryFrom) { <div><strong>Itinerary:</strong> {{ item.itineraryFrom }} → {{ item.itineraryTo }}</div> }
+                        <div><strong>Traceable:</strong> {{ item.isTraceable ? 'Yes' : 'No' }}</div>
+                        <div class="filename-detail"><strong>File:</strong> {{ item.receiptOriginalFilename }}</div>
+                      </div>
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
       }
-    </ul>
+    </section>
+  }
+
+  @if (activeReceipt(); as receipt) {
+    <aside class="receipt-panel" aria-label="Receipt preview">
+      <div class="receipt-panel__header">
+        <div class="receipt-panel__title">
+          <strong>{{ receipt.item.receiptOriginalFilename }}</strong>
+          <span>{{ formatCategory(receipt.item.category) }} · € {{ receipt.item.requestedAmount | number:'1.2-2' }}</span>
+        </div>
+        <button class="btn btn--outline btn--sm" type="button" (click)="closeReceipt()">Close</button>
+      </div>
+      @if (receipt.isPdf) {
+        <iframe [src]="receipt.url" title="Receipt PDF preview"></iframe>
+      } @else {
+        <div class="receipt-panel__body">
+          <img [src]="receipt.url" [alt]="receipt.item.receiptOriginalFilename">
+        </div>
+      }
+    </aside>
   }
 
   @if (isAddModalOpen() && refundId()) {
     <app-add-refund-item-modal
       [refundId]="refundId()!"
-      [missionStartsAt]="refund()?.mission?.startsAt ?? null"
-      [missionEndsAt]="refund()?.mission?.endsAt ?? null"
       (itemCreated)="onItemAdded($event)"
       (closed)="closeAddModal()"
     ></app-add-refund-item-modal>

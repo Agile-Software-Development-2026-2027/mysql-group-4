@@ -1,7 +1,81 @@
-:host {
-  display: block;
+.refund-page { transition: margin-inline-end 0.2s ease; }
+.refund-page.has-receipt {
+  max-inline-size: none;
+  margin-inline: 24px calc(42vw + 24px);
+  @media (max-width: 1024px) { margin-inline: auto; }
 }
 
-.actions-bar {
-  margin: 24px 0;
+.page-header {
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; margin-block-end: 20px;
+  &__title { display: flex; align-items: center; gap: 12px; h1 { margin: 0; } }
+  .btn { display: inline-flex; align-items: center; gap: 8px; }
+}
+
+.status-pill {
+  padding: 3px 12px; border-radius: 12px; font-size: 0.85rem; font-weight: 700; background: #e8eef4; color: #17324d;
+  &--submitted { background: #fff6db; color: #7a5800; }
+  &--approved { background: #e6f4ed; color: #1e7e4f; }
+}
+
+.summary-card { margin-block-end: 20px; }
+.summary-top { margin-block-end: 16px; }
+.meta-label { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: #5b6f82; }
+.summary-totals { display: flex; gap: 32px; font-variant-numeric: tabular-nums; }
+.total-block {
+  display: flex; flex-direction: column;
+  .total-value { font-size: 1.3rem; font-weight: 700; color: #17324d; }
+  &--primary .total-value { color: #be0e01; }
+}
+
+.category-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.category-chip {
+  display: flex; justify-content: space-between; align-items: center; padding: 10px 14px;
+  border: 1px solid #c5d0db; border-radius: 4px; background: #f5f8fb; font-variant-numeric: tabular-nums;
+  span { font-size: 0.88rem; color: #5b6f82; }
+  strong { color: #17324d; }
+}
+
+.table-wrapper { overflow-x: auto; max-inline-size: 100%; container-type: inline-size; }
+.sr-only { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+.expense-row { cursor: pointer; &.is-active td { background: #fff6db; } }
+.amount-cell { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cat-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; background: #e8eef4; color: #17324d; font-size: 0.82rem; font-weight: 600; }
+.link-btn { background: transparent; border: 0; padding: 4px 6px; color: #be0e01; font-weight: 600; cursor: pointer; text-decoration: underline; }
+.expense-details td { background: #f5f8fb; }
+.details-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px 16px; font-size: 0.92rem; }
+.filename-detail { min-inline-size: 0; overflow-wrap: anywhere; }
+
+.empty-state {
+  text-align: center; padding: 32px 16px; color: #5b6f82; display: flex; flex-direction: column; align-items: center; gap: 10px;
+  svg { color: #be0e01; }
+  h3 { margin: 0; }
+  p { margin: 0; max-inline-size: 46ch; }
+}
+
+.receipt-panel {
+  position: fixed; inset-block: 64px 0; inset-inline-end: 0; inline-size: 42vw;
+  display: flex; flex-direction: column; background: #fff; border-inline-start: 1px solid #c5d0db;
+  box-shadow: -4px 0 16px rgba(0, 48, 90, 0.12); z-index: 90;
+  @media (max-width: 1024px) { inline-size: min(480px, 100%); }
+  &__header { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 18px; border-block-end: 1px solid #c5d0db; }
+  &__title {
+    display: flex; flex-direction: column; min-inline-size: 0;
+    strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    span { font-size: 0.85rem; color: #5b6f82; }
+  }
+  iframe { flex: 1; border: 0; }
+  &__body { flex: 1; overflow: auto; overscroll-behavior: contain; padding: 16px; display: grid; place-items: center; }
+  img { max-inline-size: 100%; display: block; }
+}
+.btn--sm { padding: 6px 14px; font-size: 0.9rem; }
+
+@container (width < 640px) {
+  table, thead, tbody, tr, td { display: block; }
+  thead { display: none; }
+  tr.expense-row { border: 1px solid #c5d0db; border-radius: 4px; margin-block-end: 12px; padding: 8px 12px; }
+  td {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 0; border-bottom: 1px solid #edf2f7;
+    &:last-child { border-bottom: 0; }
+    &::before { content: attr(data-label); font-weight: 600; color: #5b6f82; font-size: 0.85rem; }
+  }
 }
