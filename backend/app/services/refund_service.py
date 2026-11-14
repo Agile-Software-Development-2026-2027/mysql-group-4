@@ -90,9 +90,8 @@ class RefundService:
                 raise AccessDeniedError("Only the mission requester can create a refund request")
             if mission.status != MissionStatus.ACCEPTED:
                 raise InvalidMissionStateError("A refund request can only be created for an accepted mission")
-            # TODO: temporary bypass to allow creating refund requests before mission end date
-            # if mission.ends_at > datetime.now():
-            #     raise InvalidRefundRequestDateError("Refund request can only be created after the mission has ended")
+            if mission.ends_at > datetime.now():
+                raise InvalidRefundRequestDateError("Refund request can only be created after the mission has ended")
 
             existing = await self.refund_repository.find_by_mission_id(self.session, mission.id)
             if existing is not None:
