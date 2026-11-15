@@ -199,6 +199,23 @@
 .checkbox-group { display: flex; align-items: flex-end; padding-block-end: 8px; label { display: flex; align-items: center; margin: 0; cursor: pointer; } }
 .modal-footer { display: flex; justify-content: flex-end; align-items: center; gap: 12px; padding: 14px 24px; background: var(--rr-surface-alt); border-block-start: 1px solid var(--rr-border); }
 
+.pagination-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-block-start: 12px;
+  background: var(--rr-surface);
+  border: 1px solid var(--rr-border);
+  border-radius: var(--rr-radius);
+  font-size: 0.875rem;
+}
+.pagination-summary { color: var(--rr-muted); }
+.pagination-actions { display: flex; align-items: center; gap: 10px; }
+.pagination-page-indicator { font-weight: 600; color: var(--rr-text); }
+
 @media (prefers-reduced-motion: reduce) {
   .expense-row { transition: none; }
 }
