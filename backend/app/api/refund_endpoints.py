@@ -31,7 +31,7 @@ CurrentUser = Annotated[User, Depends(current_active_user)]
 
 def get_page_request(
     page: Annotated[int, Query(ge=0)] = 0,
-    size: Annotated[int, Query(ge=1, le=100)] = 20,
+    size: Annotated[int, Query(ge=1, le=5)] = 5,
 ) -> PageRequest:
     return PageRequest(page=page, size=size)
 
