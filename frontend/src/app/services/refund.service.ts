@@ -1,12 +1,14 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
 import { API_CONFIG } from '../core/config/api.config';
+import { Page } from '../core/models/page';
 import {
   RefundApprovePayload,
   RefundItemCreatePayload,
   RefundItemDTO,
+  RefundItemFilterPayload,
   RefundReceiptUploadDTO,
   RefundRequestCreatePayload,
   RefundRequestDTO,
@@ -78,6 +80,20 @@ export class RefundService {
       API_CONFIG.endpoints.refunds.items(refundId),
       payload,
       { withCredentials: true }
+    );
+  }
+
+  filterItems(
+    refundId: string,
+    payload: RefundItemFilterPayload,
+    page: number = 0,
+    size: number = 50
+  ): Observable<Page<RefundItemDTO>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.post<Page<RefundItemDTO>>(
+      API_CONFIG.endpoints.refunds.itemsFilter(refundId),
+      payload,
+      { params, withCredentials: true }
     );
   }
 }

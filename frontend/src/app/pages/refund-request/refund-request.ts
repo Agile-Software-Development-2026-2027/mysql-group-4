@@ -8,7 +8,7 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { Topbar } from '../../components/topbar/topbar';
 import { AddRefundItemModal } from './components/add-refund-item-modal/add-refund-item-modal';
 import { API_CONFIG } from '../../core/config/api.config';
-import { ExpenseCategory, ExpenseSubtype, MissionDTO, RefundItemDTO, RefundRequestDTO } from '../../core/models';
+import { ExpenseCategory, ExpenseSubtype, MissionDTO, RefundItemDTO, RefundItemFilterPayload, RefundRequestDTO } from '../../core/models';
 import { RefundService } from '../../services/refund.service';
 import { ToastService } from '../../services/toast.service';
 
@@ -121,18 +121,41 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
     () => this.selectedCategories().size === this.categories.length
   );
 
+  readonly filteredItems = signal<RefundItemDTO[]>([]);
+  readonly isFiltering = signal(false);
+
   selectAllCategories(): void {
     this.selectedCategories.set(new Set(this.categories));
+    this.loadFilteredItems();
   }
 
-  readonly filteredItems = computed(() => {
+  loadFilteredItems(): void {
+    const id = this.refundId();
+    if (!id) return;
+
     const active = this.selectedCategories();
-    const list = this.items().filter((item) => active.has(item.category));
-    const sort = this.priceSort();
-    if (sort === 'asc') return [...list].sort((a, b) => Number(a.requestedAmount) - Number(b.requestedAmount));
-    if (sort === 'desc') return [...list].sort((a, b) => Number(b.requestedAmount) - Number(a.requestedAmount));
-    return list;
-  });
+    if (active.size === 0) {
+      this.filteredItems.set([]);
+      return;
+    }
+
+    const payload: RefundItemFilterPayload = {
+      categories: active.size === this.categories.length ? null : Array.from(active),
+      sortByAmount: this.priceSort() === 'asc' ? 'asc' : this.priceSort() === 'desc' ? 'desc' : null,
+    };
+
+    this.isFiltering.set(true);
+    this.refundService.filterItems(id, payload).subscribe({
+      next: (page) => {
+        this.filteredItems.set(page.content);
+        this.isFiltering.set(false);
+      },
+      error: () => {
+        this.isFiltering.set(false);
+        this.toastService.showError('Could not filter receipt items.', 'Filter Error');
+      },
+    });
+  }
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
@@ -148,6 +171,7 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
         this.refund.set(data);
         this.items.set(data.items ?? []);
         this.isLoading.set(false);
+        this.loadFilteredItems();
         this.http
           .get<MissionDTO>(`${API_CONFIG.baseUrl}/api/v1/missions/${data.missionId}`, { withCredentials: true })
           .subscribe({ next: (m) => this.mission.set(m) });
@@ -284,15 +308,18 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
       else next.add(cat);
       return next;
     });
+    this.loadFilteredItems();
   }
 
   setPriceSort(order: string): void {
     this.priceSort.set(order === 'asc' || order === 'desc' ? order : 'none');
+    this.loadFilteredItems();
   }
 
   resetFilters(): void {
     this.selectedCategories.set(new Set(this.categories));
     this.priceSort.set('none');
+    this.loadFilteredItems();
   }
 
   deleteItem(item: RefundItemDTO, event: Event): void {
@@ -315,6 +342,7 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
   onItemAdded(item: RefundItemDTO): void {
     this.items.update((current) => [...current, item]);
     this.closeAddModal();
+    this.loadFilteredItems();
   }
 
   formatCategory(cat: ExpenseCategory): string {
