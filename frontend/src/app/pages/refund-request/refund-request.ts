@@ -123,19 +123,36 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
 
   readonly filteredItems = signal<RefundItemDTO[]>([]);
   readonly isFiltering = signal(false);
+  readonly pageSize = 5;
+  readonly currentPage = signal(0);
+  readonly totalPages = signal(0);
+  readonly totalFilteredCount = signal(0);
+  readonly mathMin = Math.min;
+
+  goToPage(page: number): void {
+    if (page < 0 || page >= this.totalPages()) return;
+    this.currentPage.set(page);
+    this.loadFilteredItems(false);
+  }
 
   selectAllCategories(): void {
     this.selectedCategories.set(new Set(this.categories));
-    this.loadFilteredItems();
+    this.loadFilteredItems(true);
   }
 
-  loadFilteredItems(): void {
+  loadFilteredItems(resetPage: boolean = false): void {
     const id = this.refundId();
     if (!id) return;
+
+    if (resetPage) {
+      this.currentPage.set(0);
+    }
 
     const active = this.selectedCategories();
     if (active.size === 0) {
       this.filteredItems.set([]);
+      this.totalPages.set(0);
+      this.totalFilteredCount.set(0);
       return;
     }
 
@@ -145,9 +162,12 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
     };
 
     this.isFiltering.set(true);
-    this.refundService.filterItems(id, payload).subscribe({
+    this.refundService.filterItems(id, payload, this.currentPage(), this.pageSize).subscribe({
       next: (page) => {
         this.filteredItems.set(page.content);
+        this.totalPages.set(page.totalPages);
+        this.totalFilteredCount.set(page.totalElements);
+        this.currentPage.set(page.number);
         this.isFiltering.set(false);
       },
       error: () => {
@@ -308,18 +328,18 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
       else next.add(cat);
       return next;
     });
-    this.loadFilteredItems();
+    this.loadFilteredItems(true);
   }
 
   setPriceSort(order: string): void {
     this.priceSort.set(order === 'asc' || order === 'desc' ? order : 'none');
-    this.loadFilteredItems();
+    this.loadFilteredItems(true);
   }
 
   resetFilters(): void {
     this.selectedCategories.set(new Set(this.categories));
     this.priceSort.set('none');
-    this.loadFilteredItems();
+    this.loadFilteredItems(true);
   }
 
   deleteItem(item: RefundItemDTO, event: Event): void {

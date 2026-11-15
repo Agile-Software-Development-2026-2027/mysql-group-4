@@ -233,6 +233,35 @@
               </tbody>
             </table>
           </div>
+
+          @if (totalPages() > 1) {
+            <nav class="pagination-bar" aria-label="Receipts pagination">
+              <span class="pagination-summary">
+                Showing {{ currentPage() * pageSize + 1 }}–{{ mathMin((currentPage() + 1) * pageSize, totalFilteredCount()) }} of {{ totalFilteredCount() }} receipts
+              </span>
+              <div class="pagination-actions">
+                <button
+                  type="button"
+                  class="btn btn--outline btn--sm"
+                  [disabled]="currentPage() === 0"
+                  (click)="goToPage(currentPage() - 1)"
+                >
+                  Previous
+                </button>
+                <span class="pagination-page-indicator">
+                  Page {{ currentPage() + 1 }} of {{ totalPages() }}
+                </span>
+                <button
+                  type="button"
+                  class="btn btn--outline btn--sm"
+                  [disabled]="currentPage() >= totalPages() - 1"
+                  (click)="goToPage(currentPage() + 1)"
+                >
+                  Next
+                </button>
+              </div>
+            </nav>
+          }
         }
       }
       </div>
