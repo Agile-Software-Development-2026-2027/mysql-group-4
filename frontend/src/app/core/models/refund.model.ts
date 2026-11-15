@@ -116,3 +116,8 @@ export interface RefundItemCreatePayload {
   receiptOriginalFilename: string;
   description: string;
 }
+
+export interface RefundItemFilterPayload {
+  categories?: ExpenseCategory[] | null;
+  sortByAmount?: 'asc' | 'desc' | null;
+}
