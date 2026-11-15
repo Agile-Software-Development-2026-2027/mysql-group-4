@@ -88,6 +88,7 @@ class TestMissionService:
             filters=filters,
             user_id=self.user.id,
             page_request=request,
+            exclude_self_managed=False,
         )
         assert page.content == [self.dto]
         assert (page.total_elements, page.number, page.size, page.total_pages) == (12, 2, 5, 3)
@@ -100,6 +101,20 @@ class TestMissionService:
             filters=None,
             user_id=None,
             page_request=None,
+            exclude_self_managed=False,
+        )
+
+    async def test_listing_as_manager_excludes_self_managed_missions(self):
+        filters = MissionFilterDTO(fund_manager_id=self.user.id)
+        self.repository.find_all.return_value = Page(content=[], total_elements=0, number=0, size=20)
+
+        await self.service.get_missions(self.user.id, filters)
+
+        self.repository.find_all.assert_awaited_once_with(
+            filters=filters,
+            user_id=self.user.id,
+            page_request=None,
+            exclude_self_managed=True,
         )
 
     async def test_specialized_lists_enforce_their_filter_without_mutating_input(self):
