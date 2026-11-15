@@ -96,6 +96,10 @@ export class RefundService {
     );
   }
 
+  deleteRefundItem(refundId: string, itemId: string): Observable<void> {
+    return this.http.delete<void>(API_CONFIG.endpoints.refunds.item(refundId, itemId), { withCredentials: true });
+  }
+
   filterItems(
     refundId: string,
     payload: RefundItemFilterPayload,
