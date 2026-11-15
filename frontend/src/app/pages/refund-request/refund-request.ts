@@ -122,8 +122,9 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
   );
 
   readonly filteredItems = signal<RefundItemDTO[]>([]);
-  readonly isFiltering = signal(false);
+  readonly isFiltering = signal(true);
   readonly pageSize = 5;
+  readonly skeletonPlaceholders = [1, 2, 3, 4, 5];
   readonly currentPage = signal(0);
   readonly totalPages = signal(0);
   readonly totalFilteredCount = signal(0);
@@ -153,6 +154,7 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
       this.filteredItems.set([]);
       this.totalPages.set(0);
       this.totalFilteredCount.set(0);
+      this.isFiltering.set(false);
       return;
     }
 
