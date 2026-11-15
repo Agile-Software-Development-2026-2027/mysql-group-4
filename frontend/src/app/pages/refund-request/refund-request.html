@@ -31,21 +31,21 @@
     <section class="card refund-main-card" aria-label="Refund request details">
       @if (mission(); as m) {
         <div class="mission-overview">
-          <h2 class="mission-title">{{ m.subject }}</h2>
-          <dl class="mission-meta">
-            <div class="mission-meta-item">
-              <dt class="meta-label">Destination</dt>
-              <dd>{{ m.destination }}</dd>
-            </div>
-            <div class="mission-meta-item">
-              <dt class="meta-label">Period</dt>
-              <dd>{{ m.startsAt | date:'dd/MM/yyyy' }} – {{ m.endsAt | date:'dd/MM/yyyy' }}</dd>
-            </div>
-            <div class="mission-meta-item">
-              <dt class="meta-label">Type</dt>
-              <dd>{{ m.missionType }}</dd>
-            </div>
-          </dl>
+          <h2 class="mission-title">
+            <a
+              class="mission-link"
+              [routerLink]="['/missionreview']"
+              [queryParams]="{ view: 'requester', missionId: m.id }"
+              title="View mission details"
+            >
+              {{ m.subject }}
+              <svg class="mission-link__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <line x1="10" y1="14" x2="21" y2="3"></line>
+              </svg>
+            </a>
+          </h2>
         </div>
       }
 

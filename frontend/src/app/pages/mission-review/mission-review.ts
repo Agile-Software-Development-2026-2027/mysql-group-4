@@ -72,7 +72,20 @@ export class MissionReview implements OnInit {
         ? 'Mission Funds Management'
         : 'My Mission Requests';
 
-      this.loadAllMissions();
+      const missionId = params['missionId'];
+      if (missionId) {
+        this.missionService.getMissionById(missionId).subscribe({
+          next: (mission) => {
+            this.openDetail(mission);
+            this.loadAllMissions();
+          },
+          error: () => {
+            this.loadAllMissions();
+          }
+        });
+      } else {
+        this.loadAllMissions();
+      }
     });
   }
 
@@ -262,6 +275,12 @@ export class MissionReview implements OnInit {
     this.associatedFundName.set(null);
     this.associatedRefund.set(null);
     this.documents.set([]);
+    if (this.route.snapshot.queryParams['missionId']) {
+      this.router.navigate([], {
+        relativeTo: this.route,
+        queryParams: { view: this.viewMode },
+      });
+    }
   }
 
   createAndGoToRefund(missionId: string): void {
