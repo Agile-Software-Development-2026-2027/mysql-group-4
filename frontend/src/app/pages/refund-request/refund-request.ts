@@ -1,51 +1,240 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe, DecimalPipe } from '@angular/common';
+import { HttpClient } from '@angular/common/http';
+import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 
 import { Topbar } from '../../components/topbar/topbar';
 import { AddRefundItemModal } from './components/add-refund-item-modal/add-refund-item-modal';
-import { RefundItemDTO, RefundReviewDTO } from '../../core/models';
+import { API_CONFIG } from '../../core/config/api.config';
+import { ExpenseCategory, ExpenseSubtype, MissionDTO, RefundItemDTO, RefundRequestDTO } from '../../core/models';
 import { RefundService } from '../../services/refund.service';
+import { ToastService } from '../../services/toast.service';
 
 @Component({
   selector: 'app-refund-request',
   standalone: true,
-  imports: [CommonModule, DatePipe, DecimalPipe, Topbar, AddRefundItemModal],
+  imports: [CommonModule, DatePipe, DecimalPipe, ReactiveFormsModule, Topbar, AddRefundItemModal],
   templateUrl: './refund-request.html',
   styleUrl: './refund-request.scss',
 })
-export class RefundRequestComponent implements OnInit {
+export class RefundRequestComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
+  private http = inject(HttpClient);
+  private fb = inject(FormBuilder);
   private refundService = inject(RefundService);
+  private toastService = inject(ToastService);
+  private sanitizer = inject(DomSanitizer);
 
-  refundId = signal<string | null>(null);
-  refund = signal<RefundReviewDTO | null>(null);
-  items = signal<RefundItemDTO[]>([]);
-  isAddModalOpen = signal(false);
+  readonly ExpenseCategory = ExpenseCategory;
+  readonly subtypeMap: Record<ExpenseCategory, { value: ExpenseSubtype; label: string }[]> = {
+    [ExpenseCategory.TRANSPORT]: [
+      { value: ExpenseSubtype.TRAIN, label: 'Train' }, { value: ExpenseSubtype.PLANE, label: 'Plane' },
+      { value: ExpenseSubtype.SHIP, label: 'Ship / Ferry' }, { value: ExpenseSubtype.PUBLIC_TRANSPORT, label: 'Public Transit' },
+      { value: ExpenseSubtype.TAXI_RENTAL, label: 'Taxi / Car Rental' }, { value: ExpenseSubtype.OWN_VEHICLE, label: 'Personal Vehicle' },
+    ],
+    [ExpenseCategory.ACCOMMODATION]: [
+      { value: ExpenseSubtype.ACCOMMODATION_EXPENSE, label: 'Hotel / Lodging' }, { value: ExpenseSubtype.OTHER_ACCOMMODATION_EXPENSE, label: 'Other Accommodation' },
+    ],
+    [ExpenseCategory.MEALS]: [
+      { value: ExpenseSubtype.MEALS_EXPENSE, label: 'Restaurant / Meal' }, { value: ExpenseSubtype.OTHER_MEALS_EXPENSE, label: 'Other Meal' },
+    ],
+    [ExpenseCategory.OTHER]: [],
+  };
+
+  readonly refundId = signal<string | null>(null);
+  readonly refund = signal<RefundRequestDTO | null>(null);
+  readonly mission = signal<MissionDTO | null>(null);
+  readonly items = signal<RefundItemDTO[]>([]);
+  readonly isLoading = signal(true);
+  readonly loadError = signal(false);
+  readonly isAddModalOpen = signal(false);
+
+  readonly selectedItem = signal<RefundItemDTO | null>(null);
+  readonly isReceiptLoading = signal(false);
+  readonly receiptError = signal(false);
+  readonly receiptPreview = signal<{ url: SafeResourceUrl; fileURL: string; isPdf: boolean; filename: string } | null>(null);
+
+  editForm: FormGroup = this.fb.group({
+    category: [ExpenseCategory.TRANSPORT, Validators.required],
+    subtype: [null],
+    itineraryFrom: [''],
+    itineraryTo: [''],
+    startsAt: ['', Validators.required],
+    endsAt: [''],
+    requestedAmount: [null, [Validators.required, Validators.min(0.01), Validators.max(10000)]],
+    isTraceable: [true],
+    description: ['', [Validators.required, Validators.maxLength(255)]],
+  });
+
+  readonly totalRequested = computed(() =>
+    this.items().reduce((sum, item) => sum + Number(item.requestedAmount), 0)
+  );
+
+  readonly categoryTotals = computed(() => {
+    const totals: Record<ExpenseCategory, number> = {
+      [ExpenseCategory.TRANSPORT]: 0,
+      [ExpenseCategory.ACCOMMODATION]: 0,
+      [ExpenseCategory.MEALS]: 0,
+      [ExpenseCategory.OTHER]: 0,
+    };
+    for (const item of this.items()) {
+      totals[item.category] = (totals[item.category] ?? 0) + Number(item.requestedAmount);
+    }
+    return totals;
+  });
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
     this.refundId.set(id);
-    if (id) {
-      this.refundService.getReview(id).subscribe({
-        next: (data) => {
-          this.refund.set(data);
-          this.items.set(data.items ?? []);
-        },
-      });
+    if (!id) {
+      this.isLoading.set(false);
+      this.loadError.set(true);
+      return;
     }
+
+    this.refundService.getById(id).subscribe({
+      next: (data) => {
+        this.refund.set(data);
+        this.items.set(data.items ?? []);
+        this.isLoading.set(false);
+        this.http
+          .get<MissionDTO>(`${API_CONFIG.baseUrl}/api/v1/missions/${data.missionId}`, { withCredentials: true })
+          .subscribe({ next: (m) => this.mission.set(m) });
+      },
+      error: () => {
+        this.isLoading.set(false);
+        this.loadError.set(true);
+      },
+    });
   }
 
-  openAddModal(): void {
-    this.isAddModalOpen.set(true);
+  ngOnDestroy(): void { this.revokePreviewUrl(); }
+
+  openItemModal(item: RefundItemDTO): void {
+    const id = this.refundId();
+    this.selectedItem.set(item);
+    this.editForm.reset({
+      category: item.category,
+      subtype: item.subtype ?? null,
+      itineraryFrom: item.itineraryFrom ?? '',
+      itineraryTo: item.itineraryTo ?? '',
+      startsAt: this.toInputDateTime(item.startsAt),
+      endsAt: this.toInputDateTime(item.endsAt),
+      requestedAmount: Number(item.requestedAmount),
+      isTraceable: item.isTraceable,
+      description: item.description,
+    });
+    this.revokePreviewUrl();
+    this.receiptError.set(false);
+    if (!id) return;
+
+    this.isReceiptLoading.set(true);
+    this.refundService.downloadReceipt(id, item.id).subscribe({
+      next: (blob) => {
+        const fileURL = URL.createObjectURL(blob);
+        this.receiptPreview.set({
+          url: this.sanitizer.bypassSecurityTrustResourceUrl(fileURL),
+          fileURL,
+          isPdf: blob.type === 'application/pdf',
+          filename: item.receiptOriginalFilename,
+        });
+        this.isReceiptLoading.set(false);
+      },
+      error: () => {
+        this.isReceiptLoading.set(false);
+        this.receiptError.set(true);
+        this.toastService.showError('Could not load the receipt file.', 'Preview Error');
+      },
+    });
   }
 
-  closeAddModal(): void {
-    this.isAddModalOpen.set(false);
+  get currentSubtypes(): { value: ExpenseSubtype; label: string }[] {
+    const cat = this.editForm.get('category')?.value as ExpenseCategory | null;
+    return cat ? this.subtypeMap[cat] ?? [] : [];
   }
 
-  onItemAdded(item: RefundItemDTO): void {
-    this.items.update((current) => [...current, item]);
-    this.closeAddModal();
+  onEditCategoryChange(): void {
+    const cat = this.editForm.get('category')?.value as ExpenseCategory;
+    const options = this.subtypeMap[cat] ?? [];
+    this.editForm.patchValue({
+      subtype: options[0]?.value ?? null,
+      itineraryFrom: cat === ExpenseCategory.TRANSPORT ? this.editForm.value.itineraryFrom : '',
+      itineraryTo: cat === ExpenseCategory.TRANSPORT ? this.editForm.value.itineraryTo : '',
+      endsAt: cat === ExpenseCategory.TRANSPORT || cat === ExpenseCategory.ACCOMMODATION ? this.editForm.value.endsAt : '',
+    });
+  }
+
+  onReplaceReceipt(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    this.revokePreviewUrl();
+    this.receiptError.set(false);
+    const fileURL = URL.createObjectURL(file);
+    this.receiptPreview.set({
+      url: this.sanitizer.bypassSecurityTrustResourceUrl(fileURL),
+      fileURL,
+      isPdf: file.type === 'application/pdf',
+      filename: file.name,
+    });
+  }
+
+  saveItemChanges(): void {
+    const current = this.selectedItem();
+    if (!current || this.editForm.invalid) {
+      this.editForm.markAllAsTouched();
+      return;
+    }
+    const v = this.editForm.value;
+    const cat = v.category as ExpenseCategory;
+    const updated: RefundItemDTO = {
+      ...current,
+      category: cat,
+      subtype: cat === ExpenseCategory.OTHER ? null : v.subtype,
+      itineraryFrom: cat === ExpenseCategory.TRANSPORT ? v.itineraryFrom?.trim() || null : null,
+      itineraryTo: cat === ExpenseCategory.TRANSPORT ? v.itineraryTo?.trim() || null : null,
+      startsAt: v.startsAt,
+      endsAt: cat === ExpenseCategory.TRANSPORT || cat === ExpenseCategory.ACCOMMODATION ? v.endsAt || null : null,
+      requestedAmount: Number(v.requestedAmount),
+      isTraceable: Boolean(v.isTraceable),
+      description: String(v.description).trim(),
+      receiptOriginalFilename: this.receiptPreview()?.filename ?? current.receiptOriginalFilename,
+    };
+    this.items.update((list) => list.map((it) => (it.id === updated.id ? updated : it)));
+    this.toastService.showSuccess('Expense item updated.', 'Saved');
+    this.closeItemModal();
+  }
+
+  closeItemModal(): void {
+    this.selectedItem.set(null);
+    this.isReceiptLoading.set(false);
+    this.receiptError.set(false);
+    this.revokePreviewUrl();
+  }
+
+  private revokePreviewUrl(): void {
+    const current = this.receiptPreview();
+    if (current) URL.revokeObjectURL(current.fileURL);
+    this.receiptPreview.set(null);
+  }
+
+  private toInputDateTime(val?: string | null): string {
+    return val ? val.slice(0, 16) : '';
+  }
+
+  openAddModal(): void { this.isAddModalOpen.set(true); }
+  closeAddModal(): void { this.isAddModalOpen.set(false); }
+  onItemAdded(item: RefundItemDTO): void { this.items.update((c) => [...c, item]); this.closeAddModal(); }
+
+  formatCategory(cat: ExpenseCategory): string {
+    const labels: Record<ExpenseCategory, string> = {
+      [ExpenseCategory.TRANSPORT]: 'Transport',
+      [ExpenseCategory.ACCOMMODATION]: 'Accommodation',
+      [ExpenseCategory.MEALS]: 'Meals',
+      [ExpenseCategory.OTHER]: 'Other',
+    };
+    return labels[cat] ?? cat;
   }
 }
