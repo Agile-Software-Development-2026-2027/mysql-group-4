@@ -87,7 +87,7 @@ export class RefundService {
     refundId: string,
     payload: RefundItemFilterPayload,
     page: number = 0,
-    size: number = 50
+    size: number = 5
   ): Observable<Page<RefundItemDTO>> {
     const params = new HttpParams().set('page', page).set('size', size);
     return this.http.post<Page<RefundItemDTO>>(
