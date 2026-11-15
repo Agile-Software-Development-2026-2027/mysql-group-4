@@ -20,6 +20,13 @@ export class MissionService {
     );
   }
 
+  getMissionById(missionId: string): Observable<MissionDTO> {
+    return this.http.get<MissionDTO>(
+      `${this.baseUrl}/${missionId}`,
+      { withCredentials: true }
+    );
+  }
+
   getPendingMissions(fundManagerId?: string): Observable<Page<MissionDTO>> {
     const filters = fundManagerId ? { fund_manager_id: fundManagerId } : {};
     return this.http.post<Page<MissionDTO>>(

@@ -2,7 +2,7 @@ import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular
 import { CommonModule, DatePipe, DecimalPipe, Location } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 
 import { Topbar } from '../../components/topbar/topbar';
@@ -15,7 +15,7 @@ import { ToastService } from '../../services/toast.service';
 @Component({
   selector: 'app-refund-request',
   standalone: true,
-  imports: [CommonModule, DatePipe, DecimalPipe, ReactiveFormsModule, Topbar, AddRefundItemModal],
+  imports: [CommonModule, DatePipe, DecimalPipe, ReactiveFormsModule, RouterLink, Topbar, AddRefundItemModal],
   templateUrl: './refund-request.html',
   styleUrl: './refund-request.scss',
 })
