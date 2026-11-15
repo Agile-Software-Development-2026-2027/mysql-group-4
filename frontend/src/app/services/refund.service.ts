@@ -9,6 +9,7 @@ import {
   RefundItemCreatePayload,
   RefundItemDTO,
   RefundItemFilterPayload,
+  RefundItemUpdatePayload,
   RefundReceiptUploadDTO,
   RefundRequestCreatePayload,
   RefundRequestDTO,
@@ -78,6 +79,18 @@ export class RefundService {
   createRefundItem(refundId: string, payload: RefundItemCreatePayload): Observable<RefundItemDTO> {
     return this.http.post<RefundItemDTO>(
       API_CONFIG.endpoints.refunds.items(refundId),
+      payload,
+      { withCredentials: true }
+    );
+  }
+
+  updateRefundItem(
+    refundId: string,
+    itemId: string,
+    payload: RefundItemUpdatePayload
+  ): Observable<RefundItemDTO> {
+    return this.http.patch<RefundItemDTO>(
+      API_CONFIG.endpoints.refunds.item(refundId, itemId),
       payload,
       { withCredentials: true }
     );

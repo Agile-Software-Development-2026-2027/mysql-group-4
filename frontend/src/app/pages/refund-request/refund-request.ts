@@ -8,7 +8,7 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { Topbar } from '../../components/topbar/topbar';
 import { AddRefundItemModal } from './components/add-refund-item-modal/add-refund-item-modal';
 import { API_CONFIG } from '../../core/config/api.config';
-import { ExpenseCategory, ExpenseSubtype, MissionDTO, RefundItemDTO, RefundItemFilterPayload, RefundRequestDTO } from '../../core/models';
+import { ExpenseCategory, ExpenseSubtype, MissionDTO, RefundItemDTO, RefundItemFilterPayload, RefundItemUpdatePayload, RefundRequestDTO } from '../../core/models';
 import { RefundService } from '../../services/refund.service';
 import { ToastService } from '../../services/toast.service';
 
@@ -60,8 +60,10 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
 
   readonly selectedItem = signal<RefundItemDTO | null>(null);
   readonly isReceiptLoading = signal(false);
+  readonly isSaving = signal(false);
   readonly receiptError = signal(false);
   readonly receiptPreview = signal<{ url: SafeResourceUrl; fileURL: string; isPdf: boolean; filename: string } | null>(null);
+  readonly replacementFile = signal<File | null>(null);
 
   editForm: FormGroup = this.fb.group({
     category: [ExpenseCategory.TRANSPORT, Validators.required],
@@ -210,6 +212,7 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
   openItemModal(item: RefundItemDTO): void {
     const id = this.refundId();
     this.selectedItem.set(item);
+    this.replacementFile.set(null);
     this.editForm.reset({
       category: item.category,
       subtype: item.subtype ?? null,
@@ -221,9 +224,10 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
       isTraceable: item.isTraceable,
       description: item.description,
     });
+    this.updateFormValidators(item.category);
     this.revokePreviewUrl();
     this.receiptError.set(false);
-    if (!id) return;
+    if (!id || !item.receiptFilePath) return;
 
     this.isReceiptLoading.set(true);
     this.refundService.downloadReceipt(id, item.id).subscribe({
@@ -250,21 +254,52 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
     return cat ? this.subtypeMap[cat] ?? [] : [];
   }
 
+  private updateFormValidators(cat: ExpenseCategory): void {
+    const subtypeCtrl = this.editForm.get('subtype');
+    const fromCtrl = this.editForm.get('itineraryFrom');
+    const toCtrl = this.editForm.get('itineraryTo');
+    const endsAtCtrl = this.editForm.get('endsAt');
+
+    subtypeCtrl?.clearValidators();
+    fromCtrl?.clearValidators();
+    toCtrl?.clearValidators();
+    endsAtCtrl?.clearValidators();
+
+    if (cat === ExpenseCategory.TRANSPORT) {
+      subtypeCtrl?.setValidators([Validators.required]);
+      fromCtrl?.setValidators([Validators.required]);
+      toCtrl?.setValidators([Validators.required]);
+      endsAtCtrl?.setValidators([Validators.required]);
+    } else if (cat === ExpenseCategory.ACCOMMODATION) {
+      subtypeCtrl?.setValidators([Validators.required]);
+      endsAtCtrl?.setValidators([Validators.required]);
+    } else if (cat === ExpenseCategory.MEALS) {
+      subtypeCtrl?.setValidators([Validators.required]);
+    }
+
+    subtypeCtrl?.updateValueAndValidity();
+    fromCtrl?.updateValueAndValidity();
+    toCtrl?.updateValueAndValidity();
+    endsAtCtrl?.updateValueAndValidity();
+  }
+
   onEditCategoryChange(): void {
     const cat = this.editForm.get('category')?.value as ExpenseCategory;
     const options = this.subtypeMap[cat] ?? [];
     this.editForm.patchValue({
-      subtype: options[0]?.value ?? null,
+      subtype: cat === ExpenseCategory.OTHER ? null : options[0]?.value ?? null,
       itineraryFrom: cat === ExpenseCategory.TRANSPORT ? this.editForm.value.itineraryFrom : '',
       itineraryTo: cat === ExpenseCategory.TRANSPORT ? this.editForm.value.itineraryTo : '',
       endsAt: cat === ExpenseCategory.TRANSPORT || cat === ExpenseCategory.ACCOMMODATION ? this.editForm.value.endsAt : '',
     });
+    this.updateFormValidators(cat);
   }
 
   onReplaceReceipt(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
+    this.replacementFile.set(file);
     this.revokePreviewUrl();
     this.receiptError.set(false);
     const fileURL = URL.createObjectURL(file);
@@ -276,36 +311,87 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
     });
   }
 
+  private formatToIso(val?: string | null): string | null {
+    if (!val) return null;
+    const trimmed = val.trim();
+    if (!trimmed) return null;
+    return trimmed.length === 16 ? `${trimmed}:00` : trimmed;
+  }
+
   saveItemChanges(): void {
     const current = this.selectedItem();
-    if (!current || this.editForm.invalid) {
+    const refundId = this.refundId();
+    if (!current || !refundId || this.editForm.invalid || this.isSaving()) {
       this.editForm.markAllAsTouched();
       return;
     }
+
     const v = this.editForm.value;
     const cat = v.category as ExpenseCategory;
-    const updated: RefundItemDTO = {
-      ...current,
+    const startsAt = this.formatToIso(v.startsAt);
+    const endsAt = cat === ExpenseCategory.TRANSPORT || cat === ExpenseCategory.ACCOMMODATION
+      ? this.formatToIso(v.endsAt)
+      : null;
+
+    if (endsAt && startsAt && endsAt < startsAt) {
+      this.toastService.showError('End date cannot be earlier than start date.', 'Invalid Date');
+      return;
+    }
+
+    const payload: RefundItemUpdatePayload = {
       category: cat,
       subtype: cat === ExpenseCategory.OTHER ? null : v.subtype,
       itineraryFrom: cat === ExpenseCategory.TRANSPORT ? v.itineraryFrom?.trim() || null : null,
       itineraryTo: cat === ExpenseCategory.TRANSPORT ? v.itineraryTo?.trim() || null : null,
-      startsAt: v.startsAt,
-      endsAt: cat === ExpenseCategory.TRANSPORT || cat === ExpenseCategory.ACCOMMODATION ? v.endsAt || null : null,
+      startsAt: startsAt ?? undefined,
+      endsAt,
       requestedAmount: Number(v.requestedAmount),
       isTraceable: Boolean(v.isTraceable),
       description: String(v.description).trim(),
-      receiptOriginalFilename: this.receiptPreview()?.filename ?? current.receiptOriginalFilename,
     };
-    this.items.update((list) => list.map((it) => (it.id === updated.id ? updated : it)));
-    this.toastService.showSuccess('Expense item updated.', 'Saved');
-    this.closeItemModal();
+
+    this.isSaving.set(true);
+
+    const newReceipt = this.replacementFile();
+    if (newReceipt) {
+      this.refundService.uploadReceipt(refundId, newReceipt).subscribe({
+        next: (uploaded) => {
+          payload.receiptFilePath = uploaded.receiptFilePath;
+          payload.receiptOriginalFilename = uploaded.receiptOriginalFilename;
+          this.executeItemUpdate(refundId, current.id, payload);
+        },
+        error: () => {
+          this.isSaving.set(false);
+          this.toastService.showError('Could not upload the new receipt file.', 'Upload Error');
+        },
+      });
+    } else {
+      this.executeItemUpdate(refundId, current.id, payload);
+    }
+  }
+
+  private executeItemUpdate(refundId: string, itemId: string, payload: RefundItemUpdatePayload): void {
+    this.refundService.updateRefundItem(refundId, itemId, payload).subscribe({
+      next: (updatedItem) => {
+        this.items.update((list) => list.map((it) => (it.id === updatedItem.id ? updatedItem : it)));
+        this.loadFilteredItems();
+        this.toastService.showSuccess('Expense item updated successfully.', 'Saved');
+        this.isSaving.set(false);
+        this.closeItemModal();
+      },
+      error: () => {
+        this.isSaving.set(false);
+        this.toastService.showError('Could not save expense item changes.', 'Save Error');
+      },
+    });
   }
 
   closeItemModal(): void {
     this.selectedItem.set(null);
     this.isReceiptLoading.set(false);
+    this.isSaving.set(false);
     this.receiptError.set(false);
+    this.replacementFile.set(null);
     this.revokePreviewUrl();
   }
 

@@ -31,6 +31,8 @@ export const API_CONFIG = {
         `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/items/${itemId}/receipt`,
       receipts: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/receipts`,
       items: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/items`,
+      item: (refundId: string, itemId: string) =>
+        `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/items/${itemId}`,
       itemsFilter: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/items/filter`,
     },
   },

@@ -19,24 +19,7 @@
         </div>
       </div>
       <div class="receipts-section">
-        <div class="table-wrapper">
-          <table class="table-skeleton" aria-hidden="true">
-            <thead>
-              <tr><th>Category</th><th>Description</th><th>Date</th><th>Amount</th><th><span class="sr-only">Actions</span></th></tr>
-            </thead>
-            <tbody>
-              @for (placeholder of skeletonPlaceholders; track placeholder) {
-                <tr class="skeleton-row">
-                  <td><div class="sk sk-pill"></div></td>
-                  <td><div class="sk sk-desc"></div></td>
-                  <td><div class="sk sk-date"></div></td>
-                  <td><div class="sk sk-amount"></div></td>
-                  <td class="actions-cell"><div class="sk-actions"><div class="sk sk-btn"></div><div class="sk sk-btn"></div></div></td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
+        <ng-container *ngTemplateOutlet="receiptsSkeleton"></ng-container>
       </div>
     </section>
   } @else if (loadError()) {
@@ -191,25 +174,7 @@
         </div>
 
         @if (isFiltering()) {
-          <div tabindex="0" role="region" aria-labelledby="receipts-table-caption" class="table-wrapper">
-            <table class="table-skeleton" aria-busy="true" aria-label="Loading receipts">
-              <caption id="receipts-table-caption" class="sr-only">Loading receipts</caption>
-              <thead>
-                <tr><th>Category</th><th>Description</th><th>Date</th><th>Amount</th><th><span class="sr-only">Actions</span></th></tr>
-              </thead>
-              <tbody>
-                @for (placeholder of skeletonPlaceholders; track placeholder) {
-                  <tr class="skeleton-row" aria-hidden="true">
-                    <td data-label="Category"><div class="sk sk-pill"></div></td>
-                    <td data-label="Description"><div class="sk sk-desc"></div></td>
-                    <td data-label="Date"><div class="sk sk-date"></div></td>
-                    <td data-label="Amount"><div class="sk sk-amount"></div></td>
-                    <td class="actions-cell"><div class="sk-actions"><div class="sk sk-btn"></div><div class="sk sk-btn"></div></div></td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
+          <ng-container *ngTemplateOutlet="receiptsSkeleton"></ng-container>
         } @else if (filteredItems().length === 0) {
           <div class="empty-state">
             <h3>No receipts match the active filters</h3>
@@ -440,8 +405,10 @@
         </div>
 
         <footer class="modal-footer">
-          <button class="btn btn--outline" type="button" (click)="closeItemModal()">Cancel</button>
-          <button class="btn" type="button" (click)="saveItemChanges()" [disabled]="editForm.invalid">Save Changes</button>
+          <button class="btn btn--outline" type="button" (click)="closeItemModal()" [disabled]="isSaving()">Cancel</button>
+          <button class="btn" type="button" (click)="saveItemChanges()" [disabled]="editForm.invalid || isSaving()">
+            {{ isSaving() ? 'Saving...' : 'Save Changes' }}
+          </button>
         </footer>
       </div>
     </div>
@@ -456,4 +423,26 @@
       (closed)="closeAddModal()"
     ></app-add-refund-item-modal>
   }
+
+  <ng-template #receiptsSkeleton>
+    <div tabindex="0" role="region" aria-labelledby="receipts-table-caption" class="table-wrapper">
+      <table class="table-skeleton" aria-busy="true" aria-label="Loading receipts">
+        <caption id="receipts-table-caption" class="sr-only">Loading receipts</caption>
+        <thead>
+          <tr><th>Category</th><th>Description</th><th>Date</th><th>Amount</th><th><span class="sr-only">Actions</span></th></tr>
+        </thead>
+        <tbody>
+          @for (placeholder of skeletonPlaceholders; track placeholder) {
+            <tr class="skeleton-row" aria-hidden="true">
+              <td data-label="Category"><div class="sk sk-pill"></div></td>
+              <td data-label="Description"><div class="sk sk-desc"></div></td>
+              <td data-label="Date"><div class="sk sk-date"></div></td>
+              <td data-label="Amount"><div class="sk sk-amount"></div></td>
+              <td class="actions-cell"><div class="sk-actions"><div class="sk sk-btn"></div><div class="sk sk-btn"></div></div></td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </ng-template>
 </main>
