@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 
 from app.db.refund_item import RefundItem
 from app.db.refund_request import RefundRequest
+from app.schemas.refund import RefundFilterDTO
 from app.db.mission import Mission
 
 
@@ -26,10 +27,11 @@ class RefundRepository:
         stmt = (
             select(RefundRequest)
             .where(RefundRequest.id == refund_id)
-            .options(selectinload(RefundRequest.items),
-                     selectinload(RefundRequest.mission).selectinload(Mission.requester),
-                     )
+            .options(
+                selectinload(RefundRequest.items),
+                selectinload(RefundRequest.mission).selectinload(Mission.requester),
             )
+        )
         return (await session.execute(stmt)).scalar_one_or_none()
 
     async def find_by_mission_id(
@@ -61,6 +63,21 @@ class RefundRepository:
     ) -> None:
         await session.delete(item)
         await session.flush()
+
+    async def get_filtered_refunds(self, session: AsyncSession, filters: RefundFilterDTO) -> list[RefundRequest]:
+        query = (
+            select(RefundRequest)
+            .options(
+                selectinload(RefundRequest.mission).selectinload(Mission.requester),
+                selectinload(RefundRequest.items)
+            )
+        )
+
+        if filters and filters.status:
+            query = query.where(RefundRequest.status == filters.status)
+
+        result = await session.execute(query)
+        return list(result.scalars().unique().all())
 
 
 refund_repository = RefundRepository()

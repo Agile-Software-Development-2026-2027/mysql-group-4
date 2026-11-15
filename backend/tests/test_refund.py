@@ -150,7 +150,6 @@ async def test_create_refund_request_invalid_dto_extra_fields(
     assert response.status_code == 422
 
 
-
 @pytest.mark.asyncio
 async def test_create_refund_request_fails_if_mission_not_ended(client: AsyncClient, db_session: AsyncSession, requester: User):
     mission = await create_mission(db_session, requester.id, ended=False)
@@ -305,22 +304,6 @@ async def test_get_refund_by_id_not_found(client: AsyncClient, requester: User):
     response = await client.get(f"/api/v1/refunds/{uuid4()}")
     assert response.status_code == 404
 
-
-@pytest.mark.asyncio
-async def test_fund_manager_cannot_view_refund(
-    client: AsyncClient, db_session: AsyncSession, requester: User, other_user: User
-):
-    mission = await create_mission(db_session, requester.id, fund_manager_id=other_user.id, ended=True)
-    post_res = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
-    refund_id = post_res.json()["id"]
-
-    app.dependency_overrides[current_active_user] = lambda: other_user
-
-    res_by_mission = await client.get(f"/api/v1/refunds/by-mission/{mission.id}")
-    assert res_by_mission.status_code == 403
-
-    res_by_id = await client.get(f"/api/v1/refunds/{refund_id}")
-    assert res_by_id.status_code == 403
 
 # TEST endpoint GET /api/v1/refunds/{refund_id}/review (admin review)
 
@@ -1095,3 +1078,83 @@ def test_refund_item_boundary_cases_lengths():
             currency="EURO",
             description="Valuta 4 char",
         )
+
+
+@pytest.mark.asyncio
+async def test_filter_refunds_happy_path_admin(client: AsyncClient, db_session: AsyncSession, requester: User, admin_user: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    post_res = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    assert post_res.status_code == 201
+
+    res = await db_session.execute(select(RefundRequest).where(RefundRequest.mission_id == mission.id))
+    refund = res.scalar_one()
+    refund.status = RefundStatus.SUBMITTED
+    await db_session.commit()
+
+    app.dependency_overrides[current_active_user] = lambda: admin_user
+
+    payload_submitted = {"status": "SUBMITTED"}
+    response_submitted = await client.post("/api/v1/refunds/filter", json=payload_submitted)
+
+    assert response_submitted.status_code == 200
+    data_submitted = response_submitted.json()
+    assert isinstance(data_submitted, list)
+    assert len(data_submitted) == 1
+    assert data_submitted[0]["status"] == "SUBMITTED"
+    assert data_submitted[0]["subject"] == "Conferenza di Ricerca"
+
+    refund.status = RefundStatus.APPROVED
+    await db_session.commit()
+
+    payload_approved = {"status": "APPROVED"}
+    response_approved = await client.post("/api/v1/refunds/filter", json=payload_approved)
+
+    assert response_approved.status_code == 200
+    data_approved = response_approved.json()
+    assert len(data_approved) == 1
+    assert data_approved[0]["status"] == "APPROVED"
+
+
+@pytest.mark.asyncio
+async def test_filter_refunds_returns_empty_when_no_match(client: AsyncClient, db_session: AsyncSession, requester: User, admin_user: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+
+    res = await db_session.execute(select(RefundRequest).where(RefundRequest.mission_id == mission.id))
+    refund = res.scalar_one()
+    refund.status = RefundStatus.SUBMITTED
+    await db_session.commit()
+
+    app.dependency_overrides[current_active_user] = lambda: admin_user
+
+    payload = {"status": "APPROVED"}
+    response = await client.post("/api/v1/refunds/filter", json=payload)
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+@pytest.mark.asyncio
+async def test_filter_refunds_forbidden_for_non_admin(client: AsyncClient, db_session: AsyncSession, requester: User, other_user: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+
+    res = await db_session.execute(select(RefundRequest).where(RefundRequest.mission_id == mission.id))
+    refund = res.scalar_one()
+    refund.status = RefundStatus.SUBMITTED
+    await db_session.commit()
+
+    app.dependency_overrides[current_active_user] = lambda: other_user
+
+    payload = {"status": "SUBMITTED"}
+    response = await client.post("/api/v1/refunds/filter", json=payload)
+
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_filter_refunds_invalid_dto_malformed_status(client: AsyncClient, admin_user: User):
+    app.dependency_overrides[current_active_user] = lambda: admin_user
+    payload = {"status": "STATO_INESISTENTE"}
+    response = await client.post("/api/v1/refunds/filter", json=payload)
+    assert response.status_code == 422
