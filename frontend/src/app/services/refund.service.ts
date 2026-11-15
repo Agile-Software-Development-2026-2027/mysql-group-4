@@ -5,6 +5,8 @@ import { Observable } from 'rxjs';
 import { API_CONFIG } from '../core/config/api.config';
 import { Page } from '../core/models/page';
 import {
+  CurrencyConversionDTO,
+  MissionCurrencyProfileDTO,
   RefundApprovePayload,
   RefundItemCreatePayload,
   RefundItemDTO,
@@ -122,6 +124,20 @@ export class RefundService {
       API_CONFIG.endpoints.refunds.itemsFilter(refundId),
       payload,
       { params, withCredentials: true }
+    );
+  }
+
+  convertCurrencyToEur(amount: number, currency: string): Observable<CurrencyConversionDTO> {
+    return this.http.get<CurrencyConversionDTO>(API_CONFIG.endpoints.refunds.convertCurrency, {
+      params: { amount: amount.toString(), currency },
+      withCredentials: true,
+    });
+  }
+
+  getCurrencyProfile(refundId: string): Observable<MissionCurrencyProfileDTO> {
+    return this.http.get<MissionCurrencyProfileDTO>(
+      API_CONFIG.endpoints.refunds.currencyProfile(refundId),
+      { withCredentials: true }
     );
   }
 }

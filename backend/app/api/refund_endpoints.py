@@ -1,11 +1,13 @@
+from decimal import Decimal
 import mimetypes
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Query, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 
-from app.api.deps import get_refund_service
+from app.api.deps import get_currency_service, get_refund_service
 from app.db.models import User
+from app.schemas.currency import CurrencyConversionDTO, MissionCurrencyProfileDTO
 from app.schemas.page import Page, PageRequest
 from app.schemas.refund import (
     RefundApproveDTO,
@@ -21,11 +23,13 @@ from app.schemas.refund import (
     RefundOverviewDTO
 )
 from app.security import current_active_user
+from app.services.currency_service import CurrencyConversionService
 from app.services.refund_service import RefundService
 
 refund_router = APIRouter(prefix="/refunds", tags=["refunds"])
 
 RefundServiceDependency = Annotated[RefundService, Depends(get_refund_service)]
+CurrencyServiceDependency = Annotated[CurrencyConversionService, Depends(get_currency_service)]
 CurrentUser = Annotated[User, Depends(current_active_user)]
 
 
@@ -122,3 +126,34 @@ async def delete_refund_item(
     service: RefundServiceDependency,
 ) -> None:
     await service.delete_refund_item(refund_request_id=refund_id, item_id=item_id, user=user)
+@refund_router.get("/convert-currency", response_model=CurrencyConversionDTO, status_code=status.HTTP_200_OK, summary="Convert foreign currency amount to EUR")
+async def convert_currency_to_eur(
+    user: CurrentUser,
+    currency_service: CurrencyServiceDependency,
+    amount: Decimal = Query(..., gt=0),
+    currency: str = Query(..., min_length=3, max_length=5),
+) -> CurrencyConversionDTO:
+    conversion = await currency_service.convert_to_eur(amount=amount, currency=currency)
+    if conversion is None:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Unable to retrieve exchange rate for currency '{currency.upper()}'.",
+        )
+    return conversion
+
+
+@refund_router.get("/{refund_id}/currency-profile", response_model=MissionCurrencyProfileDTO, status_code=status.HTTP_200_OK, summary="Get default currency for a refund's mission destination")
+async def get_refund_currency_profile(
+    refund_id: UUID,
+    user: CurrentUser,
+    refund_service: RefundServiceDependency,
+    currency_service: CurrencyServiceDependency,
+) -> MissionCurrencyProfileDTO:
+    refund_request = await refund_service.get_refund_request_by_id(refund_id, user)
+    mission = await refund_service.mission_repository.find_by_id(refund_request.mission_id)
+    destination = mission.destination if mission else None
+    default_currency = await currency_service.resolve_currency_for_destination(destination)
+    return MissionCurrencyProfileDTO(
+        destination=destination,
+        default_currency=default_currency,
+    )

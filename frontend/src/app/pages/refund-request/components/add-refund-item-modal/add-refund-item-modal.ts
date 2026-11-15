@@ -23,6 +23,7 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { map, of, switchMap } from 'rxjs';
 
 import {
+  CurrencyConversionDTO,
   ExpenseCategory,
   ExpenseSubtype,
   MissionDTO,
@@ -84,6 +85,10 @@ export class AddRefundItemModal implements OnInit, OnChanges {
   isDragging = signal(false);
   isSubmitting = signal(false);
 
+  isConvertingCurrency = signal(false);
+  conversionInfo = signal<CurrencyConversionDTO | null>(null);
+  foreignCurrency = signal<string>('EUR');
+  readonly availableCurrencies = ['EUR', 'USD', 'GBP', 'CHF', 'RUB', 'CNY', 'TWD', 'JPY', 'AED', 'CAD', 'AUD'];
   isOcrPrefilled = signal(false);
   minDateTime = signal<string | null>(null);
   maxDateTime = signal<string | null>(null);
@@ -116,6 +121,7 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     this.initForm();
     this.setupCategoryChangeListener();
     this.loadMissionBounds();
+    this.loadMissionCurrencyProfile();
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -428,6 +434,66 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     this.uploadToMinio(file);
   }
 
+  private loadMissionCurrencyProfile(): void {
+    if (!this.refundId) {
+      return;
+    }
+    this.refundService.getCurrencyProfile(this.refundId).subscribe({
+      next: (profile) => {
+        if (profile?.defaultCurrency) {
+          this.foreignCurrency.set(profile.defaultCurrency);
+        }
+      },
+      error: (err) => {
+        console.warn('Could not load mission currency profile:', err);
+      },
+    });
+  }
+
+  onForeignCurrencyChange(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    this.foreignCurrency.set(select.value || 'EUR');
+  }
+
+  convertToEur(): void {
+    const rawAmount = Number(this.form.get('requestedAmount')?.value);
+    const curr = this.foreignCurrency();
+    if (!rawAmount || rawAmount <= 0) {
+      this.toastService.showError('Enter a valid amount to convert.', 'Invalid Amount');
+      return;
+    }
+    if (curr === 'EUR') {
+      return;
+    }
+
+    this.isConvertingCurrency.set(true);
+    this.refundService.convertCurrencyToEur(rawAmount, curr).subscribe({
+      next: (res) => {
+        this.isConvertingCurrency.set(false);
+        this.conversionInfo.set(res);
+        this.form.patchValue({
+          requestedAmount: res.convertedAmount,
+          currency: 'EUR',
+        });
+        const currentDesc = (this.form.get('description')?.value || '').trim();
+        const note = `[Converted from ${res.originalAmount} ${res.originalCurrency} @ ${res.rate}]`;
+        if (!currentDesc.includes(note)) {
+          const nextDesc = currentDesc ? `${currentDesc} ${note}` : note;
+          this.form.patchValue({ description: nextDesc.slice(0, 255) });
+        }
+        this.toastService.showSuccess(
+          `${res.originalAmount} ${res.originalCurrency} converted to €${res.convertedAmount}`,
+          'Currency Converted'
+        );
+      },
+      error: (err) => {
+        this.isConvertingCurrency.set(false);
+        const msg = err?.error?.detail ?? 'Unable to convert currency right now.';
+        this.toastService.showError(msg, 'Conversion Failed');
+      },
+    });
+  }
+
   private uploadToMinio(file: File): void {
     this.isUploading.set(true);
     this.refundService.uploadReceipt(this.refundId, file).subscribe({
@@ -451,7 +517,10 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     this.uploadedReceipt.set(null);
     this.uploadError.set(null);
     this.isOcrPrefilled.set(false);
+    this.isConvertingCurrency.set(false);
+    this.conversionInfo.set(null);
   }
+
 
   private cleanPreviews(): void {
     if (this.previewUrl()) {
