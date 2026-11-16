@@ -367,13 +367,33 @@
             <div class="form-row">
               <div class="form-group">
                 <label for="editStart">Start Date & Time *</label>
-                <input id="editStart" class="form-control" type="datetime-local" formControlName="startsAt" />
+                <input id="editStart" class="form-control" type="datetime-local" formControlName="startsAt"
+                  [min]="missionMinDateTime()" [max]="missionMaxDateTime()" [class.is-invalid]="
+                    (editForm.get('startsAt')?.invalid || editForm.hasError('startOutsideMission')) &&
+                    editForm.get('startsAt')?.touched
+                  " />
+                @if (editForm.get('startsAt')?.invalid && editForm.get('startsAt')?.touched) {
+                <span class="form-error">Start date and time is required.</span>
+                } @else if (editForm.hasError('startOutsideMission') && editForm.get('startsAt')?.touched) {
+                <span class="form-error">Must be within the mission period ({{ missionPeriodLabel() }}).</span>
+                }
               </div>
               @if (editForm.value.category === ExpenseCategory.TRANSPORT || editForm.value.category ===
               ExpenseCategory.ACCOMMODATION) {
               <div class="form-group">
                 <label for="editEnd">End Date & Time</label>
-                <input id="editEnd" class="form-control" type="datetime-local" formControlName="endsAt" />
+                <input id="editEnd" class="form-control" type="datetime-local" formControlName="endsAt"
+                  [min]="missionMinDateTime()" [max]="missionMaxDateTime()" [class.is-invalid]="
+                    (editForm.get('endsAt')?.invalid || editForm.hasError('endOutsideMission') || editForm.hasError('endBeforeStart')) &&
+                    editForm.get('endsAt')?.touched
+                  " />
+                @if (editForm.get('endsAt')?.invalid && editForm.get('endsAt')?.touched) {
+                <span class="form-error">End date and time is required.</span>
+                } @else if (editForm.hasError('endOutsideMission') && editForm.get('endsAt')?.touched) {
+                <span class="form-error">Must be within the mission period ({{ missionPeriodLabel() }}).</span>
+                } @else if (editForm.hasError('endBeforeStart') && editForm.get('endsAt')?.touched) {
+                <span class="form-error">End date and time must be after the start.</span>
+                }
               </div>
               }
             </div>

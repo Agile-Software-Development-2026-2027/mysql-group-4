@@ -1240,6 +1240,43 @@ async def test_update_refund_item_success_and_recalculates_total(client: AsyncCl
 
 
 @pytest.mark.asyncio
+async def test_update_refund_item_replacing_receipt_deletes_old_file(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    create_resp = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = UUID(create_resp.json()["id"])
+
+    item = _make_test_item(refund_id, requester.id, Decimal("20.00"))
+    db_session.add(item)
+    await db_session.commit()
+
+    with patch("app.services.refund_service.minio_client") as mock_minio:
+        resp = await client.patch(
+            f"/api/v1/refunds/{refund_id}/items/{item.id}",
+            json={"receiptFilePath": "receipts/new.pdf", "receiptOriginalFilename": "new.pdf"},
+        )
+    assert resp.status_code == 200
+    assert resp.json()["receiptFilePath"] == "receipts/new.pdf"
+    mock_minio.remove_object.assert_called_once()
+    assert mock_minio.remove_object.call_args.kwargs["object_name"] == "receipts/r.pdf"
+
+
+@pytest.mark.asyncio
+async def test_update_refund_item_without_new_receipt_keeps_file(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    create_resp = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = UUID(create_resp.json()["id"])
+
+    item = _make_test_item(refund_id, requester.id, Decimal("20.00"))
+    db_session.add(item)
+    await db_session.commit()
+
+    with patch("app.services.refund_service.minio_client") as mock_minio:
+        resp = await client.patch(f"/api/v1/refunds/{refund_id}/items/{item.id}", json={"description": "Solo testo"})
+    assert resp.status_code == 200
+    mock_minio.remove_object.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_update_refund_item_forbidden_for_other_user(client: AsyncClient, db_session: AsyncSession, requester: User, other_user: User):
     mission = await create_mission(db_session, requester.id, ended=True)
     create_resp = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})

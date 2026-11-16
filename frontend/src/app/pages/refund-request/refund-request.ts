@@ -1,7 +1,15 @@
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe, DecimalPipe, Location } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
-import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import {
+  AbstractControl,
+  FormBuilder,
+  FormGroup,
+  ReactiveFormsModule,
+  ValidationErrors,
+  ValidatorFn,
+  Validators,
+} from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 
@@ -75,7 +83,7 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
     requestedAmount: [null, [Validators.required, Validators.min(0.01), Validators.max(10000)]],
     isTraceable: [true],
     description: ['', [Validators.required, Validators.maxLength(255)]],
-  });
+  }, { validators: [this.dateConsistencyValidator()] });
 
   readonly totalRequested = computed(() =>
     this.items().reduce((sum, item) => sum + Number(item.requestedAmount), 0)
@@ -123,6 +131,15 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
     () => this.selectedCategories().size === this.categories.length
   );
 
+  readonly missionMinDateTime = computed(() => this.toInputDateTime(this.mission()?.startsAt) || null);
+  readonly missionMaxDateTime = computed(() => this.toInputDateTime(this.mission()?.endsAt) || null);
+  readonly missionPeriodLabel = computed(() => {
+    const m = this.mission();
+    if (!m?.startsAt || !m?.endsAt) return '';
+    const fmt = (val: string) => new Date(val).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+    return `${fmt(m.startsAt)} – ${fmt(m.endsAt)}`;
+  });
+
   readonly filteredItems = signal<RefundItemDTO[]>([]);
   readonly isFiltering = signal(true);
   readonly pageSize = 5;
@@ -168,6 +185,11 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
     this.isFiltering.set(true);
     this.refundService.filterItems(id, payload, this.currentPage(), this.pageSize).subscribe({
       next: (page) => {
+        if (page.content.length === 0 && page.totalPages > 0 && page.number >= page.totalPages) {
+          this.currentPage.set(page.totalPages - 1);
+          this.loadFilteredItems(false);
+          return;
+        }
         this.filteredItems.set(page.content);
         this.totalPages.set(page.totalPages);
         this.totalFilteredCount.set(page.totalElements);
@@ -198,7 +220,12 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
         this.loadFilteredItems();
         this.http
           .get<MissionDTO>(`${API_CONFIG.baseUrl}/api/v1/missions/${data.missionId}`, { withCredentials: true })
-          .subscribe({ next: (m) => this.mission.set(m) });
+          .subscribe({
+            next: (m) => {
+              this.mission.set(m);
+              this.editForm.updateValueAndValidity();
+            },
+          });
       },
       error: () => {
         this.isLoading.set(false);
@@ -301,6 +328,39 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
     return trimmed.length === 16 ? `${trimmed}:00` : (trimmed || null);
   }
 
+  private isOutsideMission(val: string | null): boolean {
+    const m = this.mission();
+    if (!val || !m?.startsAt || !m?.endsAt) return false;
+    const date = new Date(val);
+    const missionStart = new Date(m.startsAt);
+    const missionEnd = new Date(m.endsAt);
+    missionStart.setSeconds(0, 0);
+    missionEnd.setSeconds(59, 999);
+    return date < missionStart || date > missionEnd;
+  }
+
+  private dateConsistencyValidator(): ValidatorFn {
+    return (group: AbstractControl): ValidationErrors | null => {
+      const errors: ValidationErrors = {};
+      const category = group.get('category')?.value as ExpenseCategory;
+      const startsAt = group.get('startsAt')?.value as string | null;
+      const endsAt = group.get('endsAt')?.value as string | null;
+
+      if (this.isOutsideMission(startsAt)) {
+        errors['startOutsideMission'] = true;
+      }
+      if (category === ExpenseCategory.TRANSPORT || category === ExpenseCategory.ACCOMMODATION) {
+        if (this.isOutsideMission(endsAt)) {
+          errors['endOutsideMission'] = true;
+        }
+        if (startsAt && endsAt && new Date(endsAt) <= new Date(startsAt)) {
+          errors['endBeforeStart'] = true;
+        }
+      }
+      return Object.keys(errors).length > 0 ? errors : null;
+    };
+  }
+
   saveItemChanges(): void {
     const current = this.selectedItem();
     const refundId = this.refundId();
@@ -313,11 +373,6 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
     const cat = v.category as ExpenseCategory;
     const startsAt = this.formatToIso(v.startsAt);
     const endsAt = cat === ExpenseCategory.TRANSPORT || cat === ExpenseCategory.ACCOMMODATION ? this.formatToIso(v.endsAt) : null;
-
-    if (endsAt && startsAt && endsAt < startsAt) {
-      this.toastService.showError('End date cannot be earlier than start date.', 'Invalid Date');
-      return;
-    }
 
     const payload: RefundItemUpdatePayload = {
       category: cat,
