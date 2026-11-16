@@ -57,7 +57,13 @@ class InvalidRefundDecisionError(ValueError):
     pass
 
 
-class FundLockedError(Exception):
+class FundInUseError(Exception):
     def __init__(self, fund_id: UUID):
         self.fund_id = fund_id
-        super().__init__(f"Fund {fund_id} is already used by another mission")
+        super().__init__(f"Fund {fund_id} is funding one or more missions")
+
+
+class FundAmountError(ValueError):
+    def __init__(self, fund_id: UUID, message: str):
+        self.fund_id = fund_id
+        super().__init__(message)

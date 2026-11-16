@@ -1,0 +1,67 @@
+<app-topbar></app-topbar>
+<main class="container">
+  <div class="dashboard-header">
+    <div class="header-text">
+      <h1>Refund Requests Overview</h1>
+      <p>Click on the categories to expand them and select a request to review and approve the expenses.</p>
+    </div>
+  </div>
+
+  <div class="accordion-container">
+    <div class="accordion-section" [class.is-open]="activeSection === 'pending'">
+      <button class="accordion-header pending" (click)="toggleSection('pending')">
+        <div class="header-title">
+          <h2>Pending Review</h2>
+          <span class="count-badge pending">{{ pendingRefunds().length }}</span>
+        </div>
+        <span class="chevron"></span>
+      </button>
+
+      <div class="accordion-content">
+        <div class="list-container">
+          @for (refund of pendingRefunds(); track refund.id) {
+            <a class="list-card status-pending" [routerLink]="['/refundreview', refund.id]">
+              <div class="card-info">
+                <div class="title-row">
+                  <span class="badge pending">Pending</span>
+                  <h3>{{ refund.subject }}</h3>
+                </div>
+                <p><strong>Requester:</strong> {{ refund.requesterName }} {{ refund.requesterSurname }} &nbsp;&bull;&nbsp; <strong>Submitted:</strong> {{ refund.submittedAt | date:'dd/MM/yyyy' }} &nbsp;&bull;&nbsp; <strong>Requested:</strong> € {{ refund.totalRequested | number:'1.2-2' }}</p>
+              </div>
+            </a>
+          } @empty {
+            <p class="empty-state">No pending refund requests.</p>
+          }
+        </div>
+      </div>
+    </div>
+
+    <div class="accordion-section" [class.is-open]="activeSection === 'approved'">
+      <button class="accordion-header approved" (click)="toggleSection('approved')">
+        <div class="header-title">
+          <h2>Approved Refunds</h2>
+          <span class="count-badge approved">{{ approvedRefunds().length }}</span>
+        </div>
+        <span class="chevron"></span>
+      </button>
+
+      <div class="accordion-content">
+        <div class="list-container">
+          @for (refund of approvedRefunds(); track refund.id) {
+            <a class="list-card status-approved" [routerLink]="['/refundreview', refund.id]">
+              <div class="card-info">
+                <div class="title-row">
+                  <span class="badge approved">Approved</span>
+                  <h3>{{ refund.subject }}</h3>
+                </div>
+                <p><strong>Requester:</strong> {{ refund.requesterName }} {{ refund.requesterSurname }} &nbsp;&bull;&nbsp; <strong>Approved:</strong> {{ refund.approvedAt | date:'dd/MM/yyyy' }} &nbsp;&bull;&nbsp; <strong>Reimbursed:</strong> € {{ refund.totalReimbursed | number:'1.2-2' }}</p>
+              </div>
+            </a>
+          } @empty {
+            <p class="empty-state">No approved refunds yet.</p>
+          }
+        </div>
+      </div>
+    </div>
+  </div>
+</main>

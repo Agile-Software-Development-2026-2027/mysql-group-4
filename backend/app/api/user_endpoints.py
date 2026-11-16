@@ -44,7 +44,7 @@ async def get_fund_managers(session: AsyncSession=Depends(get_async_session), us
     stmt = (
         select(User)
         .join(Fund, Fund.responsible_fc == User.fiscal_code)
-        .where(User.is_active == True, Fund.locked_by_mission_id.is_(None))
+        .where(User.is_active == True, Fund.amount > Fund.committed_amount)
         .distinct()
     )
     result=await session.execute(stmt)

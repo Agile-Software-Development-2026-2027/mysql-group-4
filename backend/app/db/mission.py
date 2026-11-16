@@ -56,6 +56,11 @@ class Mission(Base):
         nullable=False,
         index=True,
     )
+    fund_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("funds.id", name="missions_fund", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     requester: Mapped["User"] = relationship(
         back_populates="requested_missions",

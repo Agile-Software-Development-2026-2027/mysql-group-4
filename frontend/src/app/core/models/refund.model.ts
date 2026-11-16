@@ -136,3 +136,18 @@ export interface RefundItemUpdatePayload {
   receiptOriginalFilename?: string | null;
   description?: string;
 }
+export interface RefundFilterPayload {
+  status?: RefundStatus | null;
+}
+
+export interface RefundOverviewDTO {
+  id: string;
+  status: RefundStatus;
+  requesterName: string;
+  requesterSurname: string;
+  subject: string;
+  totalRequested: number | string;
+  totalReimbursed: number | string;
+  submittedAt?: string | null;
+  approvedAt?: string | null;
+}

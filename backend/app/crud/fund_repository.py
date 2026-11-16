@@ -1,7 +1,8 @@
 from collections.abc import Collection
+from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import Row, select, update
+from sqlalchemy import Row, exists, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.pagination import paginate
@@ -39,37 +40,48 @@ class FundRepository:
         if responsible_fc is not None:
             query = query.where(Fund.responsible_fc == responsible_fc)
         if available_only:
-            query = query.where(Fund.locked_by_mission_id.is_(None))
+            query = query.where(Fund.amount > Fund.committed_amount)
 
         query = query.order_by(Fund.name, Fund.id)
         return await paginate(self._session, query, request.page, request.size)
 
-    async def find_lock_holders(self, mission_ids: Collection[UUID]) -> dict[UUID, Row]:
-        if not mission_ids:
+    async def find_funded_missions(self, fund_ids: Collection[UUID]) -> dict[UUID, list[Row]]:
+        if not fund_ids:
             return {}
         result = await self._session.execute(
-            select(Mission.id, Mission.subject, Mission.estimated_cost, User.name, User.surname)
+            select(
+                Mission.fund_id, Mission.id, Mission.subject, Mission.status,
+                Mission.estimated_cost, Mission.created_at, User.name, User.surname,
+            )
             .join(User, User.id == Mission.requester_id)
-            .where(Mission.id.in_(mission_ids))
+            .where(Mission.fund_id.in_(fund_ids))
+            .order_by(Mission.created_at, Mission.id)
         )
-        return {row.id: row for row in result}
+        missions: dict[UUID, list[Row]] = {}
+        for row in result:
+            missions.setdefault(row.fund_id, []).append(row)
+        return missions
 
-    async def lock(self, fund_id: UUID, mission_id: UUID) -> bool:
+    async def is_funding_missions(self, fund_id: UUID) -> bool:
+        return bool(await self._session.scalar(select(exists().where(Mission.fund_id == fund_id))))
+
+    async def reserve(self, fund_id: UUID, amount: Decimal) -> bool:
         result = await self._session.execute(
             update(Fund)
-            .where(Fund.id == fund_id, Fund.locked_by_mission_id.is_(None))
-            .values(locked_by_mission_id=mission_id)
+            .where(Fund.id == fund_id, Fund.amount - Fund.committed_amount >= amount)
+            .values(committed_amount=Fund.committed_amount + amount)
             .execution_options(synchronize_session=False)
         )
         return result.rowcount == 1
 
-    async def release(self, fund_id: UUID, mission_id: UUID) -> None:
-        await self._session.execute(
+    async def release(self, fund_id: UUID, amount: Decimal) -> bool:
+        result = await self._session.execute(
             update(Fund)
-            .where(Fund.id == fund_id, Fund.locked_by_mission_id == mission_id)
-            .values(locked_by_mission_id=None)
+            .where(Fund.id == fund_id, Fund.committed_amount >= amount)
+            .values(committed_amount=Fund.committed_amount - amount)
             .execution_options(synchronize_session=False)
         )
+        return result.rowcount == 1
 
     async def save(self, fund: Fund) -> Fund:
         self._session.add(fund)

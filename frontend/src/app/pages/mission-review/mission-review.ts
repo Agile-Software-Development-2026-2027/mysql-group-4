@@ -41,7 +41,6 @@ export class MissionReview implements OnInit {
 
   myFunds = signal<FundDTO[]>([]);
   selectedFundId = signal('');
-  hasFreeFunds = computed(() => this.myFunds().some((fund) => this.isFundFree(fund)));
 
   fundQuery = signal('');
   showFundSuggestions = signal(false);
@@ -52,6 +51,8 @@ export class MissionReview implements OnInit {
   });
 
   associatedFundName = signal<string | null>(null);
+  // Fondo da cui si è arrivati (My Funds): "Go back" torna lì invece che all'elenco missioni.
+  private returnToFundId: string | null = null;
 
   viewMode: 'manager' | 'requester' = 'manager';
   pageTitle: string = 'Mission Funds Management';
@@ -72,20 +73,22 @@ export class MissionReview implements OnInit {
         ? 'Mission Funds Management'
         : 'My Mission Requests';
 
-      const missionId = params['missionId'];
-      if (missionId) {
-        this.missionService.getMissionById(missionId).subscribe({
-          next: (mission) => {
-            this.openDetail(mission);
-            this.loadAllMissions();
-          },
-          error: () => {
-            this.loadAllMissions();
-          }
-        });
-      } else {
-        this.loadAllMissions();
+      this.returnToFundId = params['fundId'] ?? null;
+      this.loadAllMissions();
+      if (params['missionId']) {
+        this.openMissionById(params['missionId']);
       }
+    });
+  }
+
+  // Usato dai link esterni (es. My Funds): carica la missione e ne apre subito il dettaglio.
+  private openMissionById(missionId: string) {
+    this.missionService.getMission(missionId).subscribe({
+      next: (mission) => {
+        this.openDetail(mission);
+        this.cdr.detectChanges();
+      },
+      error: () => this.toastService.showError('Unable to load the mission.', 'Mission'),
     });
   }
 
@@ -213,8 +216,14 @@ export class MissionReview implements OnInit {
     return this.canManageDecisions && mission.status === 'PENDING' && mission.fundManagerId === this.authService.getUser()?.id;
   }
 
-  isFundFree(fund: FundDTO): boolean {
-    return !fund.lockedByMissionId;
+  // Un fondo è selezionabile se il suo residuo copre il costo della missione da approvare.
+  canCover(fund: FundDTO): boolean {
+    const remaining = Number(fund.remainingAmount);
+    return remaining > 0 && remaining >= Number(this.selectedMission?.estimatedCost ?? 0);
+  }
+
+  hasUsableFunds(): boolean {
+    return this.myFunds().some((fund) => this.canCover(fund));
   }
 
   onFundQueryInput(value: string) {
@@ -225,7 +234,7 @@ export class MissionReview implements OnInit {
   }
 
   selectFund(fund: FundDTO) {
-    if (!this.isFundFree(fund)) {
+    if (!this.canCover(fund)) {
       return;
     }
     this.selectedFundId.set(fund.id);
@@ -242,14 +251,14 @@ export class MissionReview implements OnInit {
       let index = this.activeSuggestion();
       for (let i = 0; i < funds.length; i++) {
         index = (index + step + funds.length) % funds.length;
-        if (this.isFundFree(funds[index])) {
+        if (this.canCover(funds[index])) {
           this.activeSuggestion.set(index);
           return;
         }
       }
     } else if (event.key === 'Enter' && this.showFundSuggestions()) {
       event.preventDefault();
-      const fund = funds[this.activeSuggestion()] ?? funds.find((f) => this.isFundFree(f));
+      const fund = funds[this.activeSuggestion()] ?? funds.find((f) => this.canCover(f));
       if (fund) {
         this.selectFund(fund);
       }
@@ -266,6 +275,14 @@ export class MissionReview implements OnInit {
       ),
       error: () => this.toastService.showError('Unable to load your funds.', 'Funds'),
     });
+  }
+
+  goBack() {
+    if (this.returnToFundId) {
+      this.router.navigate(['/fund'], { queryParams: { fundId: this.returnToFundId } });
+      return;
+    }
+    this.closeDetail();
   }
 
   closeDetail() {

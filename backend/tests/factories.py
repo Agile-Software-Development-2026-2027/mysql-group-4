@@ -33,7 +33,7 @@ def make_create_data(**overrides):
 
 def make_fund(**overrides):
     return Fund(**(dict(
-        id=uuid4(), name="Research fund", description="Lab equipment", amount=Decimal("5000.00"),
+        id=uuid4(), name="Research fund", description="Lab equipment", amount=Decimal("5000.00"), committed_amount=Decimal("0.0"),
         responsible_fc="RSSMRA80A01H501U",
         created_at=datetime(2026, 10, 24), updated_at=datetime(2026, 10, 24),
         created_by=uuid4(), updated_by=uuid4(),

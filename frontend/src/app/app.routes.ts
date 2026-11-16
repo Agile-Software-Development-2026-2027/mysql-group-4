@@ -10,6 +10,7 @@ import { AddFund } from './pages/add-fund/add-fund';
 import { MyFunds } from './pages/my-funds/my-funds';
 import { RefundReview } from './pages/refund-review/refund-review';
 import { RefundRequestComponent } from './pages/refund-request/refund-request';
+import { RefundOverview } from './pages/refund-overview/refund-overview';
 
 export const routes: Routes = [
   { path: '', component: Landingpage, canActivate: [guestGuard] },
@@ -25,5 +26,6 @@ export const routes: Routes = [
   { path: 'fund/add', component: AddFund, canActivate: [authGuard] },
   { path: 'refund/:id', component: RefundRequestComponent, canActivate: [authGuard] },
   { path: 'refundreview/:id', component: RefundReview, canActivate: [authGuard, adminGuard] },
+  { path: 'refundoverview', component: RefundOverview, canActivate: [authGuard, adminGuard] },
   { path: '**', redirectTo: '' }
 ];

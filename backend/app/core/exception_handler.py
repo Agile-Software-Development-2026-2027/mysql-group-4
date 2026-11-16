@@ -5,8 +5,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.core.exceptions import (
-    AccessDeniedError, FundLockedError, InvalidMissionPeriodError, InvalidMissionStateError,
-    InvalidRefundDecisionError, InvalidRefundStateError, RefundItemCreateError, ResourceNotFoundError,
+    AccessDeniedError, FundInUseError, InvalidMissionPeriodError, InvalidMissionStateError,
+    InvalidRefundDecisionError, InvalidRefundStateError, RefundItemCreateError, ResourceNotFoundError, FundAmountError,
 )
 from app.schemas.service_error import ServiceError
 
@@ -31,7 +31,7 @@ async def invalid_mission_handler(request: Request, exc: ValueError) -> JSONResp
     return _error_response(request, 400, str(exc))
 
 
-async def fund_locked_handler(request: Request, exc: FundLockedError) -> JSONResponse:
+async def fund_in_use_handler(request: Request, exc: FundInUseError) -> JSONResponse:
     return _error_response(request, 409, str(exc))
 
 
@@ -49,5 +49,6 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(InvalidRefundStateError, invalid_mission_handler)
     app.add_exception_handler(InvalidRefundDecisionError, invalid_mission_handler)
     app.add_exception_handler(RefundItemCreateError, invalid_mission_handler)
-    app.add_exception_handler(FundLockedError, fund_locked_handler)
+    app.add_exception_handler(FundAmountError, invalid_mission_handler)
+    app.add_exception_handler(FundInUseError, fund_in_use_handler)
     app.add_exception_handler(Exception, unexpected_error_handler)
