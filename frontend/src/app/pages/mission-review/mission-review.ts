@@ -64,7 +64,7 @@ export class MissionReview implements OnInit {
   constructor(
     private missionService: MissionService,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) { }
 
   ngOnInit() {
     this.route.queryParams.subscribe(params => {
@@ -138,8 +138,7 @@ export class MissionReview implements OnInit {
 
   isMissionEnded(mission: MissionDTO | null): boolean {
     if (!mission) return false;
-    // TODO: temporary bypass to allow accessing refund pages before mission end date
-    return true;
+    return new Date(mission.endsAt) <= new Date();
   }
 
   openDetail(mission: MissionDTO) {
@@ -292,6 +291,12 @@ export class MissionReview implements OnInit {
     this.associatedFundName.set(null);
     this.associatedRefund.set(null);
     this.documents.set([]);
+    if (this.route.snapshot.queryParams['missionId']) {
+      this.router.navigate([], {
+        relativeTo: this.route,
+        queryParams: { view: this.viewMode },
+      });
+    }
   }
 
   createAndGoToRefund(missionId: string): void {

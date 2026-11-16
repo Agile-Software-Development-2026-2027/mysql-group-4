@@ -1,21 +1,29 @@
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe, DecimalPipe, Location } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
-import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import {
+  AbstractControl,
+  FormBuilder,
+  FormGroup,
+  ReactiveFormsModule,
+  ValidationErrors,
+  ValidatorFn,
+  Validators,
+} from '@angular/forms';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 
 import { Topbar } from '../../components/topbar/topbar';
 import { AddRefundItemModal } from './components/add-refund-item-modal/add-refund-item-modal';
 import { API_CONFIG } from '../../core/config/api.config';
-import { ExpenseCategory, ExpenseSubtype, MissionDTO, RefundItemDTO, RefundRequestDTO } from '../../core/models';
+import { ExpenseCategory, ExpenseSubtype, MissionDTO, RefundItemDTO, RefundItemFilterPayload, RefundItemUpdatePayload, RefundRequestDTO } from '../../core/models';
 import { RefundService } from '../../services/refund.service';
 import { ToastService } from '../../services/toast.service';
 
 @Component({
   selector: 'app-refund-request',
   standalone: true,
-  imports: [CommonModule, DatePipe, DecimalPipe, ReactiveFormsModule, Topbar, AddRefundItemModal],
+  imports: [CommonModule, DatePipe, DecimalPipe, ReactiveFormsModule, RouterLink, Topbar, AddRefundItemModal],
   templateUrl: './refund-request.html',
   styleUrl: './refund-request.scss',
 })
@@ -60,8 +68,10 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
 
   readonly selectedItem = signal<RefundItemDTO | null>(null);
   readonly isReceiptLoading = signal(false);
+  readonly isSaving = signal(false);
   readonly receiptError = signal(false);
   readonly receiptPreview = signal<{ url: SafeResourceUrl; fileURL: string; isPdf: boolean; filename: string } | null>(null);
+  readonly replacementFile = signal<File | null>(null);
 
   editForm: FormGroup = this.fb.group({
     category: [ExpenseCategory.TRANSPORT, Validators.required],
@@ -73,7 +83,7 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
     requestedAmount: [null, [Validators.required, Validators.min(0.01), Validators.max(10000)]],
     isTraceable: [true],
     description: ['', [Validators.required, Validators.maxLength(255)]],
-  });
+  }, { validators: [this.dateConsistencyValidator()] });
 
   readonly totalRequested = computed(() =>
     this.items().reduce((sum, item) => sum + Number(item.requestedAmount), 0)
@@ -121,18 +131,77 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
     () => this.selectedCategories().size === this.categories.length
   );
 
-  selectAllCategories(): void {
-    this.selectedCategories.set(new Set(this.categories));
+  readonly missionMinDateTime = computed(() => this.toInputDateTime(this.mission()?.startsAt) || null);
+  readonly missionMaxDateTime = computed(() => this.toInputDateTime(this.mission()?.endsAt) || null);
+  readonly missionPeriodLabel = computed(() => {
+    const m = this.mission();
+    if (!m?.startsAt || !m?.endsAt) return '';
+    const fmt = (val: string) => new Date(val).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+    return `${fmt(m.startsAt)} – ${fmt(m.endsAt)}`;
+  });
+
+  readonly filteredItems = signal<RefundItemDTO[]>([]);
+  readonly isFiltering = signal(true);
+  readonly pageSize = 5;
+  readonly skeletonPlaceholders = [1, 2, 3, 4, 5];
+  readonly currentPage = signal(0);
+  readonly totalPages = signal(0);
+  readonly totalFilteredCount = signal(0);
+  readonly mathMin = Math.min;
+
+  goToPage(page: number): void {
+    if (page < 0 || page >= this.totalPages()) return;
+    this.currentPage.set(page);
+    this.loadFilteredItems(false);
   }
 
-  readonly filteredItems = computed(() => {
+  selectAllCategories(): void {
+    this.selectedCategories.set(new Set(this.categories));
+    this.loadFilteredItems(true);
+  }
+
+  loadFilteredItems(resetPage: boolean = false): void {
+    const id = this.refundId();
+    if (!id) return;
+
+    if (resetPage) {
+      this.currentPage.set(0);
+    }
+
     const active = this.selectedCategories();
-    const list = this.items().filter((item) => active.has(item.category));
-    const sort = this.priceSort();
-    if (sort === 'asc') return [...list].sort((a, b) => Number(a.requestedAmount) - Number(b.requestedAmount));
-    if (sort === 'desc') return [...list].sort((a, b) => Number(b.requestedAmount) - Number(a.requestedAmount));
-    return list;
-  });
+    if (active.size === 0) {
+      this.filteredItems.set([]);
+      this.totalPages.set(0);
+      this.totalFilteredCount.set(0);
+      this.isFiltering.set(false);
+      return;
+    }
+
+    const payload: RefundItemFilterPayload = {
+      categories: active.size === this.categories.length ? null : Array.from(active),
+      sortByAmount: this.priceSort() === 'asc' ? 'asc' : this.priceSort() === 'desc' ? 'desc' : null,
+    };
+
+    this.isFiltering.set(true);
+    this.refundService.filterItems(id, payload, this.currentPage(), this.pageSize).subscribe({
+      next: (page) => {
+        if (page.content.length === 0 && page.totalPages > 0 && page.number >= page.totalPages) {
+          this.currentPage.set(page.totalPages - 1);
+          this.loadFilteredItems(false);
+          return;
+        }
+        this.filteredItems.set(page.content);
+        this.totalPages.set(page.totalPages);
+        this.totalFilteredCount.set(page.totalElements);
+        this.currentPage.set(page.number);
+        this.isFiltering.set(false);
+      },
+      error: () => {
+        this.isFiltering.set(false);
+        this.toastService.showError('Could not filter receipt items.', 'Filter Error');
+      },
+    });
+  }
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
@@ -148,9 +217,15 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
         this.refund.set(data);
         this.items.set(data.items ?? []);
         this.isLoading.set(false);
+        this.loadFilteredItems();
         this.http
           .get<MissionDTO>(`${API_CONFIG.baseUrl}/api/v1/missions/${data.missionId}`, { withCredentials: true })
-          .subscribe({ next: (m) => this.mission.set(m) });
+          .subscribe({
+            next: (m) => {
+              this.mission.set(m);
+              this.editForm.updateValueAndValidity();
+            },
+          });
       },
       error: () => {
         this.isLoading.set(false);
@@ -164,6 +239,7 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
   openItemModal(item: RefundItemDTO): void {
     const id = this.refundId();
     this.selectedItem.set(item);
+    this.replacementFile.set(null);
     this.editForm.reset({
       category: item.category,
       subtype: item.subtype ?? null,
@@ -175,9 +251,10 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
       isTraceable: item.isTraceable,
       description: item.description,
     });
+    this.updateFormValidators(item.category);
     this.revokePreviewUrl();
     this.receiptError.set(false);
-    if (!id) return;
+    if (!id || !item.receiptFilePath) return;
 
     this.isReceiptLoading.set(true);
     this.refundService.downloadReceipt(id, item.id).subscribe({
@@ -204,21 +281,36 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
     return cat ? this.subtypeMap[cat] ?? [] : [];
   }
 
+  private updateFormValidators(cat: ExpenseCategory): void {
+    const [sub, from, to, end] = ['subtype', 'itineraryFrom', 'itineraryTo', 'endsAt'].map((k) => this.editForm.get(k));
+    [sub, from, to, end].forEach((c) => c?.clearValidators());
+    if (cat === ExpenseCategory.TRANSPORT) {
+      [sub, from, to, end].forEach((c) => c?.setValidators([Validators.required]));
+    } else if (cat === ExpenseCategory.ACCOMMODATION) {
+      [sub, end].forEach((c) => c?.setValidators([Validators.required]));
+    } else if (cat === ExpenseCategory.MEALS) {
+      sub?.setValidators([Validators.required]);
+    }
+    [sub, from, to, end].forEach((c) => c?.updateValueAndValidity());
+  }
+
   onEditCategoryChange(): void {
     const cat = this.editForm.get('category')?.value as ExpenseCategory;
     const options = this.subtypeMap[cat] ?? [];
     this.editForm.patchValue({
-      subtype: options[0]?.value ?? null,
+      subtype: cat === ExpenseCategory.OTHER ? null : options[0]?.value ?? null,
       itineraryFrom: cat === ExpenseCategory.TRANSPORT ? this.editForm.value.itineraryFrom : '',
       itineraryTo: cat === ExpenseCategory.TRANSPORT ? this.editForm.value.itineraryTo : '',
       endsAt: cat === ExpenseCategory.TRANSPORT || cat === ExpenseCategory.ACCOMMODATION ? this.editForm.value.endsAt : '',
     });
+    this.updateFormValidators(cat);
   }
 
   onReplaceReceipt(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
+    this.replacementFile.set(file);
     this.revokePreviewUrl();
     this.receiptError.set(false);
     const fileURL = URL.createObjectURL(file);
@@ -230,36 +322,104 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
     });
   }
 
+  private formatToIso(val?: string | null): string | null {
+    if (!val) return null;
+    const trimmed = val.trim();
+    return trimmed.length === 16 ? `${trimmed}:00` : (trimmed || null);
+  }
+
+  private isOutsideMission(val: string | null): boolean {
+    const m = this.mission();
+    if (!val || !m?.startsAt || !m?.endsAt) return false;
+    const date = new Date(val);
+    const missionStart = new Date(m.startsAt);
+    const missionEnd = new Date(m.endsAt);
+    missionStart.setSeconds(0, 0);
+    missionEnd.setSeconds(59, 999);
+    return date < missionStart || date > missionEnd;
+  }
+
+  private dateConsistencyValidator(): ValidatorFn {
+    return (group: AbstractControl): ValidationErrors | null => {
+      const errors: ValidationErrors = {};
+      const category = group.get('category')?.value as ExpenseCategory;
+      const startsAt = group.get('startsAt')?.value as string | null;
+      const endsAt = group.get('endsAt')?.value as string | null;
+
+      if (this.isOutsideMission(startsAt)) {
+        errors['startOutsideMission'] = true;
+      }
+      if (category === ExpenseCategory.TRANSPORT || category === ExpenseCategory.ACCOMMODATION) {
+        if (this.isOutsideMission(endsAt)) {
+          errors['endOutsideMission'] = true;
+        }
+        if (startsAt && endsAt && new Date(endsAt) <= new Date(startsAt)) {
+          errors['endBeforeStart'] = true;
+        }
+      }
+      return Object.keys(errors).length > 0 ? errors : null;
+    };
+  }
+
   saveItemChanges(): void {
     const current = this.selectedItem();
-    if (!current || this.editForm.invalid) {
+    const refundId = this.refundId();
+    if (!current || !refundId || this.editForm.invalid || this.isSaving()) {
       this.editForm.markAllAsTouched();
       return;
     }
+
     const v = this.editForm.value;
     const cat = v.category as ExpenseCategory;
-    const updated: RefundItemDTO = {
-      ...current,
+    const startsAt = this.formatToIso(v.startsAt);
+    const endsAt = cat === ExpenseCategory.TRANSPORT || cat === ExpenseCategory.ACCOMMODATION ? this.formatToIso(v.endsAt) : null;
+
+    const payload: RefundItemUpdatePayload = {
       category: cat,
       subtype: cat === ExpenseCategory.OTHER ? null : v.subtype,
       itineraryFrom: cat === ExpenseCategory.TRANSPORT ? v.itineraryFrom?.trim() || null : null,
       itineraryTo: cat === ExpenseCategory.TRANSPORT ? v.itineraryTo?.trim() || null : null,
-      startsAt: v.startsAt,
-      endsAt: cat === ExpenseCategory.TRANSPORT || cat === ExpenseCategory.ACCOMMODATION ? v.endsAt || null : null,
+      startsAt: startsAt ?? undefined,
+      endsAt,
       requestedAmount: Number(v.requestedAmount),
       isTraceable: Boolean(v.isTraceable),
       description: String(v.description).trim(),
-      receiptOriginalFilename: this.receiptPreview()?.filename ?? current.receiptOriginalFilename,
     };
-    this.items.update((list) => list.map((it) => (it.id === updated.id ? updated : it)));
-    this.toastService.showSuccess('Expense item updated.', 'Saved');
-    this.closeItemModal();
+
+    this.isSaving.set(true);
+
+    const execute = () => {
+      this.refundService.updateRefundItem(refundId, current.id, payload).subscribe({
+        next: (updatedItem) => {
+          this.items.update((list) => list.map((it) => (it.id === updatedItem.id ? updatedItem : it)));
+          this.loadFilteredItems();
+          this.toastService.showSuccess('Expense item updated successfully.', 'Saved');
+          this.closeItemModal();
+        },
+        error: () => {
+          this.isSaving.set(false);
+          this.toastService.showError('Could not save expense item changes.', 'Save Error');
+        },
+      });
+    };
+
+    const newReceipt = this.replacementFile();
+    if (newReceipt) {
+      this.refundService.uploadReceipt(refundId, newReceipt).subscribe({
+        next: (up) => { payload.receiptFilePath = up.receiptFilePath; payload.receiptOriginalFilename = up.receiptOriginalFilename; execute(); },
+        error: () => { this.isSaving.set(false); this.toastService.showError('Could not upload the new receipt file.', 'Upload Error'); },
+      });
+    } else {
+      execute();
+    }
   }
 
   closeItemModal(): void {
     this.selectedItem.set(null);
     this.isReceiptLoading.set(false);
+    this.isSaving.set(false);
     this.receiptError.set(false);
+    this.replacementFile.set(null);
     this.revokePreviewUrl();
   }
 
@@ -284,22 +444,33 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
       else next.add(cat);
       return next;
     });
+    this.loadFilteredItems(true);
   }
 
   setPriceSort(order: string): void {
     this.priceSort.set(order === 'asc' || order === 'desc' ? order : 'none');
+    this.loadFilteredItems(true);
   }
 
   resetFilters(): void {
     this.selectedCategories.set(new Set(this.categories));
     this.priceSort.set('none');
+    this.loadFilteredItems(true);
   }
 
   deleteItem(item: RefundItemDTO, event: Event): void {
     event.stopPropagation();
-    this.items.update((list) => list.filter((it) => it.id !== item.id));
-    if (this.selectedItem()?.id === item.id) this.closeItemModal();
-    this.toastService.showSuccess('Expense item removed.', 'Deleted');
+    const id = this.refundId();
+    if (!id) return;
+    this.refundService.deleteRefundItem(id, item.id).subscribe({
+      next: () => {
+        this.items.update((list) => list.filter((it) => it.id !== item.id));
+        if (this.selectedItem()?.id === item.id) this.closeItemModal();
+        this.loadFilteredItems();
+        this.toastService.showSuccess('Expense item removed.', 'Deleted');
+      },
+      error: () => this.toastService.showError('Could not delete expense item.', 'Delete Error'),
+    });
   }
 
   goBack(): void {
@@ -315,6 +486,7 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
   onItemAdded(item: RefundItemDTO): void {
     this.items.update((current) => [...current, item]);
     this.closeAddModal();
+    this.loadFilteredItems();
   }
 
   formatCategory(cat: ExpenseCategory): string {

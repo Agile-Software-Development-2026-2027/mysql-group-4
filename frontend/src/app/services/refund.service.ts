@@ -1,12 +1,15 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
 import { API_CONFIG } from '../core/config/api.config';
+import { Page } from '../core/models/page';
 import {
   RefundApprovePayload,
   RefundItemCreatePayload,
   RefundItemDTO,
+  RefundItemFilterPayload,
+  RefundItemUpdatePayload,
   RefundReceiptUploadDTO,
   RefundRequestCreatePayload,
   RefundRequestDTO,
@@ -84,11 +87,41 @@ export class RefundService {
     );
   }
 
+  updateRefundItem(
+    refundId: string,
+    itemId: string,
+    payload: RefundItemUpdatePayload
+  ): Observable<RefundItemDTO> {
+    return this.http.patch<RefundItemDTO>(
+      API_CONFIG.endpoints.refunds.item(refundId, itemId),
+      payload,
+      { withCredentials: true }
+    );
+  }
+
   filterRefunds(payload: RefundFilterPayload): Observable<RefundOverviewDTO[]> {
     return this.http.post<RefundOverviewDTO[]>(
       API_CONFIG.endpoints.refunds.filter,
       payload,
       { withCredentials: true }
+    );
+  }
+
+  deleteRefundItem(refundId: string, itemId: string): Observable<void> {
+    return this.http.delete<void>(API_CONFIG.endpoints.refunds.item(refundId, itemId), { withCredentials: true });
+  }
+
+  filterItems(
+    refundId: string,
+    payload: RefundItemFilterPayload,
+    page: number = 0,
+    size: number = 5
+  ): Observable<Page<RefundItemDTO>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.post<Page<RefundItemDTO>>(
+      API_CONFIG.endpoints.refunds.itemsFilter(refundId),
+      payload,
+      { params, withCredentials: true }
     );
   }
 }

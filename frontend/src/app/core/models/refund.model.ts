@@ -117,6 +117,25 @@ export interface RefundItemCreatePayload {
   description: string;
 }
 
+export interface RefundItemFilterPayload {
+  categories?: ExpenseCategory[] | null;
+  sortByAmount?: 'asc' | 'desc' | null;
+}
+
+export interface RefundItemUpdatePayload {
+  category?: ExpenseCategory;
+  subtype?: ExpenseSubtype | null;
+  itineraryFrom?: string | null;
+  itineraryTo?: string | null;
+  startsAt?: string;
+  endsAt?: string | null;
+  requestedAmount?: number;
+  currency?: string;
+  isTraceable?: boolean;
+  receiptFilePath?: string | null;
+  receiptOriginalFilename?: string | null;
+  description?: string;
+}
 export interface RefundFilterPayload {
   status?: RefundStatus | null;
 }

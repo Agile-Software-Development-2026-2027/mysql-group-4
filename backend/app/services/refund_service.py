@@ -323,6 +323,7 @@ class RefundService:
 
             updates = data.model_dump(exclude_unset=True)
             old_amount = item.requested_amount
+            old_receipt_path = item.receipt_file_path
             for field, value in updates.items():
                 setattr(item, field, value)
             item.updated_by = user.id
@@ -332,7 +333,21 @@ class RefundService:
 
             await self.session.flush()
             await self.session.refresh(item)
-            return RefundItemDTO.model_validate(item)
+            result = RefundItemDTO.model_validate(item)
+
+        # Remove the replaced receipt only after the new path has been committed.
+        if old_receipt_path and old_receipt_path != result.receipt_file_path:
+            try:
+                await anyio.to_thread.run_sync(
+                    lambda: minio_client.remove_object(
+                        bucket_name=settings.MINIO_BUCKET_NAME,
+                        object_name=old_receipt_path,
+                    )
+                )
+            except Exception as e:
+                logger.warning("Could not delete replaced receipt file from MinIO: %s", e)
+
+        return result
 
     async def delete_refund_item(
         self,

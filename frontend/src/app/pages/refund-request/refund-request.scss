@@ -1,6 +1,4 @@
 /* hallmark: component · custom (mysol tokens) · v2.0.0 */
-/* critique: clean operate-mode table + 2-column detail modal matching add-refund-item-modal */
-
 :host {
   --rr-primary: #be0e01;
   --rr-text: #17324d;
@@ -18,22 +16,21 @@
 .page-header {
   display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; margin-block-end: 20px;
   h1 { margin: 0; }
+  &__left { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 }
-.page-header__left { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+
 .back-btn {
   display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0;
   border: 1px solid var(--rr-border); border-radius: 50%; background: var(--rr-surface); color: var(--rr-text); cursor: pointer;
   &:hover, &:focus-visible { background: var(--rr-row-hover); }
 }
+
 .btn-add-expand {
   display: inline-flex; align-items: center; justify-content: center; height: 40px; min-width: 40px; padding: 0 10px;
   border-radius: 999px; gap: 0; overflow: hidden; white-space: nowrap;
   transition: padding 0.25s ease, gap 0.25s ease;
   svg { flex-shrink: 0; }
-  &__label {
-    max-width: 0; opacity: 0; overflow: hidden;
-    transition: max-width 0.25s ease, opacity 0.2s ease;
-  }
+  &__label { max-width: 0; opacity: 0; overflow: hidden; transition: max-width 0.25s ease, opacity 0.2s ease; }
   &:hover, &:focus-visible {
     padding: 0 16px 0 12px; gap: 8px;
     .btn-add-expand__label { max-width: 140px; opacity: 1; }
@@ -43,7 +40,7 @@
 .refund-main-card { position: relative; }
 .budget-alert-badge {
   position: relative; width: 22px; height: 22px; padding: 0;
-  border: none; border-radius: 50%; background: var(--rr-primary); color: #ffffff;
+  border: none; border-radius: 50%; background: var(--rr-primary); color: #fff;
   font: inherit; font-size: 0.85rem; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; cursor: help;
   flex-shrink: 0;
   &:hover .budget-alert-tooltip, &:focus-visible .budget-alert-tooltip { opacity: 1; }
@@ -51,16 +48,20 @@
 .budget-alert-tooltip {
   position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
   white-space: nowrap; padding: 6px 12px; z-index: 20;
-  border-radius: var(--rr-radius); background: #17324d; color: #ffffff;
+  border-radius: var(--rr-radius); background: #17324d; color: #fff;
   font-size: 0.82rem; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity 0.15s ease;
 }
-.mission-overview { margin-block-end: 14px; }
-.mission-title { margin: 0 0 10px; text-align: center; font-size: 1.35rem; font-weight: 700; color: var(--rr-text); }
-.mission-meta { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 28px; margin: 0; text-align: center; }
-.mission-meta-item {
-  display: flex; flex-direction: column; gap: 2px;
-  dd { margin: 0; font-weight: 600; color: var(--rr-text); }
+
+.mission-overview { margin-block-end: 18px; text-align: center; }
+.mission-title { margin: 0; font-size: 1.35rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+.mission-link {
+  display: inline-flex; align-items: center; gap: 8px; color: var(--rr-text); text-decoration: none;
+  padding: 4px 12px; border-radius: var(--rr-radius); transition: color 0.15s ease, background-color 0.15s ease;
+  &:hover, &:focus-visible { color: var(--rr-primary); background-color: var(--rr-row-hover); }
+  &__icon { opacity: 0.65; transition: transform 0.15s ease, opacity 0.15s ease; }
+  &:hover &__icon, &:focus-visible &__icon { opacity: 1; transform: translate(2px, -2px); }
 }
+
 .summary-totals {
   display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px 16px;
   padding-block-end: 20px; margin-block-end: 20px; border-bottom: 1px solid var(--rr-border);
@@ -79,10 +80,6 @@
 .total-value__requested { color: var(--rr-primary); font-weight: 700; }
 .total-value__sep { color: var(--rr-muted); font-weight: 500; }
 .total-value__estimated { font-weight: 700; }
-@media (max-width: 560px) {
-  .summary-totals { grid-template-columns: 1fr; justify-items: center; text-align: center; }
-  .total-block--costs, .total-block--receipts { grid-column: 1; justify-self: center; text-align: center; }
-}
 
 .receipts-toolbar { display: flex; flex-direction: column; gap: 12px; margin-block-end: 16px; }
 .receipts-heading {
@@ -188,6 +185,11 @@
 .pane-status {
   flex: 1; display: grid; place-items: center; color: var(--rr-muted);
   &--error { color: var(--rr-primary); }
+  &--loading, &--empty {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 32px 16px;
+    svg { color: var(--rr-muted); }
+    p { margin: 0; font-size: 0.9rem; color: var(--rr-muted); }
+  }
 }
 .pdf-iframe { inline-size: 100%; flex: 1; min-block-size: 400px; border: 1px solid var(--rr-border); border-radius: var(--rr-radius); }
 .preview-image-wrapper { flex: 1; display: grid; place-items: center; overflow: auto; }
@@ -195,18 +197,54 @@
 
 .form-pane { display: flex; flex-direction: column; padding: 24px; overflow-y: auto; }
 .detail-grid { display: flex; flex-direction: column; }
-.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; @media (max-width: 560px) { grid-template-columns: 1fr; } }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .checkbox-group { display: flex; align-items: flex-end; padding-block-end: 8px; label { display: flex; align-items: center; margin: 0; cursor: pointer; } }
 .modal-footer { display: flex; justify-content: flex-end; align-items: center; gap: 12px; padding: 14px 24px; background: var(--rr-surface-alt); border-block-start: 1px solid var(--rr-border); }
 
+.pagination-bar {
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+  padding: 12px 16px; margin-block-start: 12px; background: var(--rr-surface);
+  border: 1px solid var(--rr-border); border-radius: var(--rr-radius); font-size: 0.875rem;
+}
+.pagination-summary { color: var(--rr-muted); }
+.pagination-actions { display: flex; align-items: center; gap: 10px; }
+.pagination-page-indicator { font-weight: 600; color: var(--rr-text); }
+
+/* Skeleton Loading Placeholders */
+@keyframes sk-shimmer { to { background-position: -200% 0; } }
+.sk {
+  background: linear-gradient(90deg, #e8eef4 0%, #f8fafc 50%, #e8eef4 100%);
+  background-size: 200% 100%;
+  animation: sk-shimmer 1.6s ease-in-out infinite;
+  border-radius: var(--rr-radius);
+}
+.table-skeleton { width: 100%; border-collapse: collapse; }
+.skeleton-row td { padding: 14px 12px; vertical-align: middle; border-bottom: 1px solid var(--rr-border); }
+.sk-pill { width: 96px; height: 26px; }
+.sk-desc { width: 70%; min-width: 120px; height: 16px; }
+.sk-date { width: 85px; height: 16px; }
+.sk-amount { width: 65px; height: 16px; margin-inline-start: auto; }
+.sk-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.sk-btn { width: 30px; height: 30px; }
+.sk-box { width: 100%; max-width: 320px; height: 200px; border: 1px dashed var(--rr-border); }
+
+@media (max-width: 560px) {
+  .summary-totals { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+  .total-block--costs, .total-block--receipts { grid-column: 1; justify-self: center; text-align: center; }
+  .form-row { grid-template-columns: 1fr; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .expense-row { transition: none; }
+  .sk { animation: none; background: #e8eef4; }
 }
 
 @container (width < 640px) {
   table, thead, tbody, tr, td { display: block; }
   thead { display: none; }
-  tr.expense-row { border: 1px solid var(--rr-border); border-radius: var(--rr-radius); margin-block-end: 12px; padding: 8px 12px; }
+  tr.expense-row, tr.skeleton-row {
+    border: 1px solid var(--rr-border); border-radius: var(--rr-radius); margin-block-end: 12px; padding: 8px 12px;
+  }
   td {
     display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--rr-row-hover);
     &:last-child { border-bottom: 0; }
