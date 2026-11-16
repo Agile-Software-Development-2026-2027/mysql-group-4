@@ -31,8 +31,11 @@ from app.crud.refund_repository import RefundRepository
 from app.db.models import User
 from app.db.refund_item import RefundItem
 from app.db.refund_request import RefundRequest
+from app.schemas.page import Page, PageRequest
 from app.schemas.refund import (
     RefundApproveDTO,
+    RefundItemFilterDTO,
+    RefundItemUpdateDTO,
     RefundItemCreateDTO,
     RefundItemDTO,
     RefundReceiptUploadDTO,
@@ -272,4 +275,98 @@ class RefundService:
                 submitted_at=r.submitted_at,
                 approved_at=r.approved_at
             ) for r in refunds
-        ]
+        ]    
+        
+    async def get_refund_items(
+        self,
+        refund_id: UUID,
+        user: User,
+        filters: RefundItemFilterDTO | None,
+        page_request: PageRequest,
+    ) -> Page[RefundItemDTO]:
+        refund = await self.refund_repository.find_by_id(self.session, refund_id)
+        if not refund:
+            raise RefundNotFoundError(refund_id)
+        mission = await self.mission_repository.find_by_id(refund.mission_id)
+        if mission and not user.is_superuser and mission.requester_id != user.id:
+            raise AccessDeniedError("Only the requester or an administrator can view these refund items")
+
+        page = await self.refund_repository.find_items_by_refund_id(
+            self.session, refund_id, filters, page_request
+        )
+        return Page(
+            content=[RefundItemDTO.model_validate(item) for item in page.content],
+            total_elements=page.total_elements,
+            number=page.number,
+            size=page.size,
+        )
+
+    async def update_refund_item(
+        self,
+        refund_request_id: UUID,
+        item_id: UUID,
+        user: User,
+        data: RefundItemUpdateDTO,
+    ) -> RefundItemDTO:
+        async with self.transaction():
+            refund_request = await self.refund_repository.find_by_id(self.session, refund_request_id)
+            if not refund_request:
+                raise RefundNotFoundError(refund_request_id)
+            if refund_request.created_by != user.id:
+                raise AccessDeniedError("Only the requester can update a refund item.")
+            if refund_request.status != RefundStatus.DRAFT:
+                raise InvalidRefundStateError("You cannot update items of a non-draft refund request.")
+
+            item = await self.refund_repository.find_item_by_id(self.session, refund_request_id, item_id)
+            if not item:
+                raise ResourceNotFoundError("RefundItem", item_id)
+
+            updates = data.model_dump(exclude_unset=True)
+            old_amount = item.requested_amount
+            for field, value in updates.items():
+                setattr(item, field, value)
+            item.updated_by = user.id
+
+            if "requested_amount" in updates:
+                refund_request.total_requested_amount += item.requested_amount - old_amount
+
+            await self.session.flush()
+            await self.session.refresh(item)
+            return RefundItemDTO.model_validate(item)
+
+    async def delete_refund_item(
+        self,
+        refund_request_id: UUID,
+        item_id: UUID,
+        user: User,
+    ) -> None:
+        async with self.transaction():
+            refund_request = await self.refund_repository.find_by_id(self.session, refund_request_id)
+            if not refund_request:
+                raise RefundNotFoundError(refund_request_id)
+            if refund_request.created_by != user.id:
+                raise AccessDeniedError("Only the requester can delete a refund item.")
+            if refund_request.status != RefundStatus.DRAFT:
+                raise InvalidRefundStateError("You cannot delete items of a non-draft refund request.")
+
+            item = await self.refund_repository.find_item_by_id(self.session, refund_request_id, item_id)
+            if not item:
+                raise ResourceNotFoundError("RefundItem", item_id)
+
+            refund_request.total_requested_amount -= item.requested_amount
+            receipt_path = item.receipt_file_path
+
+            await self.refund_repository.delete_item(self.session, item)
+
+            if receipt_path:
+                try:
+                    await anyio.to_thread.run_sync(
+                        lambda: minio_client.remove_object(
+                            bucket_name=settings.MINIO_BUCKET_NAME,
+                            object_name=receipt_path,
+                        )
+                    )
+                except Exception as e:
+                    logger.warning("Could not delete receipt file from MinIO: %s", e)
+
+

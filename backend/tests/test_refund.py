@@ -1158,3 +1158,151 @@ async def test_filter_refunds_invalid_dto_malformed_status(client: AsyncClient, 
     payload = {"status": "STATO_INESISTENTE"}
     response = await client.post("/api/v1/refunds/filter", json=payload)
     assert response.status_code == 422
+
+
+def _make_test_item(refund_id: UUID, user_id: UUID, amount: Decimal = Decimal("20.00"), **kwargs) -> RefundItem:
+    data = dict(
+        refund_request_id=refund_id, category=ExpenseCategory.OTHER, starts_at=datetime.now(),
+        requested_amount=amount, currency="EUR", is_traceable=True,
+        receipt_file_path="receipts/r.pdf", receipt_original_filename="r.pdf",
+        description="Spesa", created_by=user_id, updated_by=user_id,
+    )
+    data.update(kwargs)
+    return RefundItem(**data)
+
+
+@pytest.mark.asyncio
+async def test_filter_refund_items_by_categories_and_sort(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    create_resp = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = UUID(create_resp.json()["id"])
+
+    now = datetime.now()
+    items = [
+        _make_test_item(
+            refund_id, requester.id, Decimal("50.00"), category=ExpenseCategory.TRANSPORT,
+            subtype=ExpenseSubtype.TRAIN, itinerary_from="Roma", itinerary_to="Milano",
+            starts_at=now, ends_at=now + timedelta(hours=3), description="Treno"
+        ),
+        _make_test_item(refund_id, requester.id, Decimal("20.00"), category=ExpenseCategory.MEALS, subtype=ExpenseSubtype.MEALS_EXPENSE),
+        _make_test_item(refund_id, requester.id, Decimal("100.00"), category=ExpenseCategory.OTHER),
+    ]
+    db_session.add_all(items)
+    await db_session.commit()
+
+    resp_all = await client.post(f"/api/v1/refunds/{refund_id}/items/filter", json={})
+    assert resp_all.status_code == 200 and resp_all.json()["totalElements"] == 3
+
+    resp_filtered = await client.post(
+        f"/api/v1/refunds/{refund_id}/items/filter",
+        json={"categories": ["TRANSPORT", "OTHER"], "sortByAmount": "desc"},
+    )
+    assert resp_filtered.status_code == 200
+    assert [Decimal(c["requestedAmount"]) for c in resp_filtered.json()["content"]] == [Decimal("100.00"), Decimal("50.00")]
+
+    resp_asc = await client.post(f"/api/v1/refunds/{refund_id}/items/filter", json={"sortByAmount": "asc"})
+    assert resp_asc.status_code == 200
+    assert [Decimal(c["requestedAmount"]) for c in resp_asc.json()["content"]] == [Decimal("20.00"), Decimal("50.00"), Decimal("100.00")]
+
+
+@pytest.mark.asyncio
+async def test_filter_refund_items_forbidden_for_other_user(client: AsyncClient, db_session: AsyncSession, requester: User, other_user: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    create_resp = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    app.dependency_overrides[current_active_user] = lambda: other_user
+    resp = await client.post(f"/api/v1/refunds/{create_resp.json()['id']}/items/filter", json={})
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_update_refund_item_success_and_recalculates_total(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    create_resp = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = UUID(create_resp.json()["id"])
+
+    item = _make_test_item(refund_id, requester.id, Decimal("40.00"), description="Vecchia descrizione")
+    db_session.add(item)
+    res = await db_session.execute(select(RefundRequest).where(RefundRequest.id == refund_id))
+    refund = res.scalar_one()
+    refund.total_requested_amount = Decimal("40.00")
+    await db_session.commit()
+
+    resp = await client.patch(
+        f"/api/v1/refunds/{refund_id}/items/{item.id}",
+        json={"requestedAmount": "65.50", "description": "Nuova descrizione"},
+    )
+    assert resp.status_code == 200
+    assert Decimal(resp.json()["requestedAmount"]) == Decimal("65.50")
+    assert resp.json()["description"] == "Nuova descrizione"
+
+    await db_session.refresh(refund)
+    assert refund.total_requested_amount == Decimal("65.50")
+
+
+@pytest.mark.asyncio
+async def test_update_refund_item_forbidden_for_other_user(client: AsyncClient, db_session: AsyncSession, requester: User, other_user: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    create_resp = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = UUID(create_resp.json()["id"])
+
+    item = _make_test_item(refund_id, requester.id, Decimal("25.00"))
+    db_session.add(item)
+    await db_session.commit()
+
+    app.dependency_overrides[current_active_user] = lambda: other_user
+    resp = await client.patch(f"/api/v1/refunds/{refund_id}/items/{item.id}", json={"description": "Hack"})
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_delete_refund_item_success_and_recalculates_total(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    create_resp = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = UUID(create_resp.json()["id"])
+
+    item = _make_test_item(refund_id, requester.id, Decimal("35.00"))
+    db_session.add(item)
+    res = await db_session.execute(select(RefundRequest).where(RefundRequest.id == refund_id))
+    refund = res.scalar_one()
+    refund.total_requested_amount = Decimal("35.00")
+    await db_session.commit()
+
+    resp = await client.delete(f"/api/v1/refunds/{refund_id}/items/{item.id}")
+    assert resp.status_code == 204
+
+    deleted_item = await db_session.get(RefundItem, item.id)
+    assert deleted_item is None
+    await db_session.refresh(refund)
+    assert refund.total_requested_amount == Decimal("0.00")
+
+
+@pytest.mark.asyncio
+async def test_delete_refund_item_forbidden_for_other_user(client: AsyncClient, db_session: AsyncSession, requester: User, other_user: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    create_resp = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = UUID(create_resp.json()["id"])
+
+    item = _make_test_item(refund_id, requester.id, Decimal("15.00"))
+    db_session.add(item)
+    await db_session.commit()
+
+    app.dependency_overrides[current_active_user] = lambda: other_user
+    resp = await client.delete(f"/api/v1/refunds/{refund_id}/items/{item.id}")
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_delete_refund_item_fails_when_refund_not_draft(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    create_resp = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = UUID(create_resp.json()["id"])
+
+    item = _make_test_item(refund_id, requester.id, Decimal("20.00"))
+    db_session.add(item)
+    res = await db_session.execute(select(RefundRequest).where(RefundRequest.id == refund_id))
+    refund = res.scalar_one()
+    refund.status = RefundStatus.SUBMITTED
+    await db_session.commit()
+
+    resp = await client.delete(f"/api/v1/refunds/{refund_id}/items/{item.id}")
+    assert resp.status_code == 400
