@@ -14,4 +14,6 @@ export interface FundDTO {
   missionSubject?: string | null;
   requestedAmount?: number | string | null;
   requesterName?: string | null;
+  committedAmount: number | string;
+  remainingAmount: number | string;
 }

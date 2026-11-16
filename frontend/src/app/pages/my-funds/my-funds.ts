@@ -58,7 +58,7 @@ export class MyFunds implements OnInit {
   }
 
   available(fund: FundDTO): number {
-    return Math.max(0, Number(fund.amount) - Number(fund.requestedAmount ?? 0));
+    return Number(fund.remainingAmount);
   }
 
   openDetail(fund: FundDTO): void {

@@ -1,5 +1,6 @@
 from collections.abc import Collection
 from uuid import UUID
+from decimal import Decimal
 
 from sqlalchemy import Row, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,11 +55,12 @@ class FundRepository:
         )
         return {row.id: row for row in result}
 
-    async def lock(self, fund_id: UUID, mission_id: UUID) -> bool:
+    async def lock(self, fund_id: UUID, mission_id: UUID, amount: Decimal) -> bool:
         result = await self._session.execute(
             update(Fund)
-            .where(Fund.id == fund_id, Fund.locked_by_mission_id.is_(None))
-            .values(locked_by_mission_id=mission_id)
+            .where(Fund.id == fund_id, Fund.locked_by_mission_id.is_(None),
+                   Fund.amount - Fund.committed_amount >= amount)
+            .values(locked_by_mission_id=mission_id, committed_amount=Fund.committed_amount + amount)
             .execution_options(synchronize_session=False)
         )
         return result.rowcount == 1

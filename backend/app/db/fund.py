@@ -17,6 +17,8 @@ class Fund(Base):
     __table_args__ = (
         CheckConstraint("amount >= 0", name="ck_funds_amount_nonnegative"),
         CheckConstraint("length(name) BETWEEN 1 AND 100", name="ck_funds_name_length"),
+        CheckConstraint("committed_amount >= 0", name="ck_funds_committed_amount_nonnegative"),
+        CheckConstraint("amount >= committed_amount", name="ck_funds_amount_geq_committed_amount"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -25,7 +27,7 @@ class Fund(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-
+    committed_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=Decimal('0.0'))
     responsible_fc: Mapped[str] = mapped_column(
         ForeignKey(
             "users.fiscal_code",

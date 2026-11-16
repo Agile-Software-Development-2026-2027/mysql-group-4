@@ -129,7 +129,7 @@ class MissionService:
             saved = await self._repository.save(mission)
             if data.fund_id is not None:
                 await self._fund_service.lock_for_mission(
-                    data.fund_id, saved.id, responsible_fc=user.fiscal_code
+                    data.fund_id, saved.id, saved.estimated_cost, responsible_fc=user.fiscal_code
                 )
             result = await self._to_dto(saved)
         logger.info("Mission %s created by user %s with status %s", result.id, user_id, result.status.value)
@@ -191,7 +191,7 @@ class MissionService:
 
             if fund_id is not None:
                 await self._fund_service.lock_for_mission(
-                    fund_id, mission.id, responsible_fc=user.fiscal_code
+                    fund_id, mission.id, mission.estimated_cost, responsible_fc=user.fiscal_code
                 )
 
             mission.status = status

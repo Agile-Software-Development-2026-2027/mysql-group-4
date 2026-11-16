@@ -181,7 +181,7 @@ class TestMissionService:
         data = make_create_data(fund_manager_id=self.user.id, fund_id=fund_id)
         result = await self.service.create_mission(data, self.user.id)
         self.fund_service.lock_for_mission.assert_awaited_once_with(
-            fund_id, result.id, responsible_fc=self.user.fiscal_code
+            fund_id, result.id, data.estimated_cost, responsible_fc=self.user.fiscal_code
         )
         assert result.status == MissionStatus.ACCEPTED
         self.session.commit.assert_awaited_once()
@@ -274,7 +274,8 @@ class TestMissionService:
         result = await self.service.accept_mission(self.mission.id, self.manager.id, self.fund_id, "Approvo")
         self.repository.find_by_id_for_update.assert_awaited_once_with(self.mission.id)
         self.fund_service.lock_for_mission.assert_awaited_once_with(
-            self.fund_id, self.mission.id, responsible_fc=self.manager.fiscal_code
+            self.fund_id, self.mission.id, self.mission.estimated_cost,
+            responsible_fc=self.manager.fiscal_code,
         )
         assert self.mission.status == MissionStatus.ACCEPTED
         assert self.mission.response == "Approvo"

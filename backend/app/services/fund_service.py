@@ -2,6 +2,7 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from uuid import UUID
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +12,7 @@ from app.core.exceptions import (
     FundLockedError,
     FundNotFoundError,
     UserNotFoundError,
+    FundAmountError,
 )
 from app.crud.fund_repository import FundRepository
 from app.crud.user_repository import UserRepository
@@ -102,6 +104,12 @@ class FundService:
             user = await self._get_active_user_or_throw(user_id)
             fund = await self._get_fund_or_throw(fund_id, for_update=True)
             self._validate_user_is_responsible(fund, user)
+            if data.amount < fund.committed_amount:
+                raise FundAmountError(
+                    fund_id,
+                    f'Fund "{fund.name}" already has € {fund.committed_amount} committed to missions: '
+                    f"its total amount cannot be lowered to € {data.amount}",
+                )
             for field, value in data.model_dump(exclude_unset=True).items():
                 setattr(fund, field, value)
             fund.updated_by = user.id
@@ -121,13 +129,20 @@ class FundService:
         logger.info("Fund %s deleted by user %s", fund_id, user_id)
 
     async def lock_for_mission(
-        self, fund_id: UUID, mission_id: UUID, *, responsible_fc: str | None = None
+        self, fund_id: UUID, mission_id: UUID, amount: Decimal, *, responsible_fc: str | None = None
     ) -> Fund:
         fund = await self._get_fund_or_throw(fund_id)
         if responsible_fc is not None and fund.responsible_fc != responsible_fc:
             raise AccessDeniedError("The fund does not belong to the mission fund manager")
-        if not await self._repository.lock(fund_id, mission_id):
-            raise FundLockedError(fund_id)
+        if not await self._repository.lock(fund_id, mission_id, amount):
+            await self._session.refresh(fund)
+            if fund.locked_by_mission_id is not None:
+                raise FundLockedError(fund_id)
+            raise FundAmountError(
+                fund_id,
+                f'Fund "{fund.name}" has € {fund.amount - fund.committed_amount} available, '
+                f"but the mission requires € {amount}",
+            )
         await self._session.refresh(fund)
         logger.info("Fund %s locked by mission %s", fund_id, mission_id)
         return fund

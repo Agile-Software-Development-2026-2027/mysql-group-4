@@ -2,7 +2,7 @@ import pytest
 from decimal import Decimal
 from unittest.mock import create_autospec, AsyncMock
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.exceptions import AccessDeniedError, FundNotFoundError
+from app.core.exceptions import AccessDeniedError, FundAmountError, FundNotFoundError
 from app.crud.fund_repository import FundRepository
 from app.crud.user_repository import UserRepository
 from app.schemas.fund import FundCreateDTO, FundDTO, FundUpdateDTO
@@ -32,6 +32,7 @@ class TestFundService:
         def fake_save(f):
             if f.id is None:
                 f.id = self.fund.id
+                f.committed_amount = Decimal("0.0")
             return f
 
         self.repository.save.side_effect = fake_save
@@ -140,6 +141,23 @@ class TestFundService:
         assert result.name == "Renamed"
         assert result.amount == Decimal("42.00")
         assert self.fund.updated_by == self.user.id
+        self.session.commit.assert_awaited_once()
+
+    async def test_update_rejects_amount_below_committed(self):
+        self.fund.committed_amount = Decimal("800.00")
+        data = FundUpdateDTO(name="Research fund", amount=Decimal("500.00"))
+        with pytest.raises(FundAmountError, match=r"€ 800\.00 committed .* cannot be lowered to € 500\.00"):
+            await self.service.update_fund(self.fund.id, data, self.user.id)
+        assert self.fund.amount == Decimal("5000.00")
+        self.repository.save.assert_not_awaited()
+        self.session.rollback.assert_awaited_once()
+
+    async def test_update_allows_amount_equal_to_committed(self):
+        self.fund.committed_amount = Decimal("800.00")
+        data = FundUpdateDTO(name="Research fund", amount=Decimal("800.00"))
+        result = await self.service.update_fund(self.fund.id, data, self.user.id)
+        assert result.amount == Decimal("800.00")
+        assert result.remaining_amount == Decimal("0.00")
         self.session.commit.assert_awaited_once()
 
     @pytest.mark.parametrize("action", ("update", "delete"))

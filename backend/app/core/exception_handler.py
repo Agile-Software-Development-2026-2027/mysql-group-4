@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.exceptions import (
     AccessDeniedError, FundLockedError, InvalidMissionPeriodError, InvalidMissionStateError,
-    InvalidRefundDecisionError, InvalidRefundStateError, RefundItemCreateError, ResourceNotFoundError,
+    InvalidRefundDecisionError, InvalidRefundStateError, RefundItemCreateError, ResourceNotFoundError, FundAmountError,
 )
 from app.schemas.service_error import ServiceError
 
@@ -51,3 +51,4 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(RefundItemCreateError, invalid_mission_handler)
     app.add_exception_handler(FundLockedError, fund_locked_handler)
     app.add_exception_handler(Exception, unexpected_error_handler)
+    app.add_exception_handler(FundAmountError, invalid_mission_handler)
