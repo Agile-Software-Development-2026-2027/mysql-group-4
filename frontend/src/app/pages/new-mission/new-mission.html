@@ -310,13 +310,15 @@
                       class="search-select__option"
                       role="option"
                       [class.is-active]="i === activeOwnFund()"
-                      [class.is-disabled]="!isFundFree(fund)"
-                      [attr.aria-disabled]="!isFundFree(fund)"
+                      [class.is-disabled]="!canCover(fund)"
+                      [attr.aria-disabled]="!canCover(fund)"
                       [attr.aria-selected]="fund.id === missionForm.get('fundId')?.value"
                       (mousedown)="$event.preventDefault(); selectOwnFund(fund)"
                     >
                       <span>{{ fund.name }}</span>
-                      <span>{{ isFundFree(fund) ? '€ ' + fund.amount : 'Already assigned' }}</span>
+                      <span>
+                        € {{ fund.remainingAmount | number:'1.2-2' }} available{{ canCover(fund) ? '' : ' — not enough' }}
+                      </span>
                     </li>
                   } @empty {
                     <li class="search-select__empty">
@@ -330,12 +332,12 @@
               <div class="form-error">Select the fund that will pay for this mission.</div>
             }
           </div>
-          @if (!hasFreeFunds()) {
+          @if (!hasUsableFunds()) {
             <p class="form-error">
-              You have no free funds. <a routerLink="/fund/add">Create a fund</a> or request another manager.
+              None of your funds has enough remaining amount for this mission. <a routerLink="/fund/add">Create a fund</a> or request another manager.
             </p>
           } @else if (selectedOwnFund()) {
-            <p>You manage this fund, so the mission will be <strong>approved automatically</strong> and the fund reserved as soon as you submit it.</p>
+            <p>You manage this fund, so the mission will be <strong>approved automatically</strong> and its cost reserved on the fund as soon as you submit it.</p>
           }
         </div>
       } @else {

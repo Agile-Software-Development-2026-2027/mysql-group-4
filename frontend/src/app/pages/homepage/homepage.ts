@@ -27,7 +27,8 @@ export class Homepage implements OnInit {
   siteName = 'MYSOL';
 
   nextMission = signal<MissionDTO | null | undefined>(undefined);
-  activeFunds = signal<number | null>(null);
+  availableFunds = signal<number | null>(null);
+  activeFunds = signal(0);
   totalFunds = signal(0);
   availableAmount = signal(0);
   completedMissions = signal<number | null>(null);
@@ -56,12 +57,13 @@ export class Homepage implements OnInit {
       next: (page) => {
         const myFiscalCode = this.authService.getUser()?.fiscalCode;
         const mine = page.content.filter((fund) => fund.responsibleFc === myFiscalCode);
-        const free = mine.filter((fund) => !fund.lockedByMissionId);
+        const usable = mine.filter((fund) => Number(fund.remainingAmount) > 0);
         this.totalFunds.set(mine.length);
-        this.activeFunds.set(free.length);
-        this.availableAmount.set(free.reduce((sum, fund) => sum + Number(fund.amount), 0));
+        this.availableFunds.set(usable.length);
+        this.activeFunds.set(mine.filter((fund) => fund.missions.length > 0).length);
+        this.availableAmount.set(usable.reduce((sum, fund) => sum + Number(fund.remainingAmount), 0));
       },
-      error: () => this.activeFunds.set(0),
+      error: () => this.availableFunds.set(0),
     });
   }
 

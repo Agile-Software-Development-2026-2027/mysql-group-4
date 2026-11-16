@@ -1,8 +1,9 @@
 import pytest
 from decimal import Decimal
+from uuid import uuid4
 from unittest.mock import create_autospec, AsyncMock
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.exceptions import AccessDeniedError, FundAmountError, FundNotFoundError
+from app.core.exceptions import AccessDeniedError, FundAmountError, FundInUseError, FundNotFoundError
 from app.crud.fund_repository import FundRepository
 from app.crud.user_repository import UserRepository
 from app.schemas.fund import FundCreateDTO, FundDTO, FundUpdateDTO
@@ -27,7 +28,8 @@ class TestFundService:
         }.get(user_id)
         self.repository.find_by_id.return_value = self.fund
         self.repository.find_by_id_for_update.return_value = self.fund
-        self.repository.find_lock_holders.return_value = {}
+        self.repository.find_funded_missions.return_value = {}
+        self.repository.is_funding_missions.return_value = False
 
         def fake_save(f):
             if f.id is None:
@@ -66,64 +68,26 @@ class TestFundService:
             await self.service.get_fund_by_id(self.fund.id, self.user.id)
 
     async def test_get_fund_by_mission_id_success(self):
-        from uuid import uuid4
-        mission_id = uuid4()
-        self.fund.locked_by_mission_id = mission_id
-
-        class MockResult:
-            def __init__(self, obj):
-                self._obj = obj
-            def scalars(self):
-                return self
-            def first(self):
-                return self._obj
-
-        self.session.execute = AsyncMock(return_value=MockResult(self.fund))
-        result = await self.service.get_fund_by_mission_id(mission_id, self.user.id)
+        mission = make_mission(requester_id=self.user.id, fund_id=self.fund.id)
+        self.session.scalar = AsyncMock(return_value=mission)
+        result = await self.service.get_fund_by_mission_id(mission.id, self.user.id)
         assert result.id == self.fund.id
+        self.repository.find_by_id.assert_awaited_once_with(self.fund.id)
 
-    async def test_get_fund_by_mission_id_not_found(self):
-        from uuid import uuid4
-        mission_id = uuid4()
-        class MockResult:
-            def scalars(self):
-                return self
-            def first(self):
-                return None
-
-        self.session.execute = AsyncMock(return_value=MockResult())
-        result = await self.service.get_fund_by_mission_id(mission_id, self.user.id)
-        assert result is None
+    @pytest.mark.parametrize("mission_exists", (False, True))
+    async def test_get_fund_by_mission_id_without_fund_returns_none(self, mission_exists):
+        mission = make_mission(requester_id=self.user.id) if mission_exists else None
+        self.session.scalar = AsyncMock(return_value=mission)
+        assert await self.service.get_fund_by_mission_id(uuid4(), self.user.id) is None
+        self.repository.find_by_id.assert_not_awaited()
 
     async def test_get_fund_by_mission_id_unauthorized(self):
-        from uuid import uuid4
-        mission_id = uuid4()
         foreign_fund = make_fund(responsible_fc="OTHERFC90A01H501Z")
-        foreign_fund.locked_by_mission_id = mission_id
-
-        mission = make_mission(requester_id=uuid4(), fund_manager_id=uuid4())
-
-        class MockResultSequence:
-            def __init__(self, results):
-                self.results = results
-                self.index = 0
-            async def __call__(self, *args, **kwargs):
-                res = self.results[self.index]
-                self.index += 1
-                return res
-
-        class MockResult:
-            def __init__(self, obj):
-                self._obj = obj
-            def scalars(self):
-                return self
-            def first(self):
-                return self._obj
-
-        self.session.execute = MockResultSequence([MockResult(foreign_fund), MockResult(mission)])
-
+        mission = make_mission(fund_id=foreign_fund.id)
+        self.repository.find_by_id.return_value = foreign_fund
+        self.session.scalar = AsyncMock(return_value=mission)
         with pytest.raises(AccessDeniedError):
-            await self.service.get_fund_by_mission_id(mission_id, self.other.id)
+            await self.service.get_fund_by_mission_id(mission.id, self.other.id)
 
     async def test_listing_is_scoped_to_responsible(self):
         request = PageRequest(page=1, size=5)
@@ -173,6 +137,15 @@ class TestFundService:
 
     async def test_delete_removes_own_fund(self):
         await self.service.delete_fund(self.fund.id, self.user.id)
+        self.repository.delete.assert_awaited_once_with(self.fund)
+
+    async def test_delete_of_a_fund_in_use_requires_force(self):
+        self.repository.is_funding_missions.return_value = True
+        with pytest.raises(FundInUseError):
+            await self.service.delete_fund(self.fund.id, self.user.id)
+        self.repository.delete.assert_not_awaited()
+
+        await self.service.delete_fund(self.fund.id, self.user.id, force=True)
         self.repository.delete.assert_awaited_once_with(self.fund)
         self.session.commit.assert_awaited_once()
 

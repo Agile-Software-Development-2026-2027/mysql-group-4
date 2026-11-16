@@ -5,7 +5,7 @@ from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import (
     AccessDeniedError,
-    FundLockedError,
+    FundAmountError,
     InvalidMissionPeriodError,
     InvalidMissionStateError,
     MissionNotFoundError,
@@ -172,17 +172,18 @@ class TestMissionService:
         self.session.commit.assert_awaited_once()
         self.session.rollback.assert_not_awaited()
 
-    async def test_create_without_fund_does_not_lock_anything(self):
+    async def test_create_without_fund_does_not_charge_anything(self):
         await self.service.create_mission(self.data, self.user.id)
-        self.fund_service.lock_for_mission.assert_not_awaited()
+        self.fund_service.reserve_for_mission.assert_not_awaited()
 
-    async def test_create_as_own_manager_locks_the_chosen_fund(self):
+    async def test_create_as_own_manager_charges_the_chosen_fund(self):
         fund_id = uuid4()
         data = make_create_data(fund_manager_id=self.user.id, fund_id=fund_id)
         result = await self.service.create_mission(data, self.user.id)
-        self.fund_service.lock_for_mission.assert_awaited_once_with(
+        self.fund_service.reserve_for_mission.assert_awaited_once_with(
             fund_id, result.id, data.estimated_cost, responsible_fc=self.user.fiscal_code
         )
+        assert result.fund_id == fund_id
         assert result.status == MissionStatus.ACCEPTED
         self.session.commit.assert_awaited_once()
 
@@ -197,12 +198,12 @@ class TestMissionService:
         with pytest.raises(InvalidMissionStateError):
             await self.service.create_mission(data, self.user.id)
         self.repository.save.assert_not_awaited()
-        self.fund_service.lock_for_mission.assert_not_awaited()
+        self.fund_service.reserve_for_mission.assert_not_awaited()
 
-    async def test_create_with_a_fund_already_taken_is_rolled_back(self):
+    async def test_create_with_a_fund_without_enough_money_is_rolled_back(self):
         data = make_create_data(fund_manager_id=self.user.id, fund_id=uuid4())
-        self.fund_service.lock_for_mission.side_effect = FundLockedError(data.fund_id)
-        with pytest.raises(FundLockedError):
+        self.fund_service.reserve_for_mission.side_effect = FundAmountError(data.fund_id, "not enough")
+        with pytest.raises(FundAmountError):
             await self.service.create_mission(data, self.user.id)
         self.session.commit.assert_not_awaited()
         self.session.rollback.assert_awaited_once()
@@ -214,7 +215,7 @@ class TestMissionService:
         with pytest.raises(InvalidMissionPeriodError):
             await self.service.create_mission(data, self.user.id)
         self.repository.save.assert_not_awaited()
-        self.fund_service.lock_for_mission.assert_not_awaited()
+        self.fund_service.reserve_for_mission.assert_not_awaited()
 
     async def test_create_inactive_actor_stops_before_mapping(self):
         self.user.is_active = False
@@ -273,19 +274,20 @@ class TestMissionService:
     async def test_accept_updates_state_and_audit_after_manager_check(self):
         result = await self.service.accept_mission(self.mission.id, self.manager.id, self.fund_id, "Approvo")
         self.repository.find_by_id_for_update.assert_awaited_once_with(self.mission.id)
-        self.fund_service.lock_for_mission.assert_awaited_once_with(
+        self.fund_service.reserve_for_mission.assert_awaited_once_with(
             self.fund_id, self.mission.id, self.mission.estimated_cost,
             responsible_fc=self.manager.fiscal_code,
         )
+        assert self.mission.fund_id == self.fund_id
         assert self.mission.status == MissionStatus.ACCEPTED
         assert self.mission.response == "Approvo"
         assert self.mission.updated_by == self.manager.id
         assert result.status == MissionStatus.ACCEPTED
         self.session.commit.assert_awaited_once()
 
-    async def test_accept_with_a_fund_already_taken_rolls_back(self):
-        self.fund_service.lock_for_mission.side_effect = FundLockedError(self.fund_id)
-        with pytest.raises(FundLockedError):
+    async def test_accept_with_a_fund_without_enough_money_rolls_back(self):
+        self.fund_service.reserve_for_mission.side_effect = FundAmountError(self.fund_id, "not enough")
+        with pytest.raises(FundAmountError):
             await self.service.accept_mission(self.mission.id, self.manager.id, self.fund_id)
         self.repository.save.assert_not_awaited()
         self.session.commit.assert_not_awaited()
@@ -293,7 +295,7 @@ class TestMissionService:
 
     async def test_reject_updates_state_and_audit(self):
         await self.service.reject_mission(self.mission.id, self.manager.id, "Rifiuto")
-        self.fund_service.lock_for_mission.assert_not_awaited()
+        self.fund_service.reserve_for_mission.assert_not_awaited()
         assert self.mission.status == MissionStatus.REJECTED
         assert self.mission.response == "Rifiuto"
         assert self.mission.updated_by == self.manager.id
@@ -304,7 +306,7 @@ class TestMissionService:
         with pytest.raises(AccessDeniedError):
             await self.service.accept_mission(self.mission.id, self.user.id, self.fund_id, "Approvo")
         assert self.mission.status == MissionStatus.PENDING
-        self.fund_service.lock_for_mission.assert_not_awaited()
+        self.fund_service.reserve_for_mission.assert_not_awaited()
         self.repository.save.assert_not_awaited()
         self.session.rollback.assert_awaited_once()
 

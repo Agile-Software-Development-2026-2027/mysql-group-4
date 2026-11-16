@@ -285,13 +285,15 @@
                           class="search-select__option"
                           role="option"
                           [class.is-active]="i === activeSuggestion()"
-                          [class.is-disabled]="!isFundFree(fund)"
-                          [attr.aria-disabled]="!isFundFree(fund)"
+                          [class.is-disabled]="!canCover(fund)"
+                          [attr.aria-disabled]="!canCover(fund)"
                           [attr.aria-selected]="fund.id === selectedFundId()"
                           (mousedown)="$event.preventDefault(); selectFund(fund)"
                         >
                           <span>{{ fund.name }}</span>
-                          <span>{{ isFundFree(fund) ? '€ ' + (fund.amount | number:'1.2-2') : 'Already assigned' }}</span>
+                          <span>
+                            € {{ fund.remainingAmount | number:'1.2-2' }} available{{ canCover(fund) ? '' : ' — not enough' }}
+                          </span>
                         </li>
                       } @empty {
                         <li class="search-select__empty">
@@ -301,16 +303,16 @@
                     </ul>
                   }
                 </div>
-                @if (!hasFreeFunds()) {
+                @if (!hasUsableFunds()) {
                   <p class="form-error">
-                    You have no free funds to assign. <a routerLink="/fund/add">Create a fund</a> to approve this mission.
+                    None of your funds has enough remaining amount for this mission. <a routerLink="/fund/add">Create a fund</a> to approve it.
                   </p>
                 }
               </div>
             }
 
             <div class="action-buttons">
-              <button class="btn btn--outline" (click)="closeDetail()">&larr; Go back</button>
+              <button class="btn btn--outline" (click)="goBack()">&larr; Go back</button>
 
               @if (canDecide(selectedMission)) {
                 <div class="primary-actions">

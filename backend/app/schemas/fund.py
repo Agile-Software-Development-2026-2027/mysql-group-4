@@ -1,9 +1,20 @@
+from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
 from pydantic import ConfigDict, Field, computed_field
 
+from app.core.enums import MissionStatus
 from app.schemas.base import CamelModel
+
+
+class FundMissionDTO(CamelModel):
+    id: UUID
+    subject: str
+    status: MissionStatus
+    estimated_cost: Decimal
+    requester_name: str
+    requested_at: datetime
 
 
 class FundDTO(CamelModel):
@@ -13,10 +24,7 @@ class FundDTO(CamelModel):
     amount: Decimal
     committed_amount: Decimal
     responsible_fc: str
-    locked_by_mission_id: UUID | None = None
-    mission_subject: str | None = None
-    requested_amount: Decimal | None = None
-    requester_name: str | None = None
+    missions: list[FundMissionDTO] = []
 
     @computed_field
     @property

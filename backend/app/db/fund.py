@@ -39,18 +39,6 @@ class Fund(Base):
         index=True,
     )
 
-    # Missione che sta usando il fondo: finché è valorizzato nessun altro può sceglierlo.
-    locked_by_mission_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey(
-            "missions.id",
-            name="funds_locked_by_mission",
-            ondelete="SET NULL",
-            use_alter=True,
-        ),
-        nullable=True,
-        unique=True,
-    )
-
     responsible: Mapped["User"] = relationship(
         back_populates="funds",
         foreign_keys=[responsible_fc],

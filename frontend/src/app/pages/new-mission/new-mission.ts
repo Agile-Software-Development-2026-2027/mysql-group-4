@@ -1,5 +1,6 @@
 import { Component, computed, inject, signal, OnDestroy } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
+import { DecimalPipe } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { forkJoin, Subject, Subscription } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
@@ -29,7 +30,7 @@ function toLocalIsoDate(date: Date): string {
 @Component({
   selector: 'app-new-mission',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, Topbar],
+  imports: [DecimalPipe, ReactiveFormsModule, RouterLink, Topbar],
   templateUrl: './new-mission.html',
   styleUrl: './new-mission.scss',
 })
@@ -72,7 +73,6 @@ export class NewMissionComponent implements OnDestroy {
   });
 
   myFunds = signal<FundDTO[]>([]);
-  hasFreeFunds = computed(() => this.myFunds().some((fund) => this.isFundFree(fund)));
   ownFundQuery = signal('');
   showOwnFundSuggestions = signal(false);
   activeOwnFund = signal(-1);
@@ -90,6 +90,7 @@ export class NewMissionComponent implements OnDestroy {
   private searchSubject = new Subject<string>();
   private searchSub?: Subscription;
   private dateSub?: Subscription;
+  private costSub?: Subscription;
   private map?: L.Map;
   private marker?: L.Marker;
   private lastSelectedLocation?: { lat: number; lon: number; label: string };
@@ -118,6 +119,14 @@ export class NewMissionComponent implements OnDestroy {
     this.setFundSource('self');
 
     this.dateSub = this.missionForm.valueChanges.subscribe(() => this.refreshDateErrors());
+    // Se il costo sale oltre il residuo del fondo scelto, la scelta non è più valida.
+    this.costSub = this.missionForm.get('estimatedCost')?.valueChanges.subscribe(() => {
+      const fund = this.selectedOwnFund();
+      if (fund && !this.canCover(fund)) {
+        this.missionForm.get('fundId')?.setValue('');
+        this.ownFundQuery.set('');
+      }
+    });
 
     this.searchSub = this.searchSubject
       .pipe(
@@ -141,6 +150,7 @@ export class NewMissionComponent implements OnDestroy {
   ngOnDestroy(): void {
     this.searchSub?.unsubscribe();
     this.dateSub?.unsubscribe();
+    this.costSub?.unsubscribe();
     this.destroyMap();
   }
 
@@ -172,8 +182,14 @@ export class NewMissionComponent implements OnDestroy {
     fundControl?.updateValueAndValidity();
   }
 
-  isFundFree(fund: FundDTO): boolean {
-    return !fund.lockedByMissionId;
+  // Un fondo è selezionabile se il suo residuo copre il costo stimato della missione.
+  canCover(fund: FundDTO): boolean {
+    const remaining = Number(fund.remainingAmount);
+    return remaining > 0 && remaining >= Number(this.missionForm.get('estimatedCost')?.value ?? 0);
+  }
+
+  hasUsableFunds(): boolean {
+    return this.myFunds().some((fund) => this.canCover(fund));
   }
 
   selectedOwnFund(): FundDTO | undefined {
@@ -190,7 +206,7 @@ export class NewMissionComponent implements OnDestroy {
   }
 
   selectOwnFund(fund: FundDTO): void {
-    if (!this.isFundFree(fund)) {
+    if (!this.canCover(fund)) {
       return;
     }
     this.missionForm.get('fundId')?.setValue(fund.id);
@@ -203,19 +219,19 @@ export class NewMissionComponent implements OnDestroy {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       this.showOwnFundSuggestions.set(true);
-      // Le frecce saltano i fondi già assegnati.
+      // Le frecce saltano i fondi che non coprono il costo.
       const step = event.key === 'ArrowDown' ? 1 : -1;
       let index = this.activeOwnFund();
       for (let i = 0; i < funds.length; i++) {
         index = (index + step + funds.length) % funds.length;
-        if (this.isFundFree(funds[index])) {
+        if (this.canCover(funds[index])) {
           this.activeOwnFund.set(index);
           return;
         }
       }
     } else if (event.key === 'Enter' && this.showOwnFundSuggestions()) {
       event.preventDefault();
-      const fund = funds[this.activeOwnFund()] ?? funds.find((f) => this.isFundFree(f));
+      const fund = funds[this.activeOwnFund()] ?? funds.find((f) => this.canCover(f));
       if (fund) {
         this.selectOwnFund(fund);
       }

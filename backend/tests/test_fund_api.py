@@ -7,7 +7,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import EmploymentLevel
-from app.core.exceptions import FundAmountError, FundLockedError
+from app.core.exceptions import FundAmountError
 from app.crud.fund_repository import FundRepository
 from app.db.models import User
 from app.security import current_active_user
@@ -67,16 +67,25 @@ async def test_funds_require_login(client: AsyncClient):
     assert (await client.get(f"/api/v1/funds/by-mission/{uuid4()}")).status_code == 401
 
 
+async def _make_mission(db_session: AsyncSession, requester: User, **overrides):
+    mission = make_mission(requester_id=requester.id, fund_manager_id=requester.id, **overrides)
+    db_session.add(mission)
+    await db_session.commit()
+    return mission
+
+
+async def _charge(db_session: AsyncSession, fund_id: UUID, mission, amount: Decimal | None = None):
+    service = FundService(db_session, FundRepository(db_session))
+    await service.reserve_for_mission(fund_id, mission.id, amount or mission.estimated_cost)
+    mission.fund_id = fund_id
+    await db_session.commit()
+
+
 @pytest.mark.asyncio
 async def test_get_fund_by_mission_success(client: AsyncClient, teacher: User, db_session: AsyncSession):
     fund_id = (await client.post("/api/v1/funds", json={"name": "Fondo Missione", "amount": "1000"})).json()["id"]
-    mission = make_mission(requester_id=teacher.id, fund_manager_id=teacher.id)
-    db_session.add(mission)
-    await db_session.commit()
-
-    service = FundService(db_session, FundRepository(db_session))
-    await service.lock_for_mission(UUID(fund_id), mission.id, mission.estimated_cost)
-    await db_session.commit()
+    mission = await _make_mission(db_session, teacher)
+    await _charge(db_session, UUID(fund_id), mission)
 
     response = await client.get(f"/api/v1/funds/by-mission/{mission.id}")
     assert response.status_code == 200
@@ -99,17 +108,11 @@ async def test_get_fund_by_mission_forbidden(client: AsyncClient, teacher: User,
         employment_level=EmploymentLevel.RICERCATORE, department="Fisica",
     )
     db_session.add(other_user)
-    await db_session.commit()
-
-    foreign_fund = make_fund(responsible_fc=other_user.fiscal_code, name="Fondo Altro", amount=Decimal("500") if 'Decimal' in globals() else 500)
+    foreign_fund = make_fund(responsible_fc=other_user.fiscal_code, name="Fondo Altro", amount=Decimal("500"))
     db_session.add(foreign_fund)
-    mission = make_mission(requester_id=other_user.id, fund_manager_id=other_user.id)
-    db_session.add(mission)
     await db_session.commit()
-
-    service = FundService(db_session, FundRepository(db_session))
-    await service.lock_for_mission(foreign_fund.id, mission.id, mission.estimated_cost)
-    await db_session.commit()
+    mission = await _make_mission(db_session, other_user)
+    await _charge(db_session, foreign_fund.id, mission)
 
     response = await client.get(f"/api/v1/funds/by-mission/{mission.id}")
     assert response.status_code == 403
@@ -133,55 +136,63 @@ async def test_fund_managers_lists_only_users_with_a_fund(
     assert [u["fiscalCode"] for u in response.json()] == [teacher.fiscal_code]
 
 
-async def _make_mission(db_session: AsyncSession, requester: User):
-    mission = make_mission(requester_id=requester.id, fund_manager_id=requester.id)
-    db_session.add(mission)
-    await db_session.commit()
-    return mission
+async def test_fund_finances_several_missions_until_its_remaining_amount_runs_out(
+    client: AsyncClient, db_session: AsyncSession, teacher: User
+):
+    fund_id = UUID((await client.post("/api/v1/funds", json={"name": "Fondo", "amount": "300"})).json()["id"])
+    first, second, third = [await _make_mission(db_session, teacher) for _ in range(3)]
+
+    await _charge(db_session, fund_id, first)
+    await _charge(db_session, fund_id, second)
+    service = FundService(db_session, FundRepository(db_session))
+    with pytest.raises(FundAmountError, match=r"has € 59\.00 available, but the mission requires € 120\.50"):
+        await service.reserve_for_mission(fund_id, third.id, third.estimated_cost)
+
+    fund = (await client.get(f"/api/v1/funds/{fund_id}")).json()
+    assert fund["committedAmount"] == "241.00"
+    assert fund["remainingAmount"] == "59.00"
+    assert {m["id"] for m in fund["missions"]} == {str(first.id), str(second.id)}
+    available = (await client.get("/api/v1/funds/available")).json()["content"]
+    assert [f["id"] for f in available] == [str(fund_id)]
 
 
-async def test_fund_can_be_locked_by_one_mission_at_a_time(
+
+async def test_financed_missions_are_listed_from_the_oldest_request(
     client: AsyncClient, db_session: AsyncSession, teacher: User
 ):
     fund_id = UUID((await client.post("/api/v1/funds", json={"name": "Fondo", "amount": "1000"})).json()["id"])
-    first = await _make_mission(db_session, teacher)
-    second = await _make_mission(db_session, teacher)
-    first_id, second_id = first.id, second.id
-    service = FundService(db_session, FundRepository(db_session))
+    requested_on = [datetime(2026, 10, 20), datetime(2026, 9, 1), datetime(2026, 10, 5)]
+    missions = [await _make_mission(db_session, teacher, created_at=day) for day in requested_on]
+    for mission in missions:
+        await _charge(db_session, fund_id, mission)
 
-    locked = await service.lock_for_mission(fund_id, first_id, first.estimated_cost)
-    await db_session.commit()
-    assert locked.locked_by_mission_id == first_id
+    listed = (await client.get(f"/api/v1/funds/{fund_id}")).json()["missions"]
+    assert [m["requestedAt"][:10] for m in listed] == ["2026-09-01", "2026-10-05", "2026-10-20"]
 
-    with pytest.raises(FundLockedError):
-        await service.lock_for_mission(fund_id, second_id, second.estimated_cost)
-
-    available = await client.get("/api/v1/funds/available")
-    assert available.json()["content"] == []
-    assert (await client.delete(f"/api/v1/funds/{fund_id}")).status_code == 409
-    for obj in list(db_session.identity_map.values()):
-        await db_session.refresh(obj)
-
-    await service.release_from_mission(fund_id, second_id)
-    await db_session.commit()
-    assert (await client.get(f"/api/v1/funds/{fund_id}")).json()["lockedByMissionId"] == str(first_id)
-
-    await service.release_from_mission(fund_id, first_id)
-    await db_session.commit()
-    available = await client.get("/api/v1/funds/available")
-    assert [f["id"] for f in available.json()["content"]] == [str(fund_id)]
-
-
-
-async def test_locking_a_fund_commits_the_mission_cost(
+async def test_releasing_a_mission_gives_its_cost_back_to_the_fund(
     client: AsyncClient, db_session: AsyncSession, teacher: User
 ):
     fund_id = UUID((await client.post("/api/v1/funds", json={"name": "Fondo", "amount": "1000"})).json()["id"])
     mission = await _make_mission(db_session, teacher)
+    await _charge(db_session, fund_id, mission, Decimal("300.00"))
     service = FundService(db_session, FundRepository(db_session))
 
-    await service.lock_for_mission(fund_id, mission.id, Decimal("300.00"))
+    await service.release_from_mission(fund_id, mission.id, Decimal("300.00"))
     await db_session.commit()
+    fund = (await client.get(f"/api/v1/funds/{fund_id}")).json()
+    assert fund["committedAmount"] == "0.00"
+    assert fund["remainingAmount"] == "1000.00"
+
+    with pytest.raises(FundAmountError):
+        await service.release_from_mission(fund_id, mission.id, Decimal("0.01"))
+
+
+async def test_reserving_commits_the_mission_cost(
+    client: AsyncClient, db_session: AsyncSession, teacher: User
+):
+    fund_id = UUID((await client.post("/api/v1/funds", json={"name": "Fondo", "amount": "1000"})).json()["id"])
+    mission = await _make_mission(db_session, teacher)
+    await _charge(db_session, fund_id, mission, Decimal("300.00"))
 
     fund = (await client.get(f"/api/v1/funds/{fund_id}")).json()
     assert fund["amount"] == "1000.00"
@@ -189,7 +200,7 @@ async def test_locking_a_fund_commits_the_mission_cost(
     assert fund["remainingAmount"] == "700.00"
 
 
-async def test_locking_a_fund_beyond_its_remaining_amount_is_refused(
+async def test_reserving_beyond_the_remaining_amount_is_refused(
     client: AsyncClient, db_session: AsyncSession, teacher: User
 ):
     fund_id = UUID((await client.post("/api/v1/funds", json={"name": "Fondo", "amount": "1000"})).json()["id"])
@@ -197,35 +208,31 @@ async def test_locking_a_fund_beyond_its_remaining_amount_is_refused(
     service = FundService(db_session, FundRepository(db_session))
 
     with pytest.raises(FundAmountError, match=r"has € 1000\.00 available, but the mission requires € 1500\.00"):
-        await service.lock_for_mission(fund_id, mission.id, Decimal("1500.00"))
+        await service.reserve_for_mission(fund_id, mission.id, Decimal("1500.00"))
 
     fund = (await client.get(f"/api/v1/funds/{fund_id}")).json()
-    assert fund["lockedByMissionId"] is None
+    assert fund["missions"] == []
     assert fund["committedAmount"] == "0.00"
     assert fund["remainingAmount"] == "1000.00"
 
-async def test_fund_manager_disappears_when_all_funds_are_assigned(
+
+async def test_fund_manager_disappears_when_all_funds_are_exhausted(
     client: AsyncClient, db_session: AsyncSession, teacher: User
 ):
     fund_ids = [
-        UUID((await client.post("/api/v1/funds", json={"name": name, "amount": "500"})).json()["id"])
+        UUID((await client.post("/api/v1/funds", json={"name": name, "amount": "120.50"})).json()["id"])
         for name in ("Fondo A", "Fondo B")
     ]
-    service = FundService(db_session, FundRepository(db_session))
 
-    first = await _make_mission(db_session, teacher)
-    await service.lock_for_mission(fund_ids[0], first.id, first.estimated_cost)
-    await db_session.commit()
+    await _charge(db_session, fund_ids[0], await _make_mission(db_session, teacher))
     managers = (await client.get("/api/v1/users/fund-managers")).json()
     assert [u["fiscalCode"] for u in managers] == [teacher.fiscal_code]
 
-    second = await _make_mission(db_session, teacher)
-    await service.lock_for_mission(fund_ids[1], second.id, second.estimated_cost)
-    await db_session.commit()
+    await _charge(db_session, fund_ids[1], await _make_mission(db_session, teacher))
     assert (await client.get("/api/v1/users/fund-managers")).json() == []
 
 
-async def test_mission_on_own_fund_locks_it_at_creation(client: AsyncClient, teacher: User):
+async def test_missions_on_own_fund_are_charged_at_creation(client: AsyncClient, teacher: User):
     fund_id = (await client.post("/api/v1/funds", json={"name": "Mio", "amount": "500"})).json()["id"]
     start = (datetime.now() + timedelta(days=30)).replace(hour=8, minute=0, second=0, microsecond=0)
     body = {
@@ -233,17 +240,22 @@ async def test_mission_on_own_fund_locks_it_at_creation(client: AsyncClient, tea
         "estimatedCost": "100", "startsAt": start.isoformat(), "endsAt": (start + timedelta(days=1, hours=12)).isoformat(),
         "fundManagerId": str(teacher.id), "fundId": fund_id,
     }
-    created = await client.post("/api/v1/missions", json=body)
-    assert created.status_code == 201
-    assert created.json()["status"] == "ACCEPTED"
-    fund = (await client.get(f"/api/v1/funds/{fund_id}")).json()
-    assert fund["lockedByMissionId"] == created.json()["id"]
-
+    first = await client.post("/api/v1/missions", json=body)
     second = await client.post("/api/v1/missions", json=body)
-    assert second.status_code == 409
+    assert (first.status_code, second.status_code) == (201, 201)
+    assert first.json()["status"] == "ACCEPTED"
+    assert first.json()["fundId"] == fund_id
+
+    fund = (await client.get(f"/api/v1/funds/{fund_id}")).json()
+    assert fund["committedAmount"] == "200.00"
+    assert {m["id"] for m in fund["missions"]} == {first.json()["id"], second.json()["id"]}
+
+    too_expensive = await client.post("/api/v1/missions", json=body | {"estimatedCost": "400"})
+    assert too_expensive.status_code == 400
+    assert too_expensive.json()["message"] == 'Fund "Mio" has € 300.00 available, but the mission requires € 400.00'
 
 
-async def test_manager_accepts_a_mission_choosing_one_of_his_funds(
+async def test_manager_accepts_several_missions_on_the_same_fund(
     client: AsyncClient, db_session: AsyncSession, teacher: User
 ):
     other = User(
@@ -272,41 +284,39 @@ async def test_manager_accepts_a_mission_choosing_one_of_his_funds(
     for obj in list(db_session.identity_map.values()):
         await db_session.refresh(obj)
 
-    accepted = await accept(missions[0], {"fundId": fund_id, "response": "Ok"})
-    assert accepted.status_code == 200
-    assert accepted.json()["status"] == "ACCEPTED"
-    assert (await client.get(f"/api/v1/funds/{fund_id}")).json()["lockedByMissionId"] == missions[0]
+    for mission_id in missions:
+        accepted = await accept(mission_id, {"fundId": fund_id, "response": "Ok"})
+        assert accepted.status_code == 200
+        assert accepted.json()["status"] == "ACCEPTED"
+        assert accepted.json()["fundId"] == fund_id
 
-    second = await accept(missions[1], {"fundId": fund_id})
-    assert second.status_code == 409
-async def test_my_funds_show_who_requested_a_locked_fund_and_force_delete_it(
+    fund = (await client.get(f"/api/v1/funds/{fund_id}")).json()
+    assert fund["committedAmount"] == "241.00"
+    assert {m["id"] for m in fund["missions"]} == set(missions)
+
+
+async def test_my_funds_show_the_financed_missions_and_force_delete_it(
     client: AsyncClient, db_session: AsyncSession, teacher: User
 ):
     fund_id = (await client.post("/api/v1/funds", json={"name": "Fondo", "amount": "200"})).json()["id"]
-    mission = make_mission(
-        requester_id=teacher.id, fund_manager_id=teacher.id,
-        subject="Convegno", estimated_cost=Decimal("150.00"),
+    mission = await _make_mission(
+        db_session, teacher, subject="Convegno", estimated_cost=Decimal("150.00"),
     )
-    db_session.add(mission)
-    await db_session.commit()
-    mission_id = mission.id
-    await FundService(db_session, FundRepository(db_session)).lock_for_mission(
-        UUID(fund_id), mission_id, Decimal("150.00")
-    )
-    await db_session.commit()
+    await _charge(db_session, UUID(fund_id), mission)
 
     fund = (await client.get("/api/v1/funds")).json()["content"][0]
-    assert fund["requestedAmount"] == "150.00"
-    assert fund["requesterName"] == "Mario Rossi"
-    assert fund["missionSubject"] == "Convegno"
-    assert (await client.get(f"/api/v1/funds/{fund_id}")).json()["requesterName"] == "Mario Rossi"
+    assert fund["missions"] == [{
+        "id": str(mission.id), "subject": "Convegno", "status": "PENDING",
+        "estimatedCost": "150.00", "requesterName": "Mario Rossi",
+        "requestedAt": mission.created_at.isoformat(),
+    }]
 
     assert (await client.delete(f"/api/v1/funds/{fund_id}")).status_code == 409
     for obj in list(db_session.identity_map.values()):
         await db_session.refresh(obj)
     assert (await client.delete(f"/api/v1/funds/{fund_id}", params={"force": "true"})).status_code == 204
     assert (await client.get(f"/api/v1/funds/{fund_id}")).status_code == 404
-    assert (await client.get(f"/api/v1/missions/{mission_id}")).status_code == 200
+    assert (await client.get(f"/api/v1/missions/{mission.id}")).status_code == 200
 
 
 async def test_mission_in_the_past_is_rejected(client: AsyncClient, teacher: User):
