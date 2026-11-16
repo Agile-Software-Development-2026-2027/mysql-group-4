@@ -102,6 +102,11 @@
 
       <!-- Form -->
       <section class="form-pane">
+        @if (isExtractingOcr()) {
+          <div class="ocr-conversion-banner" role="status">
+            ✨ <strong>AI Auto-Fill:</strong> Scanning receipt text and detecting expense details...
+          </div>
+        }
         @if (conversionInfo(); as conv) {
           <div class="ocr-conversion-banner" role="status">
             💱 <strong>Currency conversion:</strong>

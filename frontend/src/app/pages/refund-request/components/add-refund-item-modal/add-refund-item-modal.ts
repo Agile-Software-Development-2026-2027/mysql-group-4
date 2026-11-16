@@ -27,6 +27,7 @@ import {
   ExpenseCategory,
   ExpenseSubtype,
   MissionDTO,
+  ReceiptAutocompleteDTO,
   RefundItemCreatePayload,
   RefundItemDTO,
   RefundReceiptUploadDTO,
@@ -90,6 +91,8 @@ export class AddRefundItemModal implements OnInit, OnChanges {
   foreignCurrency = signal<string>('EUR');
   readonly availableCurrencies = ['EUR', 'USD', 'GBP', 'CHF', 'RUB', 'CNY', 'TWD', 'JPY', 'AED', 'CAD', 'AUD'];
   isOcrPrefilled = signal(false);
+  isExtractingOcr = signal(false);
+  ocrRawText = signal<string | null>(null);
   minDateTime = signal<string | null>(null);
   maxDateTime = signal<string | null>(null);
   missionPeriodLabel = signal<string>('');
@@ -432,6 +435,7 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     }
 
     this.uploadToMinio(file);
+    this.triggerOcrExtraction(file);
   }
 
   private loadMissionCurrencyProfile(): void {
@@ -494,6 +498,94 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     });
   }
 
+  private triggerOcrExtraction(file: File): void {
+    if (!this.refundId) {
+      return;
+    }
+    this.isExtractingOcr.set(true);
+    this.refundService.extractReceipt(this.refundId, file).subscribe({
+      next: (dto: ReceiptAutocompleteDTO) => {
+        this.isExtractingOcr.set(false);
+        if (dto.rawText) {
+          this.ocrRawText.set(dto.rawText);
+        }
+
+        const patch: Partial<RefundItemCreatePayload> = {};
+        if (dto.category) {
+          patch.category = dto.category;
+        }
+        if (dto.subtype) {
+          patch.subtype = dto.subtype;
+        }
+        if (dto.amount != null) {
+          patch.requestedAmount = dto.convertedAmountEur ?? dto.amount;
+        }
+        if (dto.startsAt) {
+          patch.startsAt = dto.startsAt;
+        }
+        if (dto.endsAt) {
+          patch.endsAt = dto.endsAt;
+        }
+        if (dto.itineraryFrom) {
+          patch.itineraryFrom = dto.itineraryFrom;
+        }
+        if (dto.itineraryTo) {
+          patch.itineraryTo = dto.itineraryTo;
+        }
+        if (dto.description || dto.merchant) {
+          const parts = [dto.merchant, dto.description].filter(Boolean);
+          patch.description = parts.join(' - ').slice(0, 255);
+        }
+
+        if (dto.convertedAmountEur && dto.currency && dto.currency !== 'EUR' && dto.exchangeRate) {
+          this.conversionInfo.set({
+            originalCurrency: dto.currency,
+            originalAmount: dto.amount ?? 0,
+            convertedAmount: dto.convertedAmountEur,
+            rate: dto.exchangeRate,
+            date: dto.rateDate ?? '',
+            provider: 'AI Auto-Conversion',
+          });
+        }
+
+        const hasExtractedFields = Boolean(
+          dto.category ||
+          dto.amount != null ||
+          dto.startsAt ||
+          dto.merchant ||
+          dto.description ||
+          dto.itineraryFrom ||
+          dto.itineraryTo
+        );
+
+        if (!hasExtractedFields) {
+          if (dto.warnings?.length) {
+            console.warn('AI receipt extraction returned warnings:', dto.warnings);
+          }
+          this.toastService.showWarning(
+            'Failed to extract data from the receipt. Please fill the fields manually.',
+            'AI Auto-Fill'
+          );
+          return;
+        }
+
+        this.populateFromOcr(patch);
+        this.toastService.showSuccess(
+          'Receipt analyzed with AI. Fields have been pre-filled.',
+          'AI Auto-Fill'
+        );
+      },
+      error: (err) => {
+        this.isExtractingOcr.set(false);
+        console.warn('AI receipt extraction skipped/failed:', err);
+        this.toastService.showWarning(
+          'Failed to extract data from the receipt. Please fill the fields manually.',
+          'AI Auto-Fill'
+        );
+      },
+    });
+  }
+
   private uploadToMinio(file: File): void {
     this.isUploading.set(true);
     this.refundService.uploadReceipt(this.refundId, file).subscribe({
@@ -517,6 +609,8 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     this.uploadedReceipt.set(null);
     this.uploadError.set(null);
     this.isOcrPrefilled.set(false);
+    this.isExtractingOcr.set(false);
+    this.ocrRawText.set(null);
     this.isConvertingCurrency.set(false);
     this.conversionInfo.set(null);
   }

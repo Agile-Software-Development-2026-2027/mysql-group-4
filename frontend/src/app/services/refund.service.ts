@@ -7,6 +7,7 @@ import { Page } from '../core/models/page';
 import {
   CurrencyConversionDTO,
   MissionCurrencyProfileDTO,
+  ReceiptAutocompleteDTO,
   RefundApprovePayload,
   RefundItemCreatePayload,
   RefundItemDTO,
@@ -76,6 +77,16 @@ export class RefundService {
     formData.append('file', file);
     return this.http.post<RefundReceiptUploadDTO>(
       API_CONFIG.endpoints.refunds.receipts(refundId),
+      formData,
+      { withCredentials: true }
+    );
+  }
+
+  extractReceipt(refundId: string, file: File): Observable<ReceiptAutocompleteDTO> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<ReceiptAutocompleteDTO>(
+      API_CONFIG.endpoints.refunds.extractReceipt(refundId),
       formData,
       { withCredentials: true }
     );
