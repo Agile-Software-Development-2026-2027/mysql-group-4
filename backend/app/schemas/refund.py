@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Self
+from typing import Literal, Self
 from uuid import UUID
 
 from pydantic import ConfigDict, Field, NaiveDatetime, model_validator
@@ -148,11 +148,32 @@ class RefundItemDecisionDTO(CamelModel):
     reimbursed_amount: Decimal = Field(ge=0, decimal_places=2)
     admin_notes: str | None = Field(default=None, max_length=1000)
 
-
 class RefundApproveDTO(CamelModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     items: list[RefundItemDecisionDTO] = Field(min_length=1)
 
+class RefundItemFilterDTO(CamelModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    categories: list[ExpenseCategory] | None = None
+    sort_by_amount: Literal["asc", "desc"] | None = None
+
+
+class RefundItemUpdateDTO(CamelModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+
+    category: ExpenseCategory | None = None
+    subtype: ExpenseSubtype | None = None
+    itinerary_from: str | None = Field(default=None, min_length=1, max_length=255)
+    itinerary_to: str | None = Field(default=None, min_length=1, max_length=255)
+    starts_at: NaiveDatetime | None = None
+    ends_at: NaiveDatetime | None = None
+    requested_amount: Decimal | None = Field(default=None, gt=0, le=MAX_EXPENSE_AMOUNT, decimal_places=2)
+    currency: str | None = Field(default=None, min_length=3, max_length=3)
+    is_traceable: bool | None = None
+    receipt_file_path: str | None = Field(default=None, min_length=1, max_length=512)
+    receipt_original_filename: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = Field(default=None, min_length=1, max_length=255)
 
 class RefundFilterDTO(CamelModel):
     model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
