@@ -2,14 +2,17 @@ import mimetypes
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, Response, UploadFile, status
 
 from app.api.deps import get_refund_service
 from app.db.models import User
+from app.schemas.page import Page, PageRequest
 from app.schemas.refund import (
     RefundApproveDTO,
     RefundItemCreateDTO,
     RefundItemDTO,
+    RefundItemFilterDTO,
+    RefundItemUpdateDTO,
     RefundReceiptUploadDTO,
     RefundRequestCreateDTO,
     RefundRequestDTO,
@@ -24,6 +27,16 @@ refund_router = APIRouter(prefix="/refunds", tags=["refunds"])
 
 RefundServiceDependency = Annotated[RefundService, Depends(get_refund_service)]
 CurrentUser = Annotated[User, Depends(current_active_user)]
+
+
+def get_page_request(
+    page: Annotated[int, Query(ge=0)] = 0,
+    size: Annotated[int, Query(ge=1, le=5)] = 5,
+) -> PageRequest:
+    return PageRequest(page=page, size=size)
+
+
+Pagination = Annotated[PageRequest, Depends(get_page_request)]
 
 
 @refund_router.post("", response_model=RefundRequestDTO, status_code=status.HTTP_201_CREATED)
@@ -77,3 +90,35 @@ async def filter_refunds(
     filters: RefundFilterDTO | None = None,
 ) -> list[RefundOverviewDTO]:
     return await service.get_filtered_refunds(user, filters)
+
+
+@refund_router.post("/{refund_id}/items/filter", response_model=Page[RefundItemDTO], summary="Filter and paginate refund items of a refund request")
+async def get_refund_items(
+    refund_id: UUID,
+    user: CurrentUser,
+    service: RefundServiceDependency,
+    page_request: Pagination,
+    filters: RefundItemFilterDTO | None = None,
+) -> Page[RefundItemDTO]:
+    return await service.get_refund_items(refund_id=refund_id, user=user, filters=filters, page_request=page_request)
+
+
+@refund_router.patch("/{refund_id}/items/{item_id}", response_model=RefundItemDTO, summary="Update a refund item")
+async def update_refund_item(
+    refund_id: UUID,
+    item_id: UUID,
+    user: CurrentUser,
+    service: RefundServiceDependency,
+    data: RefundItemUpdateDTO,
+) -> RefundItemDTO:
+    return await service.update_refund_item(refund_request_id=refund_id, item_id=item_id, user=user, data=data)
+
+
+@refund_router.delete("/{refund_id}/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete a refund item")
+async def delete_refund_item(
+    refund_id: UUID,
+    item_id: UUID,
+    user: CurrentUser,
+    service: RefundServiceDependency,
+) -> None:
+    await service.delete_refund_item(refund_request_id=refund_id, item_id=item_id, user=user)
