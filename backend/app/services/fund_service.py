@@ -2,22 +2,24 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from uuid import UUID
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import (
     AccessDeniedError,
-    FundLockedError,
+    FundInUseError,
     FundNotFoundError,
     UserNotFoundError,
+    FundAmountError,
 )
 from app.crud.fund_repository import FundRepository
 from app.crud.user_repository import UserRepository
 from app.db.fund import Fund
 from app.db.models import User
 from app.db.mission import Mission
-from app.schemas.fund import FundCreateDTO, FundDTO, FundUpdateDTO
+from app.schemas.fund import FundCreateDTO, FundDTO, FundMissionDTO, FundUpdateDTO
 from app.schemas.page import Page, PageRequest
 
 logger = logging.getLogger(__name__)
@@ -42,20 +44,16 @@ class FundService:
 
     async def get_fund_by_mission_id(self, mission_id: UUID, user_id: UUID) -> FundDTO | None:
         user = await self._get_active_user_or_throw(user_id)
-        stmt = select(Fund).where(Fund.locked_by_mission_id == mission_id)
-        result = await self._session.execute(stmt)
-        fund = result.scalars().first()
-        if fund is None:
+        mission = await self._session.scalar(select(Mission).where(Mission.id == mission_id))
+        if mission is None or mission.fund_id is None:
             return None
+        fund = await self._get_fund_or_throw(mission.fund_id)
 
-        if user.is_superuser or fund.responsible_fc == user.fiscal_code:
-            return FundDTO.model_validate(fund)
-
-        mission_stmt = select(Mission).where(Mission.id == mission_id)
-        mission_res = await self._session.execute(mission_stmt)
-        mission = mission_res.scalars().first()
-
-        if mission and (user.is_superuser or mission.requester_id == user.id or mission.fund_manager_id == user.id):
+        if (
+            user.is_superuser
+            or fund.responsible_fc == user.fiscal_code
+            or user.id in (mission.requester_id, mission.fund_manager_id)
+        ):
             return FundDTO.model_validate(fund)
 
         raise AccessDeniedError("User cannot access this fund")
@@ -102,11 +100,17 @@ class FundService:
             user = await self._get_active_user_or_throw(user_id)
             fund = await self._get_fund_or_throw(fund_id, for_update=True)
             self._validate_user_is_responsible(fund, user)
+            if data.amount < fund.committed_amount:
+                raise FundAmountError(
+                    fund_id,
+                    f'Fund "{fund.name}" already has € {fund.committed_amount} committed to missions: '
+                    f"its total amount cannot be lowered to € {data.amount}",
+                )
             for field, value in data.model_dump(exclude_unset=True).items():
                 setattr(fund, field, value)
             fund.updated_by = user.id
             saved = await self._repository.save(fund)
-            result = FundDTO.model_validate(saved)
+            result = (await self._to_dtos([saved]))[0]
         logger.info("Fund %s updated by user %s", fund_id, user_id)
         return result
 
@@ -115,43 +119,53 @@ class FundService:
             user = await self._get_active_user_or_throw(user_id)
             fund = await self._get_fund_or_throw(fund_id, for_update=True)
             self._validate_user_is_responsible(fund, user)
-            if fund.locked_by_mission_id is not None and not force:
-                raise FundLockedError(fund.id)
+            if not force and await self._repository.is_funding_missions(fund.id):
+                raise FundInUseError(fund.id)
             await self._repository.delete(fund)
         logger.info("Fund %s deleted by user %s", fund_id, user_id)
 
-    async def lock_for_mission(
-        self, fund_id: UUID, mission_id: UUID, *, responsible_fc: str | None = None
+    async def reserve_for_mission(
+        self, fund_id: UUID, mission_id: UUID, amount: Decimal, *, responsible_fc: str | None = None
     ) -> Fund:
         fund = await self._get_fund_or_throw(fund_id)
         if responsible_fc is not None and fund.responsible_fc != responsible_fc:
             raise AccessDeniedError("The fund does not belong to the mission fund manager")
-        if not await self._repository.lock(fund_id, mission_id):
-            raise FundLockedError(fund_id)
+        if not await self._repository.reserve(fund_id, amount):
+            await self._session.refresh(fund)
+            raise FundAmountError(
+                fund_id,
+                f'Fund "{fund.name}" has € {fund.amount - fund.committed_amount} available, '
+                f"but the mission requires € {amount}",
+            )
         await self._session.refresh(fund)
-        logger.info("Fund %s locked by mission %s", fund_id, mission_id)
+        logger.info("Fund %s: %s reserved by mission %s", fund_id, amount, mission_id)
         return fund
 
-    async def release_from_mission(self, fund_id: UUID, mission_id: UUID) -> None:
-        await self._repository.release(fund_id, mission_id)
-        logger.info("Fund %s released by mission %s", fund_id, mission_id)
+    async def release_from_mission(self, fund_id: UUID, mission_id: UUID, amount: Decimal) -> None:
+        if not await self._repository.release(fund_id, amount):
+            raise FundAmountError(
+                fund_id, f"Cannot release € {amount}: it exceeds the amount committed on the fund"
+            )
+        logger.info("Fund %s: %s released by mission %s", fund_id, amount, mission_id)
 
     async def _to_dtos(self, funds: list[Fund]) -> list[FundDTO]:
-        holders = await self._repository.find_lock_holders(
-            {fund.locked_by_mission_id for fund in funds if fund.locked_by_mission_id}
-        )
-        dtos = []
-        for fund in funds:
-            dto = FundDTO.model_validate(fund)
-            holder = holders.get(fund.locked_by_mission_id)
-            if holder is not None:
-                dto = dto.model_copy(update={
-                    "mission_subject": holder.subject,
-                    "requested_amount": holder.estimated_cost,
-                    "requester_name": f"{holder.name} {holder.surname}",
-                })
-            dtos.append(dto)
-        return dtos
+        missions = await self._repository.find_funded_missions({fund.id for fund in funds})
+        return [
+            FundDTO.model_validate(fund).model_copy(update={
+                "missions": [
+                    FundMissionDTO(
+                        id=row.id,
+                        subject=row.subject,
+                        status=row.status,
+                        estimated_cost=row.estimated_cost,
+                        requester_name=f"{row.name} {row.surname}",
+                        requested_at=row.created_at,
+                    )
+                    for row in missions.get(fund.id, [])
+                ],
+            })
+            for fund in funds
+        ]
 
     async def _get_fund_or_throw(self, fund_id: UUID, *, for_update: bool = False) -> Fund:
         if for_update:
