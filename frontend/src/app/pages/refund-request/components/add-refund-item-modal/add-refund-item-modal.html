@@ -229,8 +229,8 @@
                 } @else if (form.hasError('endBeforeStart') && form.get('endsAt')?.touched) {
                   <span class="form-error">
                     {{ form.get('category')?.value === ExpenseCategory.TRANSPORT
-                      ? 'Arrival time must be after departure time.'
-                      : 'Check-out time must be after check-in time.' }}
+                    ? 'Arrival time must be after departure time.'
+                    : 'Check-out time must be after check-in time.' }}
                   </span>
                 }
               </div>
