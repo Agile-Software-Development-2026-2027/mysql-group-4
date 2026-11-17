@@ -22,10 +22,12 @@ from app.core.exceptions import (
     InvalidRefundRequestDateError,
     InvalidRefundStateError,
     MissionNotFoundError,
+    RefundAmountExceededError,
     RefundItemCreateError,
     RefundNotFoundError,
     ResourceNotFoundError,
 )
+from app.crud.fund_repository import FundRepository
 from app.crud.mission_repository import MissionRepository
 from app.crud.refund_repository import RefundRepository
 from app.db.models import User
@@ -45,6 +47,7 @@ from app.schemas.refund import (
     RefundFilterDTO,
     RefundOverviewDTO
 )
+from app.services.fund_service import FundService
 
 logger = logging.getLogger(__name__)
 
@@ -70,10 +73,24 @@ _ensure_bucket_exists()
 
 
 class RefundService:
-    def __init__(self, session: AsyncSession, refund_repository: RefundRepository, mission_repository: MissionRepository):
+    def __init__(
+        self,
+        session: AsyncSession,
+        refund_repository: RefundRepository,
+        mission_repository: MissionRepository,
+        fund_service: FundService | None = None,
+    ):
         self.session = session
         self.refund_repository = refund_repository
         self.mission_repository = mission_repository
+        self.fund_service = fund_service or FundService(session, FundRepository(session))
+
+    async def _ensure_within_estimate(self, refund_request: RefundRequest, total: Decimal) -> None:
+        mission = await self.mission_repository.find_by_id(refund_request.mission_id)
+        if mission and total > mission.estimated_cost:
+            raise RefundAmountExceededError(
+                f"The refund total (€ {total}) cannot exceed the mission estimated cost (€ {mission.estimated_cost})"
+            )
 
     @asynccontextmanager
     async def transaction(self) -> AsyncIterator[None]:
@@ -120,6 +137,7 @@ class RefundService:
                 raise InvalidRefundStateError("Only draft refund requests can be submitted")
             if not refund.items:
                 raise InvalidRefundStateError("Cannot submit a refund request without expense items")
+            await self._ensure_within_estimate(refund, refund.total_requested_amount)
 
             refund.status = RefundStatus.SUBMITTED
             refund.submitted_at = datetime.now(timezone.utc)
@@ -165,17 +183,31 @@ class RefundService:
                 item = items_by_id.get(decision.item_id)
                 if item is None:
                     raise InvalidRefundDecisionError(f"Item {decision.item_id} does not belong to this refund request")
+                if decision.reimbursed_amount > item.requested_amount:
+                    raise InvalidRefundDecisionError(
+                        f"The reimbursed amount for item {item.id} cannot exceed the requested € {item.requested_amount}"
+                    )
                 item.reimbursed_amount = decision.reimbursed_amount
                 item.admin_notes = decision.admin_notes
                 item.updated_by = user.id
 
             refund.total_reimbursed_amount = sum(
                 (item.reimbursed_amount or Decimal("0.00") for item in refund.items), Decimal("0.00"))
+            mission = await self.mission_repository.find_by_id(refund.mission_id)
+            if refund.total_reimbursed_amount > mission.estimated_cost:
+                raise RefundAmountExceededError(
+                    f"The reimbursed total (€ {refund.total_reimbursed_amount}) cannot exceed "
+                    f"the mission estimated cost (€ {mission.estimated_cost})"
+                )
             refund.status = RefundStatus.APPROVED
             refund.approved_at = datetime.now(timezone.utc)
             refund.updated_by = user.id
-            mission = await self.mission_repository.find_by_id(refund.mission_id)
             mission.status = MissionStatus.COMPLETED
+
+            if mission.fund_id is not None:
+                await self.fund_service.settle_mission(
+                    mission.fund_id, mission.id, mission.estimated_cost, refund.total_reimbursed_amount
+                )
 
         logger.info("Refund request %s approved by admin %s", refund_id, user.id)
         return await self.get_refund_for_review(refund_id, user)
@@ -264,6 +296,9 @@ class RefundService:
 
             if refund_request.status != RefundStatus.DRAFT:
                 raise RefundItemCreateError("You cannot add new items to an already submitted / accepted refund request.")
+            await self._ensure_within_estimate(
+                refund_request, refund_request.total_requested_amount + data.requested_amount
+            )
 
             refund_item = RefundItem(
                 **data.model_dump(),
@@ -352,7 +387,9 @@ class RefundService:
             item.updated_by = user.id
 
             if "requested_amount" in updates:
-                refund_request.total_requested_amount += item.requested_amount - old_amount
+                new_total = refund_request.total_requested_amount + item.requested_amount - old_amount
+                await self._ensure_within_estimate(refund_request, new_total)
+                refund_request.total_requested_amount = new_total
 
             await self.session.flush()
             await self.session.refresh(item)

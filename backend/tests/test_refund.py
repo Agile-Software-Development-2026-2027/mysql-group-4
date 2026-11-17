@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.enums import (EmploymentLevel,ExpenseCategory,ExpenseSubtype,MissionStatus,MissionType,RefundStatus)
+from app.db.fund import Fund
 from app.db.mission import Mission
 from app.db.models import User
 from app.schemas.refund import MAX_EXPENSE_AMOUNT, RefundItemCreateDTO, RefundRequestDTO
@@ -1412,4 +1413,86 @@ async def test_submit_refund_request_fails_if_already_submitted(client: AsyncCli
 
     second_submit = await client.patch(f"/api/v1/refunds/{refund_id}/submit")
     assert second_submit.status_code == 400
+
+
+# ==============================================================================
+# TEST limite sul costo stimato e regolazione del fondo all'approvazione
+# ==============================================================================
+
+async def create_funded_mission(db_session: AsyncSession, requester: User) -> tuple[Mission, Fund]:
+    # Fondo da 1000 con 250 già impegnati dalla missione (il suo costo stimato).
+    mission = await create_mission(db_session, requester.id, ended=True)
+    fund = Fund(
+        name="Fondo Ricerca", amount=Decimal("1000.00"), committed_amount=mission.estimated_cost,
+        responsible_fc=requester.fiscal_code,
+    )
+    db_session.add(fund)
+    await db_session.flush()
+    mission.fund_id = fund.id
+    await db_session.commit()
+    return mission, fund
+
+
+@pytest.mark.asyncio
+async def test_create_refund_item_fails_when_total_exceeds_estimated_cost(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund_id = (await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})).json()["id"]
+
+    first = await client.post(f"/api/v1/refunds/{refund_id}/items", json=make_valid_transport_item_payload())
+    assert first.status_code == 201
+
+    too_much = make_valid_transport_item_payload() | {"requestedAmount": 200.00}
+    response = await client.post(f"/api/v1/refunds/{refund_id}/items", json=too_much)
+    assert response.status_code == 400
+    assert "estimated cost" in response.json()["message"]
+
+
+@pytest.mark.asyncio
+async def test_update_refund_item_fails_when_total_exceeds_estimated_cost(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund_id = UUID((await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})).json()["id"])
+
+    item = _make_test_item(refund_id, requester.id, Decimal("40.00"))
+    db_session.add(item)
+    refund = (await db_session.execute(select(RefundRequest).where(RefundRequest.id == refund_id))).scalar_one()
+    refund.total_requested_amount = Decimal("40.00")
+    await db_session.commit()
+
+    response = await client.patch(f"/api/v1/refunds/{refund_id}/items/{item.id}", json={"requestedAmount": "260.00"})
+    assert response.status_code == 400
+
+    await db_session.refresh(refund)
+    assert refund.total_requested_amount == Decimal("40.00")
+
+
+@pytest.mark.asyncio
+async def test_approve_refund_charges_reimbursed_and_returns_rest_to_fund(client: AsyncClient, db_session: AsyncSession, requester: User, admin_user: User):
+    mission, fund = await create_funded_mission(db_session, requester)
+    refund, item = await create_submitted_refund(db_session, mission.id)
+
+    app.dependency_overrides[current_active_user] = lambda: admin_user
+    response = await client.patch(f"/api/v1/refunds/{refund.id}/approve", json=approve_payload(item.id))
+    assert response.status_code == 200
+
+    # Riservati 250, rimborsati 20: il fondo paga 20 e gli tornano disponibili 230.
+    await db_session.refresh(fund)
+    assert fund.amount == Decimal("980.00")
+    assert fund.committed_amount == Decimal("0.00")
+
+
+@pytest.mark.asyncio
+async def test_approve_refund_fails_when_reimbursed_exceeds_requested(client: AsyncClient, db_session: AsyncSession, requester: User, admin_user: User):
+    mission, fund = await create_funded_mission(db_session, requester)
+    refund, item = await create_submitted_refund(db_session, mission.id)
+
+    app.dependency_overrides[current_active_user] = lambda: admin_user
+    payload = {"items": [{"itemId": str(item.id), "reimbursedAmount": "30.00"}]}
+    response = await client.patch(f"/api/v1/refunds/{refund.id}/approve", json=payload)
+    assert response.status_code == 400
+
+    await db_session.refresh(fund)
+    await db_session.refresh(refund)
+    assert fund.amount == Decimal("1000.00")
+    assert fund.committed_amount == Decimal("250.00")
+    assert refund.status == RefundStatus.SUBMITTED
 

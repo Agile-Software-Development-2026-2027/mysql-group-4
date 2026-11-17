@@ -403,9 +403,9 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
           this.toastService.showSuccess('Expense item updated successfully.', 'Saved');
           this.closeItemModal();
         },
-        error: () => {
+        error: (err) => {
           this.isSaving.set(false);
-          this.toastService.showError('Could not save expense item changes.', 'Save Error');
+          this.toastService.showError(err?.error?.message ?? 'Could not save expense item changes.', 'Save Error');
         },
       });
     };
