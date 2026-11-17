@@ -10,6 +10,7 @@ from app.services.mission_service import MissionService
 
 from app.crud.refund_repository import refund_repository
 from app.services.refund_service import RefundService
+from app.services.currency_service import CurrencyConversionService
 
 
 def get_mission_service(
@@ -35,3 +36,7 @@ def get_fund_service(
 
 def get_refund_service(session: AsyncSession = Depends(get_async_session)) -> RefundService:
     return RefundService(session=session, refund_repository = refund_repository, mission_repository = MissionRepository(session))
+    
+_currency_service_singleton = CurrencyConversionService()
+def get_currency_service() -> CurrencyConversionService:
+    return _currency_service_singleton

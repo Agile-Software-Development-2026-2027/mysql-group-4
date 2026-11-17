@@ -337,6 +337,53 @@ $radius: 4px;
   overflow-y: auto;
   background: $white;
 
+  .ocr-scanning-banner {
+    margin-bottom: 16px;
+    padding: 10px 14px;
+    background: #eff6ff;
+    border-left: 4px solid #3b82f6;
+    color: #1e40af;
+    font-size: 0.85rem;
+    font-weight: 500;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    .spinner-badge {
+      border: 2px solid rgba(#3b82f6, 0.3);
+      border-top-color: #3b82f6;
+    }
+  }
+
+  .ocr-conversion-banner {
+    margin-bottom: 16px;
+    padding: 10px 14px;
+    background: #fefce8;
+    border-left: 4px solid #eab308;
+    color: #854d0e;
+    font-size: 0.85rem;
+    border-radius: 4px;
+
+    .ocr-rate-note {
+      display: block;
+      font-size: 0.75rem;
+      margin-top: 3px;
+      color: #a16207;
+    }
+  }
+
+  .ocr-prefilled-alert {
+    margin-bottom: 16px;
+    padding: 10px 14px;
+    background: #ecfdf5;
+    border-left: 4px solid #10b981;
+    color: #065f46;
+    font-size: 0.85rem;
+    font-weight: 500;
+    border-radius: 4px;
+  }
+
   .form-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -374,6 +421,53 @@ $radius: 4px;
   textarea.form-control {
     min-height: 80px;
     resize: vertical;
+  }
+}
+
+.currency-converter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border: 1px solid $border;
+  border-radius: 8px;
+
+  label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #475569;
+    white-space: nowrap;
+  }
+
+  .converter-select {
+    width: auto;
+    min-width: 85px;
+    padding: 4px 8px;
+    font-size: 0.88rem;
+  }
+
+  .btn-convert-currency {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid #0284c7;
+    background: #0ea5e9;
+    color: $white;
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.15s;
+
+    &:hover:not(:disabled) {
+      background: #0284c7;
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
   }
 }
 

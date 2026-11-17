@@ -151,3 +151,17 @@ export interface RefundOverviewDTO {
   submittedAt?: string | null;
   approvedAt?: string | null;
 }
+export interface CurrencyConversionDTO {
+  originalCurrency: string;
+  originalAmount: number;
+  convertedAmount: number;
+  rate: number;
+  date: string;
+  provider: string;
+}
+
+export interface MissionCurrencyProfileDTO {
+  destination?: string | null;
+  defaultCurrency: string;
+}
+

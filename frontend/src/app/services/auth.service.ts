@@ -24,8 +24,8 @@ export class AuthService {
   getUser(): User | null {
     return this._currentUser();
   }
-  landingUrl():string{ //se l'utente è admin va alla pagina refundreview (per ora) altrimenti alla home
-    return this.isAdmin() ? '/refundreview/1' : '/home';
+  landingUrl(): string {
+    return this.isAdmin() ? '/refundoverview' : '/home';
   }
 
   checkSession(): Observable<User | null> {

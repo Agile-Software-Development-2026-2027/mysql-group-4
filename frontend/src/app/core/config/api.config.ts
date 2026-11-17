@@ -35,6 +35,8 @@ export const API_CONFIG = {
       item: (refundId: string, itemId: string) =>
         `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/items/${itemId}`,
       itemsFilter: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/items/filter`,
+      convertCurrency: `${environment.apiBaseUrl}/api/v1/refunds/convert-currency`,
+      currencyProfile: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/currency-profile`,
     },
   },
 } as const;
