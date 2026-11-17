@@ -39,16 +39,9 @@
       </button>
       <h1>Refund Receipts</h1>
     </div>
-    @if (items().length > 0) {
-    <button class="btn btn-add-expand" type="button" (click)="openAddModal()" aria-label="Add Receipt">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-        aria-hidden="true">
-        <line x1="12" y1="5" x2="12" y2="19"></line>
-        <line x1="5" y1="12" x2="19" y2="12"></line>
-      </svg>
-      <span class="btn-add-expand__label">Add Receipt</span>
-    </button>
-    }
+    <span class="status status--{{ ref.status.toLowerCase() }}">
+      {{ ref.status }}
+    </span>
   </header>
 
   <section class="card refund-main-card" aria-label="Refund request details">
@@ -106,13 +99,39 @@
         </svg>
         <h2>No receipts uploaded yet</h2>
         <p>There are no expense receipts attached to this refund request yet. Add your first receipt to get started.</p>
+        @if (isDraft()) {
         <button class="btn btn--outline" type="button" (click)="openAddModal()">Add your first receipt</button>
+        }
       </div>
       } @else {
       <div class="receipts-toolbar">
-        <div class="receipts-heading">
-          <h2>Receipts</h2>
-          <p class="receipts-hint">Click any row to view or edit its details.</p>
+        <div class="receipts-header-row">
+          <div class="receipts-heading">
+            <h2>Receipts</h2>
+            <p class="receipts-hint">Click any row to view{{ isDraft() ? ' or edit' : '' }} its details.</p>
+          </div>
+          <div class="receipts-actions">
+            @if (isDraft()) {
+            <button class="btn btn-expand btn-expand--secondary" type="button" (click)="openAddModal()" aria-label="Add Receipt" title="Add Receipt">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                aria-hidden="true">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              <span class="btn-expand__label">Add Receipt</span>
+            </button>
+            <button class="btn btn-expand btn-expand--primary" type="button"
+              [disabled]="items().length === 0 || isSubmitting()"
+              (click)="submitRefund()"
+              aria-label="Submit Request" title="Submit Request">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+              <span class="btn-expand__label">{{ isSubmitting() ? 'Submitting...' : 'Submit Request' }}</span>
+            </button>
+            }
+          </div>
         </div>
 
         <ng-template #categoryIcon let-cat>
@@ -206,12 +225,14 @@
               <th>Description</th>
               <th>Date</th>
               <th>Amount</th>
+              @if (isDraft()) {
               <th><span class="sr-only">Actions</span></th>
+              }
             </tr>
           </thead>
           <tbody>
             @for (item of filteredItems(); track item.id) {
-            <tr class="expense-row" tabindex="0" title="Click to edit receipt" (click)="openItemModal(item)"
+            <tr class="expense-row" tabindex="0" [title]="isDraft() ? 'Click to edit receipt' : 'Click to view receipt'" (click)="openItemModal(item)"
               (keydown.enter)="openItemModal(item)">
               <td data-label="Category">
                 <span class="cat-badge">
@@ -229,6 +250,7 @@
                 @if (item.endsAt) { → {{ item.endsAt | date:'dd/MM/yyyy' }} }
               </td>
               <td data-label="Amount" class="amount-cell">€ {{ item.requestedAmount | number:'1.2-2' }}</td>
+              @if (isDraft()) {
               <td class="actions-cell">
                 <button type="button" class="row-action-btn" aria-label="Edit receipt" title="Edit receipt"
                   (click)="$event.stopPropagation(); openItemModal(item)">
@@ -250,6 +272,7 @@
                   </svg>
                 </button>
               </td>
+              }
             </tr>
             }
           </tbody>
@@ -280,7 +303,7 @@
     <div class="modal-dialog card" (click)="$event.stopPropagation()" role="dialog" aria-modal="true"
       aria-labelledby="detailModalTitle">
       <header class="modal-header">
-        <h2 id="detailModalTitle">Edit Expense Item</h2>
+        <h2 id="detailModalTitle">{{ isDraft() ? 'Edit Expense Item' : 'Expense Item Details' }}</h2>
         <button class="close-btn" type="button" (click)="closeItemModal()" aria-label="Close modal">✕</button>
       </header>
 
@@ -292,7 +315,9 @@
               <span class="file-name" [title]="receiptPreview()?.filename ?? item.receiptOriginalFilename">
                 {{ receiptPreview()?.filename ?? item.receiptOriginalFilename }}
               </span>
+              @if (isDraft()) {
               <button class="btn btn--outline btn--sm" type="button" (click)="replaceInput.click()">Replace</button>
+              }
               <input #replaceInput type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" hidden
                 (change)="onReplaceReceipt($event)" />
             </div>
@@ -321,8 +346,9 @@
               <polyline points="14 2 14 8 20 8"></polyline>
             </svg>
             <p>No receipt file uploaded for this expense.</p>
-            <button class="btn btn--outline btn--sm" type="button" (click)="replaceInput.click()">Upload
-              receipt</button>
+            @if (isDraft()) {
+            <button class="btn btn--outline btn--sm" type="button" (click)="replaceInput.click()">Upload receipt</button>
+            }
           </div>
           }
         </section>
@@ -419,10 +445,12 @@
 
       <footer class="modal-footer">
         <button class="btn btn--outline" type="button" (click)="closeItemModal()"
-          [disabled]="isSaving()">Cancel</button>
+          [disabled]="isSaving()">{{ isDraft() ? 'Cancel' : 'Close' }}</button>
+        @if (isDraft()) {
         <button class="btn" type="button" (click)="saveItemChanges()" [disabled]="editForm.invalid || isSaving()">
           {{ isSaving() ? 'Saving...' : 'Save Changes' }}
         </button>
+        }
       </footer>
     </div>
   </div>

@@ -16,7 +16,7 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { Topbar } from '../../components/topbar/topbar';
 import { AddRefundItemModal } from './components/add-refund-item-modal/add-refund-item-modal';
 import { API_CONFIG } from '../../core/config/api.config';
-import { ExpenseCategory, ExpenseSubtype, MissionDTO, RefundItemDTO, RefundItemFilterPayload, RefundItemUpdatePayload, RefundRequestDTO } from '../../core/models';
+import { ExpenseCategory, ExpenseSubtype, MissionDTO, RefundItemDTO, RefundItemFilterPayload, RefundItemUpdatePayload, RefundRequestDTO, RefundStatus } from '../../core/models';
 import { RefundService } from '../../services/refund.service';
 import { ToastService } from '../../services/toast.service';
 
@@ -72,6 +72,8 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
   readonly receiptError = signal(false);
   readonly receiptPreview = signal<{ url: SafeResourceUrl; fileURL: string; isPdf: boolean; filename: string } | null>(null);
   readonly replacementFile = signal<File | null>(null);
+  readonly isSubmitting = signal(false);
+  readonly isDraft = computed(() => this.refund()?.status === RefundStatus.DRAFT);
 
   editForm: FormGroup = this.fb.group({
     category: [ExpenseCategory.TRANSPORT, Validators.required],
@@ -252,6 +254,11 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
       description: item.description,
     });
     this.updateFormValidators(item.category);
+    if (!this.isDraft()) {
+      this.editForm.disable();
+    } else {
+      this.editForm.enable();
+    }
     this.revokePreviewUrl();
     this.receiptError.set(false);
     if (!id || !item.receiptFilePath) return;
@@ -364,7 +371,7 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
   saveItemChanges(): void {
     const current = this.selectedItem();
     const refundId = this.refundId();
-    if (!current || !refundId || this.editForm.invalid || this.isSaving()) {
+    if (!current || !refundId || this.editForm.invalid || this.isSaving() || !this.isDraft()) {
       this.editForm.markAllAsTouched();
       return;
     }
@@ -458,10 +465,33 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
     this.loadFilteredItems(true);
   }
 
+  submitRefund(): void {
+    const ref = this.refund();
+    if (!ref || this.items().length === 0 || this.isSubmitting() || !this.isDraft()) {
+      return;
+    }
+    this.isSubmitting.set(true);
+    this.refundService.submitRefundRequest(ref.id).subscribe({
+      next: (updatedRefund) => {
+        this.isSubmitting.set(false);
+        this.refund.set(updatedRefund);
+        this.toastService.showSuccess('Refund request submitted successfully.', 'Submitted');
+        this.router.navigate(['/missionreview'], { queryParams: { view: 'requester' } });
+      },
+      error: (err) => {
+        this.isSubmitting.set(false);
+        this.toastService.showError(
+          err?.error?.message ?? 'Failed to submit refund request.',
+          'Error'
+        );
+      },
+    });
+  }
+
   deleteItem(item: RefundItemDTO, event: Event): void {
     event.stopPropagation();
     const id = this.refundId();
-    if (!id) return;
+    if (!id || !this.isDraft()) return;
     this.refundService.deleteRefundItem(id, item.id).subscribe({
       next: () => {
         this.items.update((list) => list.filter((it) => it.id !== item.id));
