@@ -28,6 +28,7 @@ export const API_CONFIG = {
       byId: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}`,
       review: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/review`,
       approve: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/approve`,
+      submit: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/submit`,
       receipt: (refundId: string, itemId: string) =>
         `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/items/${itemId}/receipt`,
       receipts: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/receipts`,

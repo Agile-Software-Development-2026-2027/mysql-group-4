@@ -65,6 +65,14 @@ export class RefundService {
     );
   }
 
+  submitRefundRequest(refundId: string): Observable<RefundRequestDTO> {
+    return this.http.patch<RefundRequestDTO>(
+      API_CONFIG.endpoints.refunds.submit(refundId),
+      {},
+      { withCredentials: true }
+    );
+  }
+
   downloadReceipt(refundId: string, itemId: string): Observable<Blob> {
     return this.http.get(API_CONFIG.endpoints.refunds.receipt(refundId, itemId), {
       responseType: 'blob',

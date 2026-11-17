@@ -109,6 +109,29 @@ class RefundService:
         logger.info("Refund request %s created for mission %s by user %s", result.id, data.mission_id, user.id)
         return result
 
+    async def submit_refund_request(self, refund_id: UUID, user: User) -> RefundRequestDTO:
+        async with self.transaction():
+            refund = await self.refund_repository.find_by_id(self.session, refund_id)
+            if not refund:
+                raise RefundNotFoundError(refund_id)
+            if refund.created_by != user.id:
+                raise AccessDeniedError("Only the requester can submit this refund request")
+            if refund.status != RefundStatus.DRAFT:
+                raise InvalidRefundStateError("Only draft refund requests can be submitted")
+            if not refund.items:
+                raise InvalidRefundStateError("Cannot submit a refund request without expense items")
+
+            refund.status = RefundStatus.SUBMITTED
+            refund.submitted_at = datetime.now(timezone.utc)
+            refund.updated_by = user.id
+
+            await self.session.flush()
+            await self.session.refresh(refund)
+            result = RefundRequestDTO.model_validate(refund)
+
+        logger.info("Refund request %s submitted by user %s", refund_id, user.id)
+        return result
+
     async def get_refund_request_by_id(self, refund_id: UUID, user: User) -> RefundRequestDTO:
         refund = await self.refund_repository.find_by_id(self.session, refund_id)
         if not refund:

@@ -1343,3 +1343,73 @@ async def test_delete_refund_item_fails_when_refund_not_draft(client: AsyncClien
 
     resp = await client.delete(f"/api/v1/refunds/{refund_id}/items/{item.id}")
     assert resp.status_code == 400
+
+
+# ==============================================================================
+# TEST endpoint PATCH /api/v1/refunds/{refund_id}/submit
+# ==============================================================================
+
+@pytest.mark.asyncio
+async def test_submit_refund_request_happy_path(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    post_res = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    assert post_res.status_code == 201
+    refund_id = post_res.json()["id"]
+
+    item_payload = make_valid_transport_item_payload()
+    item_res = await client.post(f"/api/v1/refunds/{refund_id}/items", json=item_payload)
+    assert item_res.status_code == 201
+
+    response = await client.patch(f"/api/v1/refunds/{refund_id}/submit")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "SUBMITTED"
+    assert data["submittedAt"] is not None
+
+
+@pytest.mark.asyncio
+async def test_submit_refund_request_forbidden_for_other_user(client: AsyncClient, db_session: AsyncSession, requester: User, other_user: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    post_res = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = post_res.json()["id"]
+
+    item_payload = make_valid_transport_item_payload()
+    await client.post(f"/api/v1/refunds/{refund_id}/items", json=item_payload)
+
+    app.dependency_overrides[current_active_user] = lambda: other_user
+    response = await client.patch(f"/api/v1/refunds/{refund_id}/submit")
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_submit_refund_request_not_found(client: AsyncClient, requester: User):
+    response = await client.patch(f"/api/v1/refunds/{uuid4()}/submit")
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_submit_refund_request_fails_if_no_items(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    post_res = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = post_res.json()["id"]
+
+    response = await client.patch(f"/api/v1/refunds/{refund_id}/submit")
+    assert response.status_code == 400
+    assert "items" in response.json()["message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_submit_refund_request_fails_if_already_submitted(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    post_res = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = post_res.json()["id"]
+
+    item_payload = make_valid_transport_item_payload()
+    await client.post(f"/api/v1/refunds/{refund_id}/items", json=item_payload)
+
+    first_submit = await client.patch(f"/api/v1/refunds/{refund_id}/submit")
+    assert first_submit.status_code == 200
+
+    second_submit = await client.patch(f"/api/v1/refunds/{refund_id}/submit")
+    assert second_submit.status_code == 400
+
