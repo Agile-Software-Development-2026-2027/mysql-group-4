@@ -83,6 +83,15 @@ class FundRepository:
         )
         return result.rowcount == 1
 
+    async def settle(self, fund_id: UUID, reserved: Decimal, spent: Decimal) -> bool:
+        result = await self._session.execute(
+            update(Fund)
+            .where(Fund.id == fund_id, Fund.committed_amount >= reserved, Fund.amount >= spent)
+            .values(amount=Fund.amount - spent, committed_amount=Fund.committed_amount - reserved)
+            .execution_options(synchronize_session=False)
+        )
+        return result.rowcount == 1
+
     async def save(self, fund: Fund) -> Fund:
         self._session.add(fund)
         await self._session.flush()

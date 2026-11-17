@@ -57,6 +57,10 @@ class InvalidRefundDecisionError(ValueError):
     pass
 
 
+class RefundAmountExceededError(ValueError):
+    pass
+
+
 class FundInUseError(Exception):
     def __init__(self, fund_id: UUID):
         self.fund_id = fund_id

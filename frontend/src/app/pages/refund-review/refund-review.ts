@@ -99,9 +99,14 @@ export class RefundReview {
       })),
     };
 
-    this.refundService.approve(refund.id, payload).subscribe((updated) => {
-      this.refund.set(updated);
-      this.expandedId.set(null);
+    this.refundService.approve(refund.id, payload).subscribe({
+      next: (updated) => {
+        this.refund.set(updated);
+        this.expandedId.set(null);
+      },
+      error: (err) => {
+        this.toastService.showError(err?.error?.message ?? 'Could not approve the refund.', 'Approval Error');
+      },
     });
   }
 

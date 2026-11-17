@@ -148,6 +148,19 @@ class FundService:
             )
         logger.info("Fund %s: %s released by mission %s", fund_id, amount, mission_id)
 
+    async def settle_mission(self, fund_id: UUID, mission_id: UUID, reserved: Decimal, spent: Decimal) -> None:
+        if spent > reserved:
+            raise FundAmountError(
+                fund_id, f"Cannot charge € {spent}: the mission reserved only € {reserved} on the fund"
+            )
+        if not await self._repository.settle(fund_id, reserved, spent):
+            raise FundAmountError(
+                fund_id, f"Cannot settle € {spent} on the fund: the reserved amount is no longer available"
+            )
+        logger.info(
+            "Fund %s: mission %s settled, %s charged and %s returned", fund_id, mission_id, spent, reserved - spent
+        )
+
     async def _to_dtos(self, funds: list[Fund]) -> list[FundDTO]:
         missions = await self._repository.find_funded_missions({fund.id for fund in funds})
         return [
