@@ -36,3 +36,7 @@ pytest-asyncio==1.4.0
 httpx
 aiosqlite
 minio>=7.2.0
+pillow>=11.0.0
+rapidocr-onnxruntime>=1.4.4
+opencv-python-headless>=5.0.0.93
+pypdf>=7.1.0

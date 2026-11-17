@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     MINIO_BUCKET_NAME: str = "mission-documents"
     MINIO_SECURE: bool = False
 
+    RECEIPT_AI_TIMEOUT_SECONDS: float = 45.0
+    OLLAMA_URL: str = "http://127.0.0.1:11434"
+    OLLAMA_MODEL: str = "gemma4:latest"
+    OLLAMA_KEEP_ALIVE: str = "2m"
+    OLLAMA_VISION_ENABLED: bool = True
+
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),
         env_file_encoding="utf-8",

@@ -5,10 +5,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 
-from app.api.deps import get_currency_service, get_refund_service
+from app.api.deps import get_currency_service, get_receipt_ai_service, get_refund_service
 from app.db.models import User
 from app.schemas.currency import CurrencyConversionDTO, MissionCurrencyProfileDTO
 from app.schemas.page import Page, PageRequest
+from app.schemas.receipt_ai import ReceiptAutocompleteDTO
 from app.schemas.refund import (
     RefundApproveDTO,
     RefundItemCreateDTO,
@@ -24,12 +25,14 @@ from app.schemas.refund import (
 )
 from app.security import current_active_user
 from app.services.currency_service import CurrencyConversionService
+from app.services.receipt_ai_service import ReceiptAIService
 from app.services.refund_service import RefundService
 
 refund_router = APIRouter(prefix="/refunds", tags=["refunds"])
 
 RefundServiceDependency = Annotated[RefundService, Depends(get_refund_service)]
 CurrencyServiceDependency = Annotated[CurrencyConversionService, Depends(get_currency_service)]
+ReceiptAIServiceDependency = Annotated[ReceiptAIService, Depends(get_receipt_ai_service)]
 CurrentUser = Annotated[User, Depends(current_active_user)]
 
 
@@ -156,4 +159,28 @@ async def get_refund_currency_profile(
     return MissionCurrencyProfileDTO(
         destination=destination,
         default_currency=default_currency,
+    )
+
+@refund_router.post(
+    "/{refund_id}/receipts/extract",
+    response_model=ReceiptAutocompleteDTO,
+    status_code=status.HTTP_200_OK,
+    summary="Extract structured expense fields from a receipt image via Receipt AI",
+)
+async def extract_receipt_fields(
+    refund_id: UUID,
+    user: CurrentUser,
+    refund_service: RefundServiceDependency,
+    currency_service: CurrencyServiceDependency,
+    receipt_ai_service: ReceiptAIServiceDependency,
+    file: UploadFile = File(...),
+) -> ReceiptAutocompleteDTO:
+    refund_request = await refund_service.get_refund_request_by_id(refund_id, user)
+    mission = await refund_service.mission_repository.find_by_id(refund_request.mission_id)
+    destination = mission.destination if mission else None
+    hint_currency = await currency_service.resolve_currency_for_destination(destination)
+    return await receipt_ai_service.extract_receipt(
+        file=file,
+        hint_currency=hint_currency,
+        hint_country=destination,
     )
