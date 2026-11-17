@@ -102,6 +102,18 @@
 
       <!-- Form -->
       <section class="form-pane">
+        @if (isExtractingOcr()) {
+          <div class="ocr-conversion-banner" role="status">
+            ✨ <strong>AI Auto-Fill:</strong> Scanning receipt text and detecting expense details...
+          </div>
+        }
+        @if (conversionInfo(); as conv) {
+          <div class="ocr-conversion-banner" role="status">
+            💱 <strong>Currency conversion:</strong>
+            {{ conv.originalAmount }} {{ conv.originalCurrency }} = <strong>{{ conv.convertedAmount }} EUR</strong>
+            <span class="ocr-rate-note">(Rate: {{ conv.rate }} via {{ conv.provider }})</span>
+          </div>
+        }
         @if (isOcrPrefilled()) {
           <div class="upload-error-alert" role="status">
             Fields were auto-filled from your receipt. Please review and correct any inaccurate values before saving.
@@ -260,6 +272,31 @@
               <label for="currency">Currency</label>
               <input id="currency" type="text" formControlName="currency" class="form-control" readonly />
             </div>
+          </div>
+
+          <!-- Foreign Currency Converter (Frankfurter API) -->
+          <div class="currency-converter-bar">
+            <label for="foreignCurrencySelect">Receipt currency:</label>
+            <select
+              id="foreignCurrencySelect"
+              class="form-control converter-select"
+              [value]="foreignCurrency()"
+              (change)="onForeignCurrencyChange($event)"
+            >
+              @for (curr of availableCurrencies; track curr) {
+                <option [value]="curr">{{ curr }}</option>
+              }
+            </select>
+            @if (foreignCurrency() !== 'EUR') {
+              <button
+                type="button"
+                class="btn-convert-currency"
+                (click)="convertToEur()"
+                [disabled]="isConvertingCurrency()"
+              >
+                {{ isConvertingCurrency() ? 'Converting...' : 'Convert ' + foreignCurrency() + ' → EUR' }}
+              </button>
+            }
           </div>
 
           <!-- Traceable Checkbox -->

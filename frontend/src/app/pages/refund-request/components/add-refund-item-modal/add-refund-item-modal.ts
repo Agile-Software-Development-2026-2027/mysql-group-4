@@ -23,9 +23,11 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { map, of, switchMap } from 'rxjs';
 
 import {
+  CurrencyConversionDTO,
   ExpenseCategory,
   ExpenseSubtype,
   MissionDTO,
+  ReceiptAutocompleteDTO,
   RefundItemCreatePayload,
   RefundItemDTO,
   RefundReceiptUploadDTO,
@@ -84,7 +86,13 @@ export class AddRefundItemModal implements OnInit, OnChanges {
   isDragging = signal(false);
   isSubmitting = signal(false);
 
+  isConvertingCurrency = signal(false);
+  conversionInfo = signal<CurrencyConversionDTO | null>(null);
+  foreignCurrency = signal<string>('EUR');
+  readonly availableCurrencies = ['EUR', 'USD', 'GBP', 'CHF', 'RUB', 'CNY', 'TWD', 'JPY', 'AED', 'CAD', 'AUD'];
   isOcrPrefilled = signal(false);
+  isExtractingOcr = signal(false);
+  ocrRawText = signal<string | null>(null);
   minDateTime = signal<string | null>(null);
   maxDateTime = signal<string | null>(null);
   missionPeriodLabel = signal<string>('');
@@ -116,6 +124,7 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     this.initForm();
     this.setupCategoryChangeListener();
     this.loadMissionBounds();
+    this.loadMissionCurrencyProfile();
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -426,6 +435,155 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     }
 
     this.uploadToMinio(file);
+    this.triggerOcrExtraction(file);
+  }
+
+  private loadMissionCurrencyProfile(): void {
+    if (!this.refundId) {
+      return;
+    }
+    this.refundService.getCurrencyProfile(this.refundId).subscribe({
+      next: (profile) => {
+        if (profile?.defaultCurrency) {
+          this.foreignCurrency.set(profile.defaultCurrency);
+        }
+      },
+      error: (err) => {
+        console.warn('Could not load mission currency profile:', err);
+      },
+    });
+  }
+
+  onForeignCurrencyChange(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    this.foreignCurrency.set(select.value || 'EUR');
+  }
+
+  convertToEur(): void {
+    const rawAmount = Number(this.form.get('requestedAmount')?.value);
+    const curr = this.foreignCurrency();
+    if (!rawAmount || rawAmount <= 0) {
+      this.toastService.showError('Enter a valid amount to convert.', 'Invalid Amount');
+      return;
+    }
+    if (curr === 'EUR') {
+      return;
+    }
+
+    this.isConvertingCurrency.set(true);
+    this.refundService.convertCurrencyToEur(rawAmount, curr).subscribe({
+      next: (res) => {
+        this.isConvertingCurrency.set(false);
+        this.conversionInfo.set(res);
+        this.form.patchValue({
+          requestedAmount: res.convertedAmount,
+          currency: 'EUR',
+        });
+        const currentDesc = (this.form.get('description')?.value || '').trim();
+        const note = `[Converted from ${res.originalAmount} ${res.originalCurrency} @ ${res.rate}]`;
+        if (!currentDesc.includes(note)) {
+          const nextDesc = currentDesc ? `${currentDesc} ${note}` : note;
+          this.form.patchValue({ description: nextDesc.slice(0, 255) });
+        }
+        this.toastService.showSuccess(
+          `${res.originalAmount} ${res.originalCurrency} converted to €${res.convertedAmount}`,
+          'Currency Converted'
+        );
+      },
+      error: (err) => {
+        this.isConvertingCurrency.set(false);
+        const msg = err?.error?.detail ?? 'Unable to convert currency right now.';
+        this.toastService.showError(msg, 'Conversion Failed');
+      },
+    });
+  }
+
+  private triggerOcrExtraction(file: File): void {
+    if (!this.refundId) {
+      return;
+    }
+    this.isExtractingOcr.set(true);
+    this.refundService.extractReceipt(this.refundId, file).subscribe({
+      next: (dto: ReceiptAutocompleteDTO) => {
+        this.isExtractingOcr.set(false);
+        if (dto.rawText) {
+          this.ocrRawText.set(dto.rawText);
+        }
+
+        const patch: Partial<RefundItemCreatePayload> = {};
+        if (dto.category) {
+          patch.category = dto.category;
+        }
+        if (dto.subtype) {
+          patch.subtype = dto.subtype;
+        }
+        if (dto.amount != null) {
+          patch.requestedAmount = dto.convertedAmountEur ?? dto.amount;
+        }
+        if (dto.startsAt) {
+          patch.startsAt = dto.startsAt;
+        }
+        if (dto.endsAt) {
+          patch.endsAt = dto.endsAt;
+        }
+        if (dto.itineraryFrom) {
+          patch.itineraryFrom = dto.itineraryFrom;
+        }
+        if (dto.itineraryTo) {
+          patch.itineraryTo = dto.itineraryTo;
+        }
+        if (dto.description || dto.merchant) {
+          const parts = [dto.merchant, dto.description].filter(Boolean);
+          patch.description = parts.join(' - ').slice(0, 255);
+        }
+
+        if (dto.convertedAmountEur && dto.currency && dto.currency !== 'EUR' && dto.exchangeRate) {
+          this.conversionInfo.set({
+            originalCurrency: dto.currency,
+            originalAmount: dto.amount ?? 0,
+            convertedAmount: dto.convertedAmountEur,
+            rate: dto.exchangeRate,
+            date: dto.rateDate ?? '',
+            provider: 'AI Auto-Conversion',
+          });
+        }
+
+        const hasExtractedFields = Boolean(
+          dto.category ||
+          dto.amount != null ||
+          dto.startsAt ||
+          dto.merchant ||
+          dto.description ||
+          dto.itineraryFrom ||
+          dto.itineraryTo
+        );
+
+        if (!hasExtractedFields) {
+          if (dto.warnings?.length) {
+            console.warn('AI receipt extraction returned warnings:', dto.warnings);
+          }
+          this.toastService.showWarning(
+            'Failed to extract data from the receipt. Please fill the fields manually.',
+            'AI Auto-Fill'
+          );
+          return;
+        }
+
+        this.populateFromOcr(patch);
+        this.toastService.showSuccess(
+          'Receipt analyzed with AI. Fields have been pre-filled.',
+          'AI Auto-Fill'
+        );
+      },
+      error: (err) => {
+        this.isExtractingOcr.set(false);
+        console.warn('AI receipt extraction skipped/failed:', err);
+        this.toastService.showWarning(
+          'Failed to extract data from the receipt. Please fill the fields manually.',
+          'AI Auto-Fill'
+        );
+      },
+    });
   }
 
   private uploadToMinio(file: File): void {
@@ -451,7 +609,12 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     this.uploadedReceipt.set(null);
     this.uploadError.set(null);
     this.isOcrPrefilled.set(false);
+    this.isExtractingOcr.set(false);
+    this.ocrRawText.set(null);
+    this.isConvertingCurrency.set(false);
+    this.conversionInfo.set(null);
   }
+
 
   private cleanPreviews(): void {
     if (this.previewUrl()) {

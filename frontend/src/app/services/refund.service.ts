@@ -5,6 +5,9 @@ import { Observable } from 'rxjs';
 import { API_CONFIG } from '../core/config/api.config';
 import { Page } from '../core/models/page';
 import {
+  CurrencyConversionDTO,
+  MissionCurrencyProfileDTO,
+  ReceiptAutocompleteDTO,
   RefundApprovePayload,
   RefundItemCreatePayload,
   RefundItemDTO,
@@ -87,6 +90,16 @@ export class RefundService {
     );
   }
 
+  extractReceipt(refundId: string, file: File): Observable<ReceiptAutocompleteDTO> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<ReceiptAutocompleteDTO>(
+      API_CONFIG.endpoints.refunds.extractReceipt(refundId),
+      formData,
+      { withCredentials: true }
+    );
+  }
+
   createRefundItem(refundId: string, payload: RefundItemCreatePayload): Observable<RefundItemDTO> {
     return this.http.post<RefundItemDTO>(
       API_CONFIG.endpoints.refunds.items(refundId),
@@ -130,6 +143,20 @@ export class RefundService {
       API_CONFIG.endpoints.refunds.itemsFilter(refundId),
       payload,
       { params, withCredentials: true }
+    );
+  }
+
+  convertCurrencyToEur(amount: number, currency: string): Observable<CurrencyConversionDTO> {
+    return this.http.get<CurrencyConversionDTO>(API_CONFIG.endpoints.refunds.convertCurrency, {
+      params: { amount: amount.toString(), currency },
+      withCredentials: true,
+    });
+  }
+
+  getCurrencyProfile(refundId: string): Observable<MissionCurrencyProfileDTO> {
+    return this.http.get<MissionCurrencyProfileDTO>(
+      API_CONFIG.endpoints.refunds.currencyProfile(refundId),
+      { withCredentials: true }
     );
   }
 }

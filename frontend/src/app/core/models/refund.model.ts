@@ -151,3 +151,38 @@ export interface RefundOverviewDTO {
   submittedAt?: string | null;
   approvedAt?: string | null;
 }
+export interface CurrencyConversionDTO {
+  originalCurrency: string;
+  originalAmount: number;
+  convertedAmount: number;
+  rate: number;
+  date: string;
+  provider: string;
+}
+
+export interface MissionCurrencyProfileDTO {
+  destination?: string | null;
+  defaultCurrency: string;
+}
+
+export interface ReceiptAutocompleteDTO {
+  category?: ExpenseCategory | null;
+  subtype?: ExpenseSubtype | null;
+  amount?: number | null;
+  currency?: string | null;
+  convertedAmountEur?: number | null;
+  exchangeRate?: number | null;
+  rateDate?: string | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  merchant?: string | null;
+  description?: string | null;
+  itineraryFrom?: string | null;
+  itineraryTo?: string | null;
+  rawText: string;
+  confidence?: number | null;
+  ocrEngine: string;
+  llmModel: string;
+  warnings: string[];
+}
+
