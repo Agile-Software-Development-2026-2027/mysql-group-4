@@ -11,6 +11,8 @@ import {
   RefundRequestCreatePayload,
   RefundRequestDTO,
   RefundReviewDTO,
+  RefundFilterPayload,
+  RefundOverviewDTO,
 } from '../core/models';
 
 @Injectable({
@@ -63,6 +65,7 @@ export class RefundService {
       withCredentials: true,
     });
   }
+
   uploadReceipt(refundId: string, file: File): Observable<RefundReceiptUploadDTO> {
     const formData = new FormData();
     formData.append('file', file);
@@ -76,6 +79,14 @@ export class RefundService {
   createRefundItem(refundId: string, payload: RefundItemCreatePayload): Observable<RefundItemDTO> {
     return this.http.post<RefundItemDTO>(
       API_CONFIG.endpoints.refunds.items(refundId),
+      payload,
+      { withCredentials: true }
+    );
+  }
+
+  filterRefunds(payload: RefundFilterPayload): Observable<RefundOverviewDTO[]> {
+    return this.http.post<RefundOverviewDTO[]>(
+      API_CONFIG.endpoints.refunds.filter,
       payload,
       { withCredentials: true }
     );
