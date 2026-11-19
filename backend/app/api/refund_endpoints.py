@@ -14,6 +14,8 @@ from app.schemas.refund import (
     RefundRequestCreateDTO,
     RefundRequestDTO,
     RefundReviewDTO,
+    RefundFilterDTO,
+    RefundOverviewDTO
 )
 from app.security import current_active_user
 from app.services.refund_service import RefundService
@@ -67,3 +69,11 @@ async def download_receipt(refund_id: UUID, item_id: UUID, user: CurrentUser, se
 @refund_router.post("/{refund_id}/items", response_model=RefundItemDTO, status_code=status.HTTP_201_CREATED, summary="Create refund item")
 async def create_refund_item(refund_id: UUID, user: CurrentUser, service: RefundServiceDependency, data: RefundItemCreateDTO) -> RefundItemDTO:
     return await service.create_refund_item(refund_request_id=refund_id, user=user, data=data)
+
+@refund_router.post("/filter", response_model=list[RefundOverviewDTO], summary="Filter refunds by status (admin only)")
+async def filter_refunds(
+    user: CurrentUser,
+    service: RefundServiceDependency,
+    filters: RefundFilterDTO | None = None,
+) -> list[RefundOverviewDTO]:
+    return await service.get_filtered_refunds(user, filters)

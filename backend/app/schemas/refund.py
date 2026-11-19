@@ -141,6 +141,7 @@ class RefundMissionDTO(CamelModel):
 class RefundReviewDTO(RefundRequestDTO):
     mission: RefundMissionDTO
 
+
 class RefundItemDecisionDTO(CamelModel):
     model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
     item_id: UUID
@@ -151,3 +152,20 @@ class RefundItemDecisionDTO(CamelModel):
 class RefundApproveDTO(CamelModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     items: list[RefundItemDecisionDTO] = Field(min_length=1)
+
+
+class RefundFilterDTO(CamelModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+
+    status: RefundStatus | None = None
+
+class RefundOverviewDTO(CamelModel):
+    id: UUID
+    status: RefundStatus
+    requester_name: str
+    requester_surname: str
+    subject: str
+    total_requested: Decimal
+    total_reimbursed: Decimal
+    submitted_at: datetime | None = None
+    approved_at: datetime | None = None
