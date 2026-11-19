@@ -247,20 +247,26 @@ class MissionService:
             raise InvalidMissionStateError("This operation requires a pending mission")
 
     async def _find_missions(
-        self,
-        user: User,
-        filters: MissionFilterDTO | None,
-        page_request: PageRequest | None,
-    ) -> Page[MissionDTO]:
-        visible_to = None if user.is_superuser else user.id
-        missions = await self._repository.find_all(
-            filters=filters,
-            user_id=visible_to,
-            page_request=page_request,
-        )
-        logger.debug("Found %s missions for user %s", missions.total_elements, user.id)
-        dtos = {mission.id: await self._to_dto(mission) for mission in missions.content}
-        return missions.map(lambda mission: dtos[mission.id])
+            self,
+            user: User,
+            filters: MissionFilterDTO | None,
+            page_request: PageRequest | None,
+        ) -> Page[MissionDTO]:
+            visible_to = None if user.is_superuser else user.id
+
+            exclude_self = False
+            if filters is not None and filters.fund_manager_id == user.id:
+                exclude_self = True
+
+            missions = await self._repository.find_all(
+                filters=filters,
+                user_id=visible_to,
+                page_request=page_request,
+                exclude_self_managed=exclude_self,
+            )
+            logger.debug("Found %s missions for user %s", missions.total_elements, user.id)
+            dtos = {mission.id: await self._to_dto(mission) for mission in missions.content}
+            return missions.map(lambda mission: dtos[mission.id])
 
     async def _to_dto(self, mission: Mission) -> MissionDTO:
         dto = MissionDTO.model_validate(mission)
