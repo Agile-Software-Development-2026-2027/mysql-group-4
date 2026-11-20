@@ -73,6 +73,7 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
   readonly receiptPreview = signal<{ url: SafeResourceUrl; fileURL: string; isPdf: boolean; filename: string } | null>(null);
   readonly replacementFile = signal<File | null>(null);
   readonly isSubmitting = signal(false);
+  readonly confirmSubmitOpen = signal(false);
   readonly isDraft = computed(() => this.refund()?.status === RefundStatus.DRAFT);
 
   editForm: FormGroup = this.fb.group({
@@ -466,6 +467,7 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
   }
 
   submitRefund(): void {
+    this.confirmSubmitOpen.set(false);
     const ref = this.refund();
     if (!ref || this.items().length === 0 || this.isSubmitting() || !this.isDraft()) {
       return;
