@@ -122,7 +122,7 @@
             </button>
             <button class="btn btn-expand btn-expand--primary" type="button"
               [disabled]="items().length === 0 || isSubmitting()"
-              (click)="submitRefund()"
+              (click)="confirmSubmitOpen.set(true)"
               aria-label="Submit Request" title="Submit Request">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <line x1="22" y1="2" x2="11" y2="13"></line>
@@ -462,6 +462,25 @@
     (closed)="closeAddModal()"></app-add-refund-item-modal>
   }
 
+  @if (confirmSubmitOpen()) {
+  <div class="modal-backdrop" (click)="confirmSubmitOpen.set(false)">
+    <div class="modal-dialog modal-dialog--confirm card" (click)="$event.stopPropagation()" role="dialog"
+      aria-modal="true" aria-labelledby="confirmSubmitTitle">
+      <header class="modal-header">
+        <h2 id="confirmSubmitTitle">Submit refund request?</h2>
+      </header>
+      <div class="modal-body">
+        <p>Receipts: <strong>{{ items().length }}</strong></p>
+        <p>Total requested: <strong>€ {{ totalRequested() | number:'1.2-2' }}</strong></p>
+        <p>Once submitted, you will no longer be able to edit it.</p>
+      </div>
+      <footer class="modal-footer">
+        <button class="btn btn--outline" type="button" (click)="confirmSubmitOpen.set(false)">Cancel</button>
+        <button class="btn" type="button" (click)="submitRefund()">Submit</button>
+      </footer>
+    </div>
+  </div>
+  }
   <ng-template #receiptsSkeleton>
     <div tabindex="0" role="region" aria-labelledby="receipts-table-caption" class="table-wrapper">
       <table class="table-skeleton" aria-busy="true" aria-label="Loading receipts">
