@@ -26,6 +26,7 @@ export class RefundReview {
   readonly notes = signal<Record<string, string>>({});
   readonly receipt = signal<{ itemId: string; url: SafeResourceUrl; fileURL: string; isPdf: boolean; filename: string } | null>(null);
   readonly confirmOpen = signal(false);
+  readonly zoomed = signal(false);
 
   readonly isEditable = computed(() => this.refund()?.status === RefundStatus.SUBMITTED);
 
@@ -52,7 +53,6 @@ export class RefundReview {
 
   readonly canApprove = computed(() =>
     (this.refund()?.items ?? []).every((item) => {
-      const amount = this.refundableAmounts()[item.id] ?? 0;
       return !this.isNegative(item) && !this.exceedsRequested(item);
     })
   );
@@ -119,7 +119,9 @@ export class RefundReview {
         this.closeReceipt();
         this.receipt.set({
           itemId: item.id,
-          url: this.sanitizer.bypassSecurityTrustResourceUrl(fileURL),
+          url: this.sanitizer.bypassSecurityTrustResourceUrl(
+            blob.type === 'application/pdf' ? `${fileURL}#toolbar=0&navpanes=0&view=FitH` : fileURL
+          ),
           fileURL,
           isPdf: blob.type === 'application/pdf',
           filename: item.receiptOriginalFilename,
@@ -134,6 +136,7 @@ export class RefundReview {
   closeReceipt(): void {
     const receipt = this.receipt();
     if (receipt) URL.revokeObjectURL(receipt.fileURL);
+    this.zoomed.set(false);
     this.receipt.set(null);
   }
 }
