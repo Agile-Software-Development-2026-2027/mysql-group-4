@@ -54,11 +54,11 @@
                     <div class="form-group">
                       <label>Refundable amount ({{ item.currency }})</label>
                       <input
-                        type="number" min="0" step="0.01" placeholder="0.00"
-                        [max]="item.requestedAmount"
+                        type="text" inputmode="decimal" placeholder="0.00"
                         [class.is-invalid]="exceedsRequested(item) || isNegative(item)"
-                        [value]="refundableAmounts()[item.id] ?? ''"
-                        (input)="setRefundable(item.id, $any($event.target).value)"
+                        [value]="refundableInputs()[item.id] ?? ''"
+                        (keydown)="allowDigitsAndDot($event)"
+                        (input)="setRefundable(item.id, $any($event.target))"
                       />
                        @if (exceedsRequested(item)) {
                         <p class="form-error">The refundable amount cannot exceed the requested amount ({{ item.requestedAmount | number:'1.2-2' }} {{ item.currency }}).</p>

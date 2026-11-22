@@ -22,6 +22,7 @@ export class RefundReview {
   readonly refund = signal<RefundReviewDTO | null>(null);
   readonly loadError = signal(false);
   readonly expandedId = signal<string | null>(null);
+  readonly refundableInputs = signal<Record<string, string>>({});
   readonly refundableAmounts = signal<Record<string, number>>({});
   readonly notes = signal<Record<string, string>>({});
   readonly receipt = signal<{ itemId: string; url: SafeResourceUrl; fileURL: string; isPdf: boolean; filename: string } | null>(null);
@@ -62,11 +63,15 @@ export class RefundReview {
     this.refundService.getReview(id).subscribe({
       next: (refund) => {
         this.refund.set(refund);
+        const initialInputs = Object.fromEntries(
+          refund.items
+            .filter((item) => item.reimbursedAmount != null)
+            .map((item) => [item.id, String(item.reimbursedAmount)])
+        );
+        this.refundableInputs.set(initialInputs);
         this.refundableAmounts.set(
           Object.fromEntries(
-            refund.items
-              .filter((item) => item.reimbursedAmount != null)
-              .map((item) => [item.id, Number(item.reimbursedAmount)])
+            Object.entries(initialInputs).map(([id, val]) => [id, Number(val) || 0])
           )
         );
       },
@@ -78,8 +83,38 @@ export class RefundReview {
     this.expandedId.update((current) => (current === id ? null : id));
   }
 
-  setRefundable(id: string, value: string): void {
-    this.refundableAmounts.update((amounts) => ({ ...amounts, [id]: Number(value) || 0 }));
+  allowDigitsAndDot(event: KeyboardEvent): void {
+    if (event.ctrlKey || event.metaKey || event.altKey || event.key.length > 1) {
+      return;
+    }
+    const input = event.target as HTMLInputElement;
+    if (!/^[0-9.]$/.test(event.key) || (event.key === '.' && input.value.includes('.'))) {
+      event.preventDefault();
+    }
+  }
+
+  setRefundable(id: string, input: HTMLInputElement): void {
+    const cleaned = input.value.replace(/[^0-9.]/g, '');
+    const dotIndex = cleaned.indexOf('.');
+
+    let intPart = dotIndex === -1 ? cleaned : cleaned.slice(0, dotIndex);
+    let decPart = dotIndex === -1 ? '' : cleaned.slice(dotIndex + 1).replace(/\./g, '');
+
+    // Match backend Numeric(12, 2): max 10 integer digits and 2 decimal digits
+    if (intPart.length > 10) {
+      intPart = intPart.slice(0, 10);
+    }
+    if (decPart.length > 2) {
+      decPart = decPart.slice(0, 2);
+    }
+
+    const sanitized = dotIndex === -1 ? intPart : `${intPart}.${decPart}`;
+    if (sanitized !== input.value) {
+      input.value = sanitized;
+    }
+
+    this.refundableInputs.update((inputs) => ({ ...inputs, [id]: sanitized }));
+    this.refundableAmounts.update((amounts) => ({ ...amounts, [id]: Number(sanitized) || 0 }));
   }
 
   setNote(id: string, value: string): void {
