@@ -15,6 +15,7 @@ from app.core.exceptions import (
 )
 from app.crud.fund_repository import FundRepository
 from app.crud.mission_repository import MissionRepository
+from app.crud.refund_repository import RefundRepository
 from app.crud.user_repository import UserRepository
 from app.core.enums import MissionStatus
 from app.db.mission import Mission
@@ -38,10 +39,12 @@ class MissionService:
         repository: MissionRepository,
         user_repository: UserRepository | None = None,
         fund_service: FundService | None = None,
+        refund_repository: RefundRepository | None = None,
     ):
         self._session = session
         self._repository = repository
         self._user_repository = user_repository or UserRepository()
+        self._refund_repository = refund_repository or RefundRepository()
         self._fund_service = fund_service or FundService(
             session, FundRepository(session), self._user_repository
         )
@@ -272,14 +275,19 @@ class MissionService:
 
     async def _to_dto(self, mission: Mission) -> MissionDTO:
         dto = MissionDTO.model_validate(mission)
+        # Importo effettivamente rimborsato: valorizzato solo a rimborso approvato.
+        refund_amount = await self._refund_repository.find_approved_amount_by_mission_id(
+            self._session, mission.id
+        )
+        update: dict[str, object] = {"refund_amount": refund_amount}
         requester = await self._user_repository.get_user_by_id(self._session, mission.requester_id)
-        if requester is None:
-            return dto
-        return dto.model_copy(update={
-            "requester_name": requester.name,
-            "requester_surname": requester.surname,
-            "requester_email": requester.email,
-        })
+        if requester is not None:
+            update |= {
+                "requester_name": requester.name,
+                "requester_surname": requester.surname,
+                "requester_email": requester.email,
+            }
+        return dto.model_copy(update=update)
 
     @staticmethod
     def _with_filters(filters: MissionFilterDTO | None, **overrides: object) -> MissionFilterDTO:

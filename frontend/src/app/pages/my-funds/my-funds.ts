@@ -5,7 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
 
 import { Topbar } from '../../components/topbar/topbar';
-import { FundDTO } from '../../core/models';
+import { FundDTO, FundMissionDTO, MissionStatus, RefundStatus } from '../../core/models';
 import { AuthService } from '../../services/auth.service';
 import { FundService } from '../../services/fund.service';
 import { ToastService } from '../../services/toast.service';
@@ -64,6 +64,14 @@ export class MyFunds implements OnInit {
 
   available(fund: FundDTO): number {
     return Number(fund.remainingAmount);
+  }
+
+  // Missione approvata con rimborso inviato: mostrata come "Refund review" finché l'admin non lo approva.
+  missionStatus(mission: FundMissionDTO): string {
+    if (mission.status === MissionStatus.ACCEPTED && mission.refundStatus === RefundStatus.SUBMITTED) {
+      return 'REFUND_REVIEW';
+    }
+    return mission.status;
   }
 
   openMission(missionId: string): void {

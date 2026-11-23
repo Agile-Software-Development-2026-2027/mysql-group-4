@@ -167,6 +167,13 @@
   .value { font-size: 1.15rem; font-weight: 500; }
 }
 
+// Costo stimato e rimborso effettivo affiancati, separati da una linea verticale.
+.cost-pair {
+  flex-direction: row; gap: 24px;
+  &__col { display: flex; flex-direction: column; gap: 6px; }
+  &__col + &__col { border-left: 1px solid #c5d0db; padding-left: 24px; }
+}
+
 .divider { border: 0; height: 1px; background: #c5d0db; margin: 0 0 32px 0; }
 
 .decision-form {

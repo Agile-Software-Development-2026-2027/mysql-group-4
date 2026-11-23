@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import ConfigDict, Field, computed_field
 
-from app.core.enums import MissionStatus
+from app.core.enums import MissionStatus, RefundStatus
 from app.schemas.base import CamelModel
 
 
@@ -15,6 +15,8 @@ class FundMissionDTO(CamelModel):
     estimated_cost: Decimal
     requester_name: str
     requested_at: datetime
+    refund_status: RefundStatus | None = None
+    refund_amount: Decimal | None = None
 
 
 class FundDTO(CamelModel):

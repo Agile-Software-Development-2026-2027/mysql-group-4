@@ -60,8 +60,8 @@
                     <span class="mission-row__subject">{{ mission.subject }}</span>
                     <span class="mission-row__requester">{{ mission.requesterName }}</span>
                     <span class="mission-row__date">{{ mission.requestedAt | date:'dd/MM/yyyy' }}</span>
-                    <span class="mission-row__status" [attr.data-status]="mission.status">{{ mission.status | titlecase }}</span>
-                    <span class="mission-row__cost amount">€ {{ mission.estimatedCost | number:'1.2-2' }}</span>
+                    <span class="mission-row__status" [attr.data-status]="missionStatus(mission)">{{ missionStatus(mission) === 'REFUND_REVIEW' ? 'Refund review' : (mission.status | titlecase) }}</span>
+                    <span class="mission-row__cost amount">€ {{ (mission.refundAmount ?? mission.estimatedCost) | number:'1.2-2' }}<sup class="mission-row__estimate" [class.is-hidden]="mission.refundAmount != null" [attr.title]="mission.refundAmount == null ? 'Estimated cost, not yet refunded' : null" [attr.aria-hidden]="mission.refundAmount != null">*</sup></span>
                     <span class="mission-row__chevron" aria-hidden="true">›</span>
                   </button>
                 </li>

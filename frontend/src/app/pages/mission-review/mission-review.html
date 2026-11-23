@@ -107,7 +107,7 @@
                     <span class="badge completed">Completed</span>
                     <h3>{{ mission.subject }}</h3>
                   </div>
-                  <p><strong>Requester:</strong> {{ mission.requesterName }} {{ mission.requesterSurname }} ({{ mission.requesterEmail }}) &nbsp;&bull;&nbsp; <strong>Date:</strong> {{ mission.startsAt | date:'dd/MM/yyyy' }} &nbsp;&bull;&nbsp; <strong>Estimated cost:</strong> € {{ mission.estimatedCost | number:'1.2-2' }} </p>
+                  <p><strong>Requester:</strong> {{ mission.requesterName }} {{ mission.requesterSurname }} ({{ mission.requesterEmail }}) &nbsp;&bull;&nbsp; <strong>Date:</strong> {{ mission.startsAt | date:'dd/MM/yyyy' }} &nbsp;&bull;&nbsp; <strong>Estimated cost:</strong> € {{ mission.estimatedCost | number:'1.2-2' }}@if (mission.refundAmount != null) { &nbsp;&bull;&nbsp; <strong>Refunded:</strong> € {{ mission.refundAmount | number:'1.2-2' }}} </p>
                 </div>
               </div>
             }
@@ -176,9 +176,17 @@
                 <span class="label">End Date</span>
                 <span class="value">{{ selectedMission.endsAt | date:'dd/MM/yyyy' }}</span>
               </div>
-              <div class="detail-item highlight-cost">
-                <span class="label">Estimated Cost</span>
-                <span class="value">€ {{ selectedMission.estimatedCost | number:'1.2-2' }}</span>
+              <div class="detail-item highlight-cost cost-pair">
+                <div class="cost-pair__col">
+                  <span class="label">Estimated Cost</span>
+                  <span class="value">€ {{ selectedMission.estimatedCost | number:'1.2-2' }}</span>
+                </div>
+                @if (selectedMission.refundAmount != null) {
+                  <div class="cost-pair__col">
+                    <span class="label">Refunded Amount</span>
+                    <span class="value">€ {{ selectedMission.refundAmount | number:'1.2-2' }}</span>
+                  </div>
+                }
               </div>
               <div class="documents-section" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px dashed #e2e8f0;">
                 <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem;">Attached Documents</h3>

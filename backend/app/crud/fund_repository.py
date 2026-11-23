@@ -9,6 +9,7 @@ from app.crud.pagination import paginate
 from app.db.fund import Fund
 from app.db.mission import Mission
 from app.db.models import User
+from app.db.refund_request import RefundRequest
 from app.schemas.page import Page, PageRequest
 
 
@@ -52,8 +53,11 @@ class FundRepository:
             select(
                 Mission.fund_id, Mission.id, Mission.subject, Mission.status,
                 Mission.estimated_cost, Mission.created_at, User.name, User.surname,
+                RefundRequest.status.label("refund_status"),
+                RefundRequest.total_reimbursed_amount,
             )
             .join(User, User.id == Mission.requester_id)
+            .outerjoin(RefundRequest, RefundRequest.mission_id == Mission.id)
             .where(Mission.fund_id.in_(fund_ids))
             .order_by(Mission.created_at, Mission.id)
         )

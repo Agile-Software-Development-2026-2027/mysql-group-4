@@ -308,7 +308,7 @@ async def test_my_funds_show_the_financed_missions_and_force_delete_it(
     assert fund["missions"] == [{
         "id": str(mission.id), "subject": "Convegno", "status": "PENDING",
         "estimatedCost": "150.00", "requesterName": "Mario Rossi",
-        "requestedAt": mission.created_at.isoformat(),
+        "requestedAt": mission.created_at.isoformat(), "refundStatus": None, "refundAmount": None,
     }]
 
     assert (await client.delete(f"/api/v1/funds/{fund_id}")).status_code == 409
