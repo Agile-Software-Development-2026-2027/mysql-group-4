@@ -61,6 +61,34 @@
         </div>
       </div>
 
+      @if (viewMode === 'requester') {
+        <div class="accordion-section" [class.is-open]="activeSection === 'refund-review'">
+          <button class="accordion-header refund-review" (click)="toggleSection('refund-review')">
+            <div class="header-title">
+              <h2>Refund Review</h2>
+              <span class="count-badge refund-review">{{ refundReviewMissions.length }}</span>
+            </div>
+            <span class="chevron"></span>
+          </button>
+
+          <div class="accordion-content">
+            <div class="list-container">
+              @for (mission of refundReviewMissions; track mission.id) {
+                <div class="list-card status-refund-review" (click)="openDetail(mission)">
+                  <div class="card-info">
+                    <div class="title-row">
+                      <span class="badge refund-review">Refund in review</span>
+                      <h3>{{ mission.subject }}</h3>
+                    </div>
+                    <p><strong>Requester:</strong> {{ mission.requesterName }} {{ mission.requesterSurname }} ({{ mission.requesterEmail }}) &nbsp;&bull;&nbsp; <strong>Date:</strong> {{ mission.startsAt | date:'dd/MM/yyyy' }} &nbsp;&bull;&nbsp; <strong>Estimated cost:</strong> € {{ mission.estimatedCost | number:'1.2-2' }}</p>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      }
+
       <div class="accordion-section" [class.is-open]="activeSection === 'completed'">
         <button class="accordion-header completed" (click)="toggleSection('completed')">
           <div class="header-title">
@@ -79,7 +107,7 @@
                     <span class="badge completed">Completed</span>
                     <h3>{{ mission.subject }}</h3>
                   </div>
-                  <p><strong>Requester:</strong> {{ mission.requesterName }} {{ mission.requesterSurname }} ({{ mission.requesterEmail }}) &nbsp;&bull;&nbsp; <strong>Date:</strong> {{ mission.startsAt | date:'dd/MM/yyyy' }} &nbsp;&bull;&nbsp; <strong>Estimated cost:</strong> € {{ mission.estimatedCost | number:'1.2-2' }}</p>
+                  <p><strong>Requester:</strong> {{ mission.requesterName }} {{ mission.requesterSurname }} ({{ mission.requesterEmail }}) &nbsp;&bull;&nbsp; <strong>Date:</strong> {{ mission.startsAt | date:'dd/MM/yyyy' }} &nbsp;&bull;&nbsp; <strong>Estimated cost:</strong> € {{ mission.estimatedCost | number:'1.2-2' }} </p>
                 </div>
               </div>
             }

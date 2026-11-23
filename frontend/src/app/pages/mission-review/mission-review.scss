@@ -34,7 +34,7 @@
       display: block;
       animation: slideDown 0.3s ease-out;
     }
-    .chevron { transform: rotate(180deg); }
+    .chevron { transform: rotate(225deg); }
   }
 }
 
@@ -70,6 +70,7 @@
 
     &.pending { background: rgba(245, 166, 35, 0.15); color: #c47c0b; }
     &.approved { background: rgba(30, 126, 79, 0.15); color: #1e7e4f; }
+    &.refund-review { background: rgba(0, 102, 204, 0.15); color: #0066cc; }
     &.completed { background: rgba(23, 50, 77, 0.15); color: #17324d; }
     &.rejected { background: rgba(192, 38, 45, 0.15); color: #c0262d; }
   }
@@ -82,6 +83,7 @@
 
   &.pending { border-left: 4px solid #f5a623; }
   &.approved { border-left: 4px solid #1e7e4f; }
+  &.refund-review { border-left: 4px solid #0066cc; }
   &.completed { border-left: 4px solid #17324d; }
   &.rejected { border-left: 4px solid #c0262d; }
 }
@@ -108,6 +110,7 @@
 
   &.status-pending { border-left-color: #f5a623; }
   &.status-approved { border-left-color: #1e7e4f; }
+  &.status-refund-review { border-left-color: #0066cc; }
   &.status-completed { border-left-color: #17324d; }
   &.status-rejected { border-left-color: #c0262d; }
 
@@ -124,6 +127,7 @@
     padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase;
     &.pending { background: rgba(245, 166, 35, 0.15); color: #c47c0b; }
     &.approved { background: rgba(30, 126, 79, 0.15); color: #1e7e4f; }
+    &.refund-review { background: rgba(0, 102, 204, 0.15); color: #0066cc; }
     &.completed { background: rgba(23, 50, 77, 0.15); color: #17324d; }
     &.rejected { background: rgba(192, 38, 45, 0.15); color: #c0262d; }
   }
