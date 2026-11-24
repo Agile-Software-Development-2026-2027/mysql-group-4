@@ -117,12 +117,29 @@
   <aside class="receipt-panel">
     <div class="receipt-panel__header">
       <strong>{{ receipt.filename }}</strong>
-      <button class="btn btn--outline" type="button" (click)="closeReceipt()">Close</button>
+      <div class="receipt-panel__actions">
+        <a class="btn btn--outline icon-btn" [href]="receipt.fileURL" target="_blank" rel="noopener"
+          title="Open in new tab" aria-label="Open in new tab">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+            <polyline points="15 3 21 3 21 9"></polyline>
+            <line x1="10" y1="14" x2="21" y2="3"></line>
+          </svg>
+        </a>
+        <button class="btn btn--outline" type="button" (click)="closeReceipt()">Close</button>
+      </div>
     </div>
     @if (receipt.isPdf) {
       <iframe [src]="receipt.url" title="Receipt"></iframe>
     } @else {
-      <img [src]="receipt.url" [alt]="receipt.filename" />
+      <img
+        [src]="receipt.url"
+        [alt]="receipt.filename"
+        [class.is-zoomed]="zoomed()"
+        [title]="zoomed() ? 'Click to fit' : 'Click to zoom'"
+        (click)="zoomed.set(!zoomed())"
+      />
     }
   </aside>
 }
