@@ -7,7 +7,7 @@
   <div class="topbar__actions">
     @if (!isAdmin()) {
     <div class="bell">
-      <button class="icon-btn" type="button" aria-label="Missions to approve" (click)="toggleBell()">
+      <button class="icon-btn" type="button" aria-label="Missions to approve" [attr.aria-expanded]="bellOpen()" (click)="toggleBell()">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22zm7-6v-5a7 7 0 0 0-5.5-6.84V3a1.5 1.5 0 0 0-3 0v1.16A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2z" />
         </svg>
@@ -20,7 +20,7 @@
         <div class="bell__panel">
           @if (missionsToApprove() > 0) {
             <p>You have <strong>{{ missionsToApprove() }}</strong> {{ missionsToApprove() === 1 ? 'mission' : 'missions' }} to approve.</p>
-            <a class="bell__link" routerLink="/missionreview">Go to approvals →</a>
+            <a class="bell__link" routerLink="/missionreview" [queryParams]="{ view: 'manager' }" (click)="bellOpen.set(false)">Go to approvals →</a>
           } @else {
             <p>No missions to approve.</p>
           }
@@ -49,11 +49,12 @@
 
 <div class="overlay" [class.is-open]="menuOpen" (click)="closeMenu()"></div>
 
-<nav class="side-menu" [class.is-open]="menuOpen" aria-label="Main menu">
+<nav class="side-menu" [class.is-open]="menuOpen" [attr.aria-hidden]="!menuOpen" [attr.inert]="!menuOpen ? '' : null" aria-label="Main menu">
   @for (item of visibleMenuItems(); track item.label) {
     <a
       [routerLink]="item.link !== '/logout' ? item.link : null"
-      [routerLinkActiveOptions]="{ exact: true }"
+      [queryParams]="item.queryParams ?? null"
+      [routerLinkActiveOptions]="{ paths: 'exact', queryParams: 'exact', fragment: 'ignored', matrixParams: 'ignored' }"
       routerLinkActive="is-active"
       [class.side-menu__bottom]="item.link === '/logout'"
       (click)="onMenuClick(item, $event)"

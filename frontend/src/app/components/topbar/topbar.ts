@@ -1,4 +1,4 @@
-import { Component, ChangeDetectorRef, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, ChangeDetectorRef, HostListener, OnInit, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { API_CONFIG } from '../../core/config/api.config';
 import { RouterLink, RouterLinkActive } from '@angular/router';
@@ -7,6 +7,7 @@ import { AuthService } from '../../services/auth.service';
 interface MenuItem {
   label: string;
   link: string;
+  queryParams?: Record<string, string>;
 }
 
 @Component({
@@ -26,8 +27,8 @@ export class Topbar implements OnInit {
   menuItems: MenuItem[] = [
     { label: 'Home', link: '/home' },
     { label: 'New Mission', link: '/mission/new' },
-    { label: 'My Mission', link: '/mission' },
-    { label: 'Approve Missions', link: '/missionreview' },
+    { label: 'My Missions', link: '/missionreview', queryParams: { view: 'requester' } },
+    { label: 'Approve Missions', link: '/missionreview', queryParams: { view: 'manager' } },
     { label: 'Add Fund', link: '/fund/add' },
     { label: 'My Fund', link: '/fund' },
     { label: 'Logout', link: '/logout' },
@@ -49,12 +50,19 @@ export class Topbar implements OnInit {
 
   toggleMenu(): void {
     this.menuOpen = !this.menuOpen;
+    if (this.menuOpen) this.bellOpen.set(false);
     this.cdr.markForCheck();
   }
 
   closeMenu(): void {
     this.menuOpen = false;
     this.cdr.markForCheck();
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscapeKey(): void {
+    if (this.menuOpen) this.closeMenu();
+    if (this.bellOpen()) this.bellOpen.set(false);
   }
 
   onMenuClick(item: MenuItem, event: Event): void {
