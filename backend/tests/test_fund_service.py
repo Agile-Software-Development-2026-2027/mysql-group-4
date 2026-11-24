@@ -1,8 +1,11 @@
 import pytest
+from datetime import datetime
+from types import SimpleNamespace
 from decimal import Decimal
 from uuid import uuid4
 from unittest.mock import create_autospec, AsyncMock
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.enums import MissionStatus, RefundStatus
 from app.core.exceptions import AccessDeniedError, FundAmountError, FundInUseError, FundNotFoundError
 from app.crud.fund_repository import FundRepository
 from app.crud.user_repository import UserRepository
@@ -52,6 +55,21 @@ class TestFundService:
     async def test_get_by_id_returns_own_fund(self):
         result = await self.service.get_fund_by_id(self.fund.id, self.user.id)
         assert result == FundDTO.model_validate(self.fund)
+
+    @pytest.mark.parametrize(
+        ("refund_status", "expected"),
+        [(None, None), (RefundStatus.SUBMITTED, None), (RefundStatus.APPROVED, Decimal("80.00"))],
+    )
+    async def test_get_by_id_shows_refund_amount_only_when_approved(self, refund_status, expected):
+        row = SimpleNamespace(
+            id=uuid4(), subject="Convegno", status=MissionStatus.ACCEPTED,
+            estimated_cost=Decimal("100.00"), name="Mario", surname="Rossi",
+            created_at=datetime(2026, 10, 24), refund_status=refund_status,
+            total_reimbursed_amount=Decimal("80.00"),
+        )
+        self.repository.find_funded_missions.return_value = {self.fund.id: [row]}
+        result = await self.service.get_fund_by_id(self.fund.id, self.user.id)
+        assert result.missions[0].refund_amount == expected
 
     async def test_get_by_id_forbids_other_users(self):
         with pytest.raises(AccessDeniedError):

@@ -153,6 +153,11 @@ $mission-columns: minmax(0, 2fr) minmax(0, 1.5fr) 110px 110px 120px 16px;
   &__requester { color: $text-muted; overflow-wrap: anywhere; }
   &__date { color: $text-muted; font-variant-numeric: tabular-nums; white-space: nowrap; }
   &__cost { font-weight: 700; }
+  &__estimate {
+    margin-left: 2px; color: $text-muted;
+    // Nascosto ma presente: occupa lo stesso spazio, così le cifre restano allineate.
+    &.is-hidden { visibility: hidden; }
+  }
   &__chevron { font-size: 1.4rem; line-height: 1; color: $border; transition: color 0.15s ease, transform 0.15s ease; }
 
   &__status {
@@ -164,6 +169,7 @@ $mission-columns: minmax(0, 2fr) minmax(0, 1.5fr) 110px 110px 120px 16px;
     background: $locked-bg;
     color: $text-muted;
     &[data-status='ACCEPTED'] { background: rgba(30, 126, 79, 0.15); color: #1e7e4f; }
+    &[data-status='REFUND_REVIEW'] { background: rgba(0, 102, 204, 0.15); color: #0066cc; }
     &[data-status='COMPLETED'] { background: rgba(23, 50, 77, 0.1); color: $text; }
   }
 }

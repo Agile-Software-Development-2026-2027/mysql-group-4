@@ -26,6 +26,7 @@ class MissionDTO(CamelModel):
     requester_email: str | None = None
     fund_manager_id: UUID
     fund_id: UUID | None = None
+    refund_amount: Decimal | None = None
     created_at: datetime
     updated_at: datetime
     created_by: UUID | None

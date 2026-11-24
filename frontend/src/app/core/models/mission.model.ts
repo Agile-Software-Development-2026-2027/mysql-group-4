@@ -40,6 +40,7 @@ export interface MissionDTO {
   requesterEmail?: string | null;
   fundManagerId: string;
   fundId?: string | null;
+  refundAmount?: number | string | null;
   createdAt: string;
   updatedAt: string;
   createdBy?: string | null;
