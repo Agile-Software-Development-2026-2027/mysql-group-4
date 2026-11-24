@@ -5,6 +5,7 @@ export interface FundCreatePayload {
 }
 
 import { MissionStatus } from './mission.model';
+import { RefundStatus } from './refund.model';
 
 export interface FundMissionDTO {
   id: string;
@@ -13,6 +14,8 @@ export interface FundMissionDTO {
   estimatedCost: number | string;
   requesterName: string;
   requestedAt: string;
+  refundStatus?: RefundStatus | null;
+  refundAmount?: number | string | null;
 }
 
 export interface FundDTO {

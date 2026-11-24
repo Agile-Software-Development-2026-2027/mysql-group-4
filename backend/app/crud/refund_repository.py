@@ -1,9 +1,11 @@
+from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.enums import RefundStatus
 from app.crud.pagination import paginate
 from app.db.refund_item import RefundItem
 from app.db.refund_request import RefundRequest
@@ -36,6 +38,15 @@ class RefundRepository:
             )
         )
         return (await session.execute(stmt)).scalar_one_or_none()
+
+    async def find_approved_amount_by_mission_id(
+        self, session: AsyncSession, mission_id: UUID
+    ) -> Decimal | None:
+        stmt = select(RefundRequest.total_reimbursed_amount).where(
+            RefundRequest.mission_id == mission_id,
+            RefundRequest.status == RefundStatus.APPROVED,
+        )
+        return await session.scalar(stmt)
 
     async def find_by_mission_id(
         self, session: AsyncSession, mission_id: UUID

@@ -1,12 +1,14 @@
 import { Component, OnInit, ChangeDetectorRef, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { forkJoin, of } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 import { RouterLink, ActivatedRoute, Router } from '@angular/router';
 import { MissionService } from '../../services/mission.service';
 import { FundService } from '../../services/fund.service';
 import { RefundService } from '../../services/refund.service';
 import { AuthService } from '../../services/auth.service';
 import { ToastService } from '../../services/toast.service';
-import { FundDTO, MissionDTO, RefundRequestDTO } from '../../core/models';
+import { FundDTO, MissionDTO, RefundRequestDTO, RefundStatus } from '../../core/models';
 import { Topbar } from '../../components/topbar/topbar';
 
 @Component({
@@ -23,6 +25,7 @@ export class MissionReview implements OnInit {
 
   pendingMissions: MissionDTO[] = [];
   approvedMissions: MissionDTO[] = [];
+  refundReviewMissions: MissionDTO[] = [];
   completedMissions: MissionDTO[] = [];
   rejectedMissions: MissionDTO[] = [];
 
@@ -118,8 +121,7 @@ export class MissionReview implements OnInit {
         this.cdr.detectChanges();
       });
       this.missionService.getMyAcceptedMissions().subscribe(page => {
-        this.approvedMissions = page.content || [];
-        this.cdr.detectChanges();
+        this.splitByRefundStatus(page.content || []);
       });
       this.missionService.getMyCompletedMissions().subscribe(page => {
         this.completedMissions = page.content || [];
@@ -130,6 +132,32 @@ export class MissionReview implements OnInit {
         this.cdr.detectChanges();
       });
     }
+  }
+
+  // Le missioni terminate con un rimborso già inviato passano in "Refund Review" finché non viene approvato.
+  private splitByRefundStatus(missions: MissionDTO[]) {
+    const ended = missions.filter((mission) => this.isMissionEnded(mission));
+    if (ended.length === 0) {
+      this.approvedMissions = missions;
+      this.refundReviewMissions = [];
+      this.cdr.detectChanges();
+      return;
+    }
+
+    forkJoin(
+      ended.map((mission) =>
+        this.refundService.getByMissionId(mission.id).pipe(catchError(() => of(null)))
+      )
+    ).subscribe((refunds) => {
+      const inReview = new Set(
+        refunds
+          .filter((refund) => refund?.status === RefundStatus.SUBMITTED)
+          .map((refund) => refund!.missionId)
+      );
+      this.approvedMissions = missions.filter((mission) => !inReview.has(mission.id));
+      this.refundReviewMissions = missions.filter((mission) => inReview.has(mission.id));
+      this.cdr.detectChanges();
+    });
   }
 
   toggleSection(section: string) {

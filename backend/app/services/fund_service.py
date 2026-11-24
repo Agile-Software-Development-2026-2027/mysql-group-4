@@ -7,6 +7,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.enums import RefundStatus
 from app.core.exceptions import (
     AccessDeniedError,
     FundInUseError,
@@ -173,6 +174,12 @@ class FundService:
                         estimated_cost=row.estimated_cost,
                         requester_name=f"{row.name} {row.surname}",
                         requested_at=row.created_at,
+                        refund_status=row.refund_status,
+                        # Rimborso effettivo: valorizzato solo dopo l'approvazione dell'admin.
+                        refund_amount=(
+                            row.total_reimbursed_amount
+                            if row.refund_status == RefundStatus.APPROVED else None
+                        ),
                     )
                     for row in missions.get(fund.id, [])
                 ],

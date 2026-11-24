@@ -1,5 +1,6 @@
 import pytest
 from datetime import date, datetime, time, timedelta
+from decimal import Decimal
 from unittest.mock import create_autospec, patch
 from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +13,7 @@ from app.core.exceptions import (
     UserNotFoundError,
 )
 from app.crud.mission_repository import MissionRepository
+from app.crud.refund_repository import RefundRepository
 from app.crud.user_repository import UserRepository
 from app.core.enums import MissionStatus
 from app.schemas.mission import MissionDTO, MissionFilterDTO, MissionUpdateDTO
@@ -58,8 +60,14 @@ class TestMissionService:
         })
         self.fund_service = create_autospec(FundService, instance=True)
         self.fund_id = uuid4()
+        self.refund_repository = create_autospec(RefundRepository, instance=True)
+        self.refund_repository.find_approved_amount_by_mission_id.return_value = None
         self.service = MissionService(
-            self.session, self.repository, self.user_repository, fund_service=self.fund_service
+            self.session,
+            self.repository,
+            self.user_repository,
+            fund_service=self.fund_service,
+            refund_repository=self.refund_repository,
         )
 
     async def test_get_by_id_checks_visibility_before_mapping(self):
@@ -67,6 +75,14 @@ class TestMissionService:
         assert result == self.dto
         self.repository.find_by_id.assert_awaited_once_with(self.mission.id)
         self.session.commit.assert_not_awaited()
+
+    async def test_get_by_id_includes_approved_refund_amount(self):
+        self.refund_repository.find_approved_amount_by_mission_id.return_value = Decimal("123.45")
+        result = await self.service.get_mission_by_id(self.mission.id, self.user.id)
+        assert result.refund_amount == Decimal("123.45")
+        self.refund_repository.find_approved_amount_by_mission_id.assert_awaited_once_with(
+            self.session, self.mission.id
+        )
 
     async def test_get_by_id_does_not_map_forbidden_mission(self):
         other_user = make_user()
