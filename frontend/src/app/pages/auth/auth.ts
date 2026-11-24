@@ -75,15 +75,15 @@ export class AuthComponent implements OnInit {
     { validators: this.passwordMatchValidator }
   );
 
-  isRegisterConfirmMismatch(): boolean {
-    const ctrl = this.registerForm.get('confirmPassword');
-    return !!(this.registerForm.hasError('passwordMismatch') && ctrl && (ctrl.dirty || ctrl.touched));
+  isConfirmMismatch(form: AbstractControl): boolean {
+    const ctrl = form.get('confirmPassword');
+    return !!(form.hasError('passwordMismatch') && ctrl && (ctrl.dirty || ctrl.touched));
   }
 
-  isRegisterPasswordsMatched(): boolean {
-    const pwd = this.registerForm.get('password');
-    const confirm = this.registerForm.get('confirmPassword');
-    return !!(pwd?.valid && confirm?.value && !this.registerForm.hasError('passwordMismatch'));
+  isPasswordsMatched(form: AbstractControl): boolean {
+    const pwd = form.get('password');
+    const confirm = form.get('confirmPassword');
+    return !!(pwd?.valid && confirm?.value && !form.hasError('passwordMismatch'));
   }
 
   ngOnInit(): void {

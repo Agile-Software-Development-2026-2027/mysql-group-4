@@ -238,9 +238,9 @@
                 [type]="showConfirmPassword() ? 'text' : 'password'"
                 formControlName="confirmPassword"
                 class="form-control"
-                [class.is-invalid]="isFieldInvalid('register', 'confirmPassword') || isRegisterConfirmMismatch()"
-                [class.is-valid]="isRegisterPasswordsMatched()"
-                [attr.aria-invalid]="isFieldInvalid('register', 'confirmPassword') || isRegisterConfirmMismatch()"
+                [class.is-invalid]="isFieldInvalid('register', 'confirmPassword') || isConfirmMismatch(registerForm)"
+                [class.is-valid]="isPasswordsMatched(registerForm)"
+                [attr.aria-invalid]="isFieldInvalid('register', 'confirmPassword') || isConfirmMismatch(registerForm)"
                 placeholder="Re-enter password"
                 autocomplete="new-password"
                 required
@@ -261,9 +261,9 @@
             </div>
             @if (isFieldInvalid('register', 'confirmPassword')) {
               <div class="form-error">Please confirm your password.</div>
-            } @else if (isRegisterConfirmMismatch()) {
+            } @else if (isConfirmMismatch(registerForm)) {
               <div class="form-error">Passwords do not match.</div>
-            } @else if (isRegisterPasswordsMatched()) {
+            } @else if (isPasswordsMatched(registerForm)) {
               <p class="field-match" role="status">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
                 <span>Passwords match</span>
@@ -467,14 +467,9 @@
                 [type]="showConfirmPassword() ? 'text' : 'password'"
                 formControlName="confirmPassword"
                 class="form-control"
-                [class.is-invalid]="
-                  isFieldInvalid('reset', 'confirmPassword') ||
-                  (resetPasswordForm.hasError('passwordMismatch') && resetPasswordForm.get('confirmPassword')?.touched)
-                "
-                [attr.aria-invalid]="
-                  isFieldInvalid('reset', 'confirmPassword') ||
-                  (resetPasswordForm.hasError('passwordMismatch') && resetPasswordForm.get('confirmPassword')?.touched)
-                "
+                [class.is-invalid]="isFieldInvalid('reset', 'confirmPassword') || isConfirmMismatch(resetPasswordForm)"
+                [class.is-valid]="isPasswordsMatched(resetPasswordForm)"
+                [attr.aria-invalid]="isFieldInvalid('reset', 'confirmPassword') || isConfirmMismatch(resetPasswordForm)"
                 placeholder="Re-enter your new password"
                 autocomplete="new-password"
                 required
@@ -493,12 +488,15 @@
                 }
               </button>
             </div>
-            @if (resetPasswordForm.get('confirmPassword')?.touched) {
-              @if (resetPasswordForm.get('confirmPassword')?.hasError('required')) {
-                <div class="form-error">Please confirm your password.</div>
-              } @else if (resetPasswordForm.hasError('passwordMismatch')) {
-                <div class="form-error">Passwords do not match.</div>
-              }
+            @if (isFieldInvalid('reset', 'confirmPassword')) {
+              <div class="form-error">Please confirm your password.</div>
+            } @else if (isConfirmMismatch(resetPasswordForm)) {
+              <div class="form-error">Passwords do not match.</div>
+            } @else if (isPasswordsMatched(resetPasswordForm)) {
+              <p class="field-match" role="status">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                <span>Passwords match</span>
+              </p>
             }
           </div>
 
