@@ -32,20 +32,6 @@
       </p>
     </div>
 
-    <!-- Error Alert Banner -->
-    @if (errorMessage()) {
-      <div class="alert alert--danger" role="alert">
-        {{ errorMessage() }}
-      </div>
-    }
-
-    <!-- Success Alert Banner -->
-    @if (successMessage()) {
-      <div class="alert alert--success" role="alert">
-        {{ successMessage() }}
-      </div>
-    }
-
     <!-- ==================== LOGIN FORM ==================== -->
     @if (authMode() === 'login') {
       <form [formGroup]="loginForm" (ngSubmit)="onLoginSubmit()" novalidate>

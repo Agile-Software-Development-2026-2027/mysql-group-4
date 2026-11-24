@@ -4,6 +4,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { EmploymentLevel } from '../../core/models';
 import { AuthService } from '../../services/auth.service';
+import { ToastService } from '../../services/toast.service';
 
 export type AuthMode = 'login' | 'register' | 'forgot-password' | 'reset-password';
 
@@ -16,6 +17,7 @@ export type AuthMode = 'login' | 'register' | 'forgot-password' | 'reset-passwor
 export class AuthComponent implements OnInit {
   private fb = inject(FormBuilder);
   private authService = inject(AuthService);
+  private toastService = inject(ToastService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
 
@@ -23,8 +25,6 @@ export class AuthComponent implements OnInit {
   readonly authMode = signal<AuthMode>('login');
   readonly isLoginMode = computed(() => this.authMode() === 'login');
   readonly isSubmitting = signal(false);
-  readonly errorMessage = signal<string | null>(null);
-  readonly successMessage = signal<string | null>(null);
   readonly resetToken = signal<string | null>(null);
   readonly tokenError = signal<string | null>(null);
   readonly showPassword = signal(false);
@@ -98,8 +98,6 @@ export class AuthComponent implements OnInit {
       } else {
         this.authMode.set('login');
       }
-      this.errorMessage.set(null);
-      this.successMessage.set(null);
       this.showPassword.set(false);
       this.showConfirmPassword.set(false);
     });
@@ -118,8 +116,6 @@ export class AuthComponent implements OnInit {
   switchMode(mode: AuthMode | boolean): void {
     const targetMode: AuthMode = typeof mode === 'boolean' ? (mode ? 'login' : 'register') : mode;
     this.authMode.set(targetMode);
-    this.errorMessage.set(null);
-    this.successMessage.set(null);
     this.showPassword.set(false);
     this.showConfirmPassword.set(false);
     this.router.navigate([`/${targetMode}`]);
@@ -132,22 +128,21 @@ export class AuthComponent implements OnInit {
     }
 
     this.isSubmitting.set(true);
-    this.errorMessage.set(null);
-
     const { email, password } = this.loginForm.getRawValue();
 
     this.authService.login({ email: email!, password: password! }).subscribe({
       next: () => {
         this.isSubmitting.set(false);
+        this.toastService.showSuccess('Signed in successfully.', 'Welcome back');
         this.router.navigateByUrl(this.authService.landingUrl());
       },
       error: (err) => {
         this.isSubmitting.set(false);
-        if (err.status === 400) {
-          this.errorMessage.set('Invalid email or password. Please try again.');
-        } else {
-          this.errorMessage.set('An unexpected error occurred. Please try again later.');
-        }
+        const msg =
+          err.status === 400
+            ? 'Invalid email or password. Please try again.'
+            : 'An unexpected error occurred. Please try again later.';
+        this.toastService.showError(msg, 'Sign In Failed');
       },
     });
   }
@@ -159,8 +154,6 @@ export class AuthComponent implements OnInit {
     }
 
     this.isSubmitting.set(true);
-    this.errorMessage.set(null);
-
     const formValue = this.registerForm.getRawValue();
     const payload = {
       name: formValue.name!.trim(),
@@ -179,34 +172,27 @@ export class AuthComponent implements OnInit {
           .subscribe({
             next: () => {
               this.isSubmitting.set(false);
+              this.toastService.showSuccess('Account created successfully. Welcome to MySOL!', 'Account Created');
               this.router.navigateByUrl(this.authService.landingUrl());
             },
             error: () => {
               this.isSubmitting.set(false);
-              this.authMode.set('login');
-              this.successMessage.set(
-                'Registration successful! Please sign in with your credentials.'
-              );
+              this.toastService.showSuccess('Registration successful! Please sign in with your credentials.', 'Account Created');
               this.router.navigate(['/login']);
             },
           });
       },
       error: (err) => {
         this.isSubmitting.set(false);
+        const detail = err.error?.detail;
+        let msg = 'An error occurred during registration. Please try again later.';
         if (err.status === 400) {
-          const detail = err.error?.detail;
-          if (detail === 'REGISTER_USER_ALREADY_EXISTS') {
-            this.errorMessage.set('A user with this email already exists.');
-          } else if (detail === 'REGISTER_FISCAL_CODE_ALREADY_EXISTS') {
-            this.errorMessage.set('A user with this fiscal code already exists.');
-          } else if (typeof detail === 'string') {
-            this.errorMessage.set(detail);
-          } else {
-            this.errorMessage.set('Registration failed. Please check the provided information.');
-          }
-        } else {
-          this.errorMessage.set('An error occurred during registration. Please try again later.');
+          if (detail === 'REGISTER_USER_ALREADY_EXISTS') msg = 'A user with this email already exists.';
+          else if (detail === 'REGISTER_FISCAL_CODE_ALREADY_EXISTS') msg = 'A user with this fiscal code already exists.';
+          else if (typeof detail === 'string') msg = detail;
+          else msg = 'Registration failed. Please check the provided information.';
         }
+        this.toastService.showError(msg, 'Registration Failed');
       },
     });
   }
@@ -217,24 +203,22 @@ export class AuthComponent implements OnInit {
       return;
     }
 
-    this.isSubmitting.set(true);
-    this.errorMessage.set(null);
-    this.successMessage.set(null);
-
     const email = this.forgotPasswordForm.get('email')?.value?.trim().toLowerCase();
     if (!email) return;
+    this.isSubmitting.set(true);
 
     this.authService.forgotPassword({ email }).subscribe({
       next: () => {
         this.isSubmitting.set(false);
-        this.successMessage.set(
-          'If this email is registered in our system, you will receive an email with instructions to reset your password shortly.'
+        this.toastService.showSuccess(
+          'If this email is registered in our system, you will receive reset instructions shortly.',
+          'Reset Requested'
         );
         this.forgotPasswordForm.reset();
       },
       error: () => {
         this.isSubmitting.set(false);
-        this.errorMessage.set('An unexpected error occurred. Please try again later.');
+        this.toastService.showError('An unexpected error occurred. Please try again later.', 'Error');
       },
     });
   }
@@ -252,39 +236,34 @@ export class AuthComponent implements OnInit {
     }
 
     this.isSubmitting.set(true);
-    this.errorMessage.set(null);
-    this.successMessage.set(null);
-
     const password = this.resetPasswordForm.get('password')?.value!;
 
     this.authService.resetPassword({ token, password }).subscribe({
       next: () => {
         this.isSubmitting.set(false);
-        this.successMessage.set(
-          'Your password has been reset successfully! You can now sign in with your new password.'
+        this.toastService.showSuccess(
+          'Your password has been reset successfully! You can now sign in.',
+          'Password Updated'
         );
         this.resetPasswordForm.reset();
+        this.router.navigate(['/login']);
       },
       error: (err) => {
         this.isSubmitting.set(false);
+        const detail = err.error?.detail;
+        let msg = 'An unexpected error occurred. Please try again later.';
         if (err.status === 400) {
-          const detail = err.error?.detail;
           if (detail === 'RESET_PASSWORD_BAD_TOKEN') {
-            this.errorMessage.set(
-              'The reset link is invalid or has expired. Please request a new password reset.'
-            );
+            msg = 'The reset link is invalid or has expired. Please request a new password reset.';
           } else if (detail === 'RESET_PASSWORD_INVALID_PASSWORD') {
-            this.errorMessage.set(
-              'The new password must be at least 8 characters long.'
-            );
+            msg = 'The new password must be at least 8 characters long.';
           } else if (typeof detail === 'string') {
-            this.errorMessage.set(detail);
+            msg = detail;
           } else {
-            this.errorMessage.set('Failed to reset password. Please try again.');
+            msg = 'Failed to reset password. Please try again.';
           }
-        } else {
-          this.errorMessage.set('An unexpected error occurred. Please try again later.');
         }
+        this.toastService.showError(msg, 'Reset Failed');
       },
     });
   }
