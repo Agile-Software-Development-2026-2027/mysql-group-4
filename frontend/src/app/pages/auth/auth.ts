@@ -1,5 +1,5 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { EmploymentLevel } from '../../core/models';
@@ -27,6 +27,8 @@ export class AuthComponent implements OnInit {
   readonly successMessage = signal<string | null>(null);
   readonly resetToken = signal<string | null>(null);
   readonly tokenError = signal<string | null>(null);
+  readonly showPassword = signal(false);
+  readonly showConfirmPassword = signal(false);
 
   employmentLevels = [
     { value: EmploymentLevel.RICERCATORE, label: 'Researcher (Ricercatore)' },
@@ -41,15 +43,25 @@ export class AuthComponent implements OnInit {
     password: ['', [Validators.required]],
   });
 
-  registerForm = this.fb.group({
-    name: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(50)]],
-    surname: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(50)]],
-    email: ['', [Validators.required, Validators.email]],
-    password: ['', [Validators.required, Validators.minLength(8)]],
-    fiscalCode: ['', [Validators.required, Validators.pattern(this.fiscalCodePattern)]],
-    department: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(50)]],
-    employmentLevel: [EmploymentLevel.RICERCATORE, [Validators.required]],
-  });
+  private passwordMatchValidator = (group: AbstractControl): ValidationErrors | null => {
+    const password = group.get('password')?.value;
+    const confirmPassword = group.get('confirmPassword')?.value;
+    return password === confirmPassword ? null : { passwordMismatch: true };
+  };
+
+  registerForm = this.fb.group(
+    {
+      name: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(50)]],
+      surname: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(50)]],
+      email: ['', [Validators.required, Validators.email]],
+      password: ['', [Validators.required, Validators.minLength(8)]],
+      confirmPassword: ['', [Validators.required]],
+      fiscalCode: ['', [Validators.required, Validators.pattern(this.fiscalCodePattern)]],
+      department: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(50)]],
+      employmentLevel: [EmploymentLevel.RICERCATORE, [Validators.required]],
+    },
+    { validators: this.passwordMatchValidator }
+  );
 
   forgotPasswordForm = this.fb.group({
     email: ['', [Validators.required, Validators.email]],
@@ -60,14 +72,19 @@ export class AuthComponent implements OnInit {
       password: ['', [Validators.required, Validators.minLength(8)]],
       confirmPassword: ['', [Validators.required]],
     },
-    {
-      validators: (group) => {
-        const password = group.get('password')?.value;
-        const confirmPassword = group.get('confirmPassword')?.value;
-        return password === confirmPassword ? null : { passwordMismatch: true };
-      },
-    }
+    { validators: this.passwordMatchValidator }
   );
+
+  isRegisterConfirmMismatch(): boolean {
+    const ctrl = this.registerForm.get('confirmPassword');
+    return !!(this.registerForm.hasError('passwordMismatch') && ctrl && (ctrl.dirty || ctrl.touched));
+  }
+
+  isRegisterPasswordsMatched(): boolean {
+    const pwd = this.registerForm.get('password');
+    const confirm = this.registerForm.get('confirmPassword');
+    return !!(pwd?.valid && confirm?.value && !this.registerForm.hasError('passwordMismatch'));
+  }
 
   ngOnInit(): void {
     this.route.url.subscribe((segments) => {
@@ -83,6 +100,8 @@ export class AuthComponent implements OnInit {
       }
       this.errorMessage.set(null);
       this.successMessage.set(null);
+      this.showPassword.set(false);
+      this.showConfirmPassword.set(false);
     });
 
     this.route.queryParamMap.subscribe((params) => {
@@ -101,6 +120,8 @@ export class AuthComponent implements OnInit {
     this.authMode.set(targetMode);
     this.errorMessage.set(null);
     this.successMessage.set(null);
+    this.showPassword.set(false);
+    this.showConfirmPassword.set(false);
     this.router.navigate([`/${targetMode}`]);
   }
 

@@ -7,21 +7,21 @@
   </a>
 
   <div class="topbar__actions">
-    <a routerLink="/" class="btn btn--outline auth-topbar-btn">Back to Home</a>
+    <a routerLink="/" class="btn btn--outline btn--sm auth-topbar-btn">Back to Home</a>
   </div>
 </header>
 
 <main class="auth-wrapper">
-  <div class="card auth-card">
+  <div class="card auth-card" [class.auth-card--wide]="authMode() === 'register'">
     <div class="auth-header">
-      <h2>
+      <h1>
         @switch (authMode()) {
           @case ('login') { Sign In }
           @case ('register') { Create an Account }
           @case ('forgot-password') { Reset Password }
           @case ('reset-password') { Set New Password }
         }
-      </h2>
+      </h1>
       <p class="auth-subtitle">
         @switch (authMode()) {
           @case ('login') { Access your MySOL account to manage your missions. }
@@ -57,8 +57,13 @@
             formControlName="email"
             class="form-control"
             [class.is-invalid]="isFieldInvalid('login', 'email')"
+            [attr.aria-invalid]="isFieldInvalid('login', 'email')"
             placeholder="e.g., name.surname@unical.it"
-            autocomplete="email"
+            autocomplete="username"
+            autocorrect="off"
+            autocapitalize="none"
+            spellcheck="false"
+            required
           />
           @if (isFieldInvalid('login', 'email')) {
             <div class="form-error">
@@ -73,15 +78,32 @@
 
         <div class="form-group">
           <label for="login-password">Password</label>
-          <input
-            id="login-password"
-            type="password"
-            formControlName="password"
-            class="form-control"
-            [class.is-invalid]="isFieldInvalid('login', 'password')"
-            placeholder="Enter your password"
-            autocomplete="current-password"
-          />
+          <div class="password-field">
+            <input
+              id="login-password"
+              [type]="showPassword() ? 'text' : 'password'"
+              formControlName="password"
+              class="form-control"
+              [class.is-invalid]="isFieldInvalid('login', 'password')"
+              [attr.aria-invalid]="isFieldInvalid('login', 'password')"
+              placeholder="Enter your password"
+              autocomplete="current-password"
+              required
+            />
+            <button
+              type="button"
+              class="password-toggle"
+              [attr.aria-pressed]="showPassword()"
+              [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
+              (click)="showPassword.set(!showPassword())"
+            >
+              @if (showPassword()) {
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              } @else {
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              }
+            </button>
+          </div>
           @if (isFieldInvalid('login', 'password')) {
             <div class="form-error">Password is required.</div>
           }
@@ -161,8 +183,13 @@
             formControlName="email"
             class="form-control"
             [class.is-invalid]="isFieldInvalid('register', 'email')"
+            [attr.aria-invalid]="isFieldInvalid('register', 'email')"
             placeholder="e.g., mario.rossi@unical.it"
-            autocomplete="email"
+            autocomplete="username"
+            autocorrect="off"
+            autocapitalize="none"
+            spellcheck="false"
+            required
           />
           @if (isFieldInvalid('register', 'email')) {
             <div class="form-error">
@@ -175,89 +202,166 @@
           }
         </div>
 
-        <div class="form-group">
-          <label for="reg-password">Password</label>
-          <input
-            id="reg-password"
-            type="password"
-            formControlName="password"
-            class="form-control"
-            [class.is-invalid]="isFieldInvalid('register', 'password')"
-            placeholder="At least 8 characters"
-            autocomplete="new-password"
-          />
-          @if (isFieldInvalid('register', 'password')) {
-            <div class="form-error">
-              @if (registerForm.get('password')?.hasError('required')) {
-                Password is required.
-              } @else if (registerForm.get('password')?.hasError('minlength')) {
-                Password must be at least 8 characters.
-              }
-            </div>
-          }
-        </div>
-
-        <div class="form-group">
-          <label for="reg-fiscal-code">Fiscal Code (Codice Fiscale)</label>
-          <input
-            id="reg-fiscal-code"
-            type="text"
-            formControlName="fiscalCode"
-            class="form-control uppercase-input"
-            [class.is-invalid]="isFieldInvalid('register', 'fiscalCode')"
-            placeholder="e.g., RSSMRA80A01H501U"
-            maxlength="16"
-          />
-          @if (isFieldInvalid('register', 'fiscalCode')) {
-            <div class="form-error">
-              @if (registerForm.get('fiscalCode')?.hasError('required')) {
-                Fiscal code is required.
-              } @else if (registerForm.get('fiscalCode')?.hasError('pattern')) {
-                Invalid fiscal code format (must be 16 alphanumeric characters).
-              }
-            </div>
-          }
-        </div>
-
         <div class="form-row">
           <div class="form-group">
-            <label for="reg-department">Department</label>
-            <input
-              id="reg-department"
-              type="text"
-              formControlName="department"
-              class="form-control"
-              [class.is-invalid]="isFieldInvalid('register', 'department')"
-              placeholder="e.g., DEMACS, DIMEG"
-            />
-            @if (isFieldInvalid('register', 'department')) {
+            <label for="reg-password">Password</label>
+            <div class="password-field">
+              <input
+                id="reg-password"
+                [type]="showPassword() ? 'text' : 'password'"
+                formControlName="password"
+                class="form-control"
+                [class.is-invalid]="isFieldInvalid('register', 'password')"
+                [attr.aria-invalid]="isFieldInvalid('register', 'password')"
+                aria-describedby="reg-password-hint"
+                placeholder="At least 8 characters"
+                autocomplete="new-password"
+                required
+              />
+              <button
+                type="button"
+                class="password-toggle"
+                [attr.aria-pressed]="showPassword()"
+                [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
+                (click)="showPassword.set(!showPassword())"
+              >
+                @if (showPassword()) {
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                } @else {
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                }
+              </button>
+            </div>
+            <p id="reg-password-hint" class="field-hint">Use at least 8 characters.</p>
+            @if (isFieldInvalid('register', 'password')) {
               <div class="form-error">
-                @if (registerForm.get('department')?.hasError('required')) {
-                  Department is required.
-                } @else if (registerForm.get('department')?.hasError('minlength')) {
-                  Must be at least 2 characters.
+                @if (registerForm.get('password')?.hasError('required')) {
+                  Password is required.
+                } @else if (registerForm.get('password')?.hasError('minlength')) {
+                  Password must be at least 8 characters.
                 }
               </div>
             }
           </div>
 
           <div class="form-group">
-            <label for="reg-employment-level">Employment Level</label>
-            <select
-              id="reg-employment-level"
-              formControlName="employmentLevel"
-              class="form-control"
-              [class.is-invalid]="isFieldInvalid('register', 'employmentLevel')"
-            >
-              @for (level of employmentLevels; track level.value) {
-                <option [value]="level.value">{{ level.label }}</option>
-              }
-            </select>
-            @if (isFieldInvalid('register', 'employmentLevel')) {
-              <div class="form-error">Please select an employment level.</div>
+            <label for="reg-confirm-password">Confirm Password</label>
+            <div class="password-field">
+              <input
+                id="reg-confirm-password"
+                [type]="showConfirmPassword() ? 'text' : 'password'"
+                formControlName="confirmPassword"
+                class="form-control"
+                [class.is-invalid]="isFieldInvalid('register', 'confirmPassword') || isRegisterConfirmMismatch()"
+                [class.is-valid]="isRegisterPasswordsMatched()"
+                [attr.aria-invalid]="isFieldInvalid('register', 'confirmPassword') || isRegisterConfirmMismatch()"
+                placeholder="Re-enter password"
+                autocomplete="new-password"
+                required
+              />
+              <button
+                type="button"
+                class="password-toggle"
+                [attr.aria-pressed]="showConfirmPassword()"
+                [attr.aria-label]="showConfirmPassword() ? 'Hide password' : 'Show password'"
+                (click)="showConfirmPassword.set(!showConfirmPassword())"
+              >
+                @if (showConfirmPassword()) {
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                } @else {
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                }
+              </button>
+            </div>
+            @if (isFieldInvalid('register', 'confirmPassword')) {
+              <div class="form-error">Please confirm your password.</div>
+            } @else if (isRegisterConfirmMismatch()) {
+              <div class="form-error">Passwords do not match.</div>
+            } @else if (isRegisterPasswordsMatched()) {
+              <p class="field-match" role="status">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                <span>Passwords match</span>
+              </p>
             }
           </div>
         </div>
+
+        <fieldset class="auth-fieldset">
+          <legend>Academic Profile</legend>
+
+          <div class="form-group">
+            <label for="reg-fiscal-code">Fiscal Code (Codice Fiscale)</label>
+            <input
+              id="reg-fiscal-code"
+              type="text"
+              formControlName="fiscalCode"
+              class="form-control uppercase-input"
+              [class.is-invalid]="isFieldInvalid('register', 'fiscalCode')"
+              [attr.aria-invalid]="isFieldInvalid('register', 'fiscalCode')"
+              aria-describedby="reg-fc-hint"
+              placeholder="e.g., RSSMRA80A01H501U"
+              autocapitalize="characters"
+              autocorrect="off"
+              spellcheck="false"
+              maxlength="16"
+              required
+            />
+            <p id="reg-fc-hint" class="field-hint">16 alphanumeric characters.</p>
+            @if (isFieldInvalid('register', 'fiscalCode')) {
+              <div class="form-error">
+                @if (registerForm.get('fiscalCode')?.hasError('required')) {
+                  Fiscal code is required.
+                } @else if (registerForm.get('fiscalCode')?.hasError('pattern')) {
+                  Invalid fiscal code format (must be 16 alphanumeric characters).
+                }
+              </div>
+            }
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="reg-department">Department</label>
+              <input
+                id="reg-department"
+                type="text"
+                formControlName="department"
+                class="form-control"
+                [class.is-invalid]="isFieldInvalid('register', 'department')"
+                [attr.aria-invalid]="isFieldInvalid('register', 'department')"
+                placeholder="e.g., DEMACS, DIMEG"
+                required
+              />
+              @if (isFieldInvalid('register', 'department')) {
+                <div class="form-error">
+                  @if (registerForm.get('department')?.hasError('required')) {
+                    Department is required.
+                  } @else if (registerForm.get('department')?.hasError('minlength')) {
+                    Must be at least 2 characters.
+                  }
+                </div>
+              }
+            </div>
+
+            <div class="form-group">
+              <label for="reg-employment-level">Employment Level</label>
+              <select
+                id="reg-employment-level"
+                formControlName="employmentLevel"
+                class="form-control"
+                [class.is-invalid]="isFieldInvalid('register', 'employmentLevel')"
+                [attr.aria-invalid]="isFieldInvalid('register', 'employmentLevel')"
+                required
+              >
+                @for (level of employmentLevels; track level.value) {
+                  <option [value]="level.value">{{ level.label }}</option>
+                }
+              </select>
+              @if (isFieldInvalid('register', 'employmentLevel')) {
+                <div class="form-error">Please select an employment level.</div>
+              }
+            </div>
+          </div>
+        </fieldset>
 
         <button type="submit" class="btn btn--block" [disabled]="isSubmitting()">
           {{ isSubmitting() ? 'Creating account...' : 'Create Account' }}
@@ -283,8 +387,13 @@
             formControlName="email"
             class="form-control"
             [class.is-invalid]="isFieldInvalid('forgot', 'email')"
+            [attr.aria-invalid]="isFieldInvalid('forgot', 'email')"
             placeholder="e.g., name.surname@unical.it"
-            autocomplete="email"
+            autocomplete="username"
+            autocorrect="off"
+            autocapitalize="none"
+            spellcheck="false"
+            required
           />
           @if (isFieldInvalid('forgot', 'email')) {
             <div class="form-error">
@@ -325,15 +434,34 @@
         <form [formGroup]="resetPasswordForm" (ngSubmit)="onResetPasswordSubmit()" novalidate>
           <div class="form-group">
             <label for="reset-password">New Password</label>
-            <input
-              id="reset-password"
-              type="password"
-              formControlName="password"
-              class="form-control"
-              [class.is-invalid]="isFieldInvalid('reset', 'password')"
-              placeholder="Enter at least 8 characters"
-              autocomplete="new-password"
-            />
+            <div class="password-field">
+              <input
+                id="reset-password"
+                [type]="showPassword() ? 'text' : 'password'"
+                formControlName="password"
+                class="form-control"
+                [class.is-invalid]="isFieldInvalid('reset', 'password')"
+                [attr.aria-invalid]="isFieldInvalid('reset', 'password')"
+                aria-describedby="reset-password-hint"
+                placeholder="Enter at least 8 characters"
+                autocomplete="new-password"
+                required
+              />
+              <button
+                type="button"
+                class="password-toggle"
+                [attr.aria-pressed]="showPassword()"
+                [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
+                (click)="showPassword.set(!showPassword())"
+              >
+                @if (showPassword()) {
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                } @else {
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                }
+              </button>
+            </div>
+            <p id="reset-password-hint" class="field-hint">Use at least 8 characters.</p>
             @if (isFieldInvalid('reset', 'password')) {
               <div class="form-error">
                 @if (resetPasswordForm.get('password')?.hasError('required')) {
@@ -347,18 +475,38 @@
 
           <div class="form-group">
             <label for="reset-confirm-password">Confirm New Password</label>
-            <input
-              id="reset-confirm-password"
-              type="password"
-              formControlName="confirmPassword"
-              class="form-control"
-              [class.is-invalid]="
-                isFieldInvalid('reset', 'confirmPassword') ||
-                (resetPasswordForm.hasError('passwordMismatch') && resetPasswordForm.get('confirmPassword')?.touched)
-              "
-              placeholder="Re-enter your new password"
-              autocomplete="new-password"
-            />
+            <div class="password-field">
+              <input
+                id="reset-confirm-password"
+                [type]="showConfirmPassword() ? 'text' : 'password'"
+                formControlName="confirmPassword"
+                class="form-control"
+                [class.is-invalid]="
+                  isFieldInvalid('reset', 'confirmPassword') ||
+                  (resetPasswordForm.hasError('passwordMismatch') && resetPasswordForm.get('confirmPassword')?.touched)
+                "
+                [attr.aria-invalid]="
+                  isFieldInvalid('reset', 'confirmPassword') ||
+                  (resetPasswordForm.hasError('passwordMismatch') && resetPasswordForm.get('confirmPassword')?.touched)
+                "
+                placeholder="Re-enter your new password"
+                autocomplete="new-password"
+                required
+              />
+              <button
+                type="button"
+                class="password-toggle"
+                [attr.aria-pressed]="showConfirmPassword()"
+                [attr.aria-label]="showConfirmPassword() ? 'Hide password' : 'Show password'"
+                (click)="showConfirmPassword.set(!showConfirmPassword())"
+              >
+                @if (showConfirmPassword()) {
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                } @else {
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                }
+              </button>
+            </div>
             @if (resetPasswordForm.get('confirmPassword')?.touched) {
               @if (resetPasswordForm.get('confirmPassword')?.hasError('required')) {
                 <div class="form-error">Please confirm your password.</div>
