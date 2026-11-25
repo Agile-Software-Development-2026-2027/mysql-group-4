@@ -11,6 +11,7 @@ import anyio
 from fastapi import UploadFile
 from minio import Minio
 from minio.error import S3Error
+from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -562,6 +563,18 @@ class RefundService:
             updated_by=user_id,
         )
 
+    async def _cleanup_minio_objects(self, object_names: list[str]) -> None:
+        for object_name in object_names:
+            try:
+                await anyio.to_thread.run_sync(
+                    lambda name=object_name: minio_client.remove_object(
+                        bucket_name=settings.MINIO_BUCKET_NAME,
+                        object_name=name,
+                    )
+                )
+            except Exception as exc:
+                logger.warning("Could not remove orphaned MinIO object %s: %s", object_name, exc)
+
     async def process_batch_receipts(
         self,
         refund_request_id: UUID,
@@ -573,6 +586,17 @@ class RefundService:
     ) -> list[RefundItemDTO]:
         if not boxes:
             raise RefundItemCreateError("At least one bounding box is required.")
+
+        content_type = (file.content_type or "").lower()
+        filename_lower = (file.filename or "").lower()
+        is_pdf = content_type == "application/pdf" or filename_lower.endswith(".pdf")
+        is_image = content_type.startswith("image/") or any(
+            filename_lower.endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".webp")
+        )
+        if not is_image and not is_pdf:
+            raise RefundItemCreateError(
+                "Batch receipt processing supports image files (JPEG, PNG, WEBP) and PDF documents."
+            )
 
         refund_request = await self.refund_repository.find_by_id(self.session, refund_request_id)
         if not refund_request:
@@ -588,10 +612,6 @@ class RefundService:
         if len(raw_bytes) > MAX_RECEIPT_FILE_SIZE:
             raise RefundItemCreateError("Receipt file exceeds the maximum allowed size of 10MB.")
 
-        content_type = (file.content_type or "").lower()
-        filename_lower = (file.filename or "").lower()
-        is_pdf = content_type == "application/pdf" or filename_lower.endswith(".pdf")
-
         pdf_pages: list[bytes] = []
         if is_pdf:
             try:
@@ -601,6 +621,22 @@ class RefundService:
                 raise RefundItemCreateError("Unable to render PDF pages.")
             if not pdf_pages:
                 raise RefundItemCreateError("Uploaded PDF contains no pages.")
+        else:
+            try:
+                with Image.open(io.BytesIO(raw_bytes)) as img:
+                    img.verify()
+            except Exception as exc:
+                logger.warning("Invalid or corrupted image during batch processing: %s", exc)
+                raise RefundItemCreateError("Uploaded image file is corrupted or unreadable.")
+
+        for box in boxes:
+            if is_pdf:
+                if box.page < 0 or box.page >= len(pdf_pages):
+                    raise RefundItemCreateError(f"Invalid page index {box.page} for PDF document.")
+            elif box.page != 0:
+                raise RefundItemCreateError(
+                    f"Invalid page index {box.page} for single-image receipt; expected page 0."
+                )
 
         mission = await self.mission_repository.find_by_id(refund_request.mission_id)
         destination = mission.destination if mission else None
@@ -609,45 +645,64 @@ class RefundService:
         base_stem = Path(file.filename).stem if file.filename else "receipt"
 
         prepared_items: list[RefundItem] = []
-        for idx, box in enumerate(boxes, start=1):
-            if is_pdf:
-                if box.page < 0 or box.page >= len(pdf_pages):
-                    raise RefundItemCreateError(f"Invalid page index {box.page} for PDF document.")
-                source_bytes = pdf_pages[box.page]
-            else:
-                source_bytes = raw_bytes
+        uploaded_object_names: list[str] = []
 
-            cropped_bytes = await anyio.to_thread.run_sync(receipt_ai_service.crop_receipt, source_bytes, box)
-            crop_filename = f"{base_stem}_part_{idx}.jpg"
-            upload_dto = await self._upload_receipt_bytes(
-                refund_request_id=refund_request_id,
-                content=cropped_bytes,
-                filename=crop_filename,
-                content_type="image/jpeg",
-            )
-            extracted = await receipt_ai_service.extract_receipt_from_bytes(
-                cropped_bytes,
-                is_pdf=False,
-                hint_currency=hint_currency,
-                hint_country=destination,
-            )
-            item = self._build_batch_refund_item(
-                refund_request_id=refund_request_id,
-                user_id=user.id,
-                extracted=extracted,
-                upload_dto=upload_dto,
-                fallback_start=fallback_start,
-            )
-            prepared_items.append(item)
+        try:
+            for idx, box in enumerate(boxes, start=1):
+                source_bytes = pdf_pages[box.page] if is_pdf else raw_bytes
+                try:
+                    cropped_bytes = await anyio.to_thread.run_sync(
+                        receipt_ai_service.crop_receipt, source_bytes, box
+                    )
+                except Exception as exc:
+                    raise RefundItemCreateError(f"Unable to crop receipt box #{idx}: {exc}") from exc
 
-        created_dtos: list[RefundItemDTO] = []
+                crop_filename = f"{base_stem}_part_{idx}.jpg"
+                upload_dto = await self._upload_receipt_bytes(
+                    refund_request_id=refund_request_id,
+                    content=cropped_bytes,
+                    filename=crop_filename,
+                    content_type="image/jpeg",
+                )
+                uploaded_object_names.append(upload_dto.receipt_file_path)
 
-        async with self.transaction():
-            refund_request = await self.refund_repository.find_by_id(self.session, refund_request_id)
-            for item in prepared_items:
-                saved = await self.refund_repository.save_item(self.session, item)
-                refund_request.total_requested_amount += item.requested_amount
-                await self.session.flush()
-                created_dtos.append(RefundItemDTO.model_validate(saved))
+                extracted = await receipt_ai_service.extract_receipt_from_bytes(
+                    cropped_bytes,
+                    is_pdf=False,
+                    hint_currency=hint_currency,
+                    hint_country=destination,
+                )
+                item = self._build_batch_refund_item(
+                    refund_request_id=refund_request_id,
+                    user_id=user.id,
+                    extracted=extracted,
+                    upload_dto=upload_dto,
+                    fallback_start=fallback_start,
+                )
+                prepared_items.append(item)
 
-        return created_dtos
+            created_dtos: list[RefundItemDTO] = []
+            async with self.transaction():
+                current_refund = await self.refund_repository.find_by_id(self.session, refund_request_id)
+                if not current_refund:
+                    raise RefundNotFoundError(refund_request_id)
+                if current_refund.created_by != user.id:
+                    raise AccessDeniedError("Only the requester can process batch receipts.")
+                if current_refund.status != RefundStatus.DRAFT:
+                    raise RefundItemCreateError("Cannot add items to a non-draft refund request.")
+
+                batch_total = sum((item.requested_amount for item in prepared_items), Decimal("0.00"))
+                await self._ensure_within_estimate(
+                    current_refund, current_refund.total_requested_amount + batch_total
+                )
+
+                for item in prepared_items:
+                    saved = await self.refund_repository.save_item(self.session, item)
+                    current_refund.total_requested_amount += item.requested_amount
+                    await self.session.flush()
+                    created_dtos.append(RefundItemDTO.model_validate(saved))
+
+            return created_dtos
+        except BaseException:
+            await self._cleanup_minio_objects(uploaded_object_names)
+            raise

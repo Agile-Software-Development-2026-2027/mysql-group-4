@@ -347,7 +347,18 @@ class ReceiptAIService:
             )
 
         if not is_pdf:
-            return await self.detector.detect(raw_bytes)
+            try:
+                with Image.open(io.BytesIO(raw_bytes)) as img:
+                    img.verify()
+                return await self.detector.detect(raw_bytes)
+            except HTTPException:
+                raise
+            except Exception as exc:
+                logger.warning("Invalid or corrupted image during receipt detection: %s", exc)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Uploaded image file is corrupted or unreadable.",
+                )
 
         try:
             pdf_pages = await anyio.to_thread.run_sync(render_pdf_pages, raw_bytes)
@@ -368,7 +379,14 @@ class ReceiptAIService:
         pages_dtos: list[ReceiptPageDTO] = []
 
         for page_idx, page_bytes in enumerate(pdf_pages):
-            detection = await self.detector.detect(page_bytes)
+            try:
+                detection = await self.detector.detect(page_bytes)
+            except Exception as exc:
+                logger.warning("Detection failed on rendered PDF page %s: %s", page_idx, exc)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Unable to process rendered PDF page {page_idx}.",
+                )
             for box in detection.boxes:
                 all_boxes.append(
                     BoundingBoxDTO(
@@ -397,19 +415,26 @@ class ReceiptAIService:
         )
 
     def crop_receipt(self, raw_bytes: bytes, box: BoundingBoxDTO) -> bytes:
-        with Image.open(io.BytesIO(raw_bytes)) as img:
-            img = ImageOps.exif_transpose(img)
-            if img.mode != "RGB":
-                img = img.convert("RGB")
-            img_w, img_h = img.size
-            left = max(0, min(box.x, img_w - 1))
-            top = max(0, min(box.y, img_h - 1))
-            right = max(left + 1, min(box.x + box.width, img_w))
-            bottom = max(top + 1, min(box.y + box.height, img_h))
-            cropped = img.crop((left, top, right, bottom))
-            out = io.BytesIO()
-            cropped.save(out, format="JPEG", quality=92)
-            return out.getvalue()
+        try:
+            with Image.open(io.BytesIO(raw_bytes)) as img:
+                img = ImageOps.exif_transpose(img)
+                if img.mode != "RGB":
+                    img = img.convert("RGB")
+                img_w, img_h = img.size
+                left = max(0, min(box.x, img_w - 1))
+                top = max(0, min(box.y, img_h - 1))
+                right = max(left + 1, min(box.x + box.width, img_w))
+                bottom = max(top + 1, min(box.y + box.height, img_h))
+                cropped = img.crop((left, top, right, bottom))
+                out = io.BytesIO()
+                cropped.save(out, format="JPEG", quality=92)
+                return out.getvalue()
+        except Exception as exc:
+            logger.warning("Failed to crop receipt image: %s", exc)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Uploaded image file is corrupted or cannot be cropped.",
+            )
 
     async def extract_receipt(
         self,
