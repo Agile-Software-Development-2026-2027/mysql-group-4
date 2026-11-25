@@ -61,6 +61,11 @@
   </nav>
 
   <div class="topbar__actions">
+    <a class="icon-btn home-btn" [routerLink]="homeLink()" routerLinkActive="is-active" [routerLinkActiveOptions]="{ exact: true }" ariaCurrentWhenActive="page" aria-label="Home" title="Home">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 10.5 12 3l9 7.5"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/>
+      </svg>
+    </a>
     <a class="icon-btn user-btn desktop-action" routerLink="/settings" routerLinkActive="is-active" ariaCurrentWhenActive="page" aria-label="User settings" title="User settings">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>

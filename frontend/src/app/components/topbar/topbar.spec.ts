@@ -39,7 +39,8 @@ describe('Topbar', () => {
     expect(brand?.textContent).toContain(component.siteName);
   });
 
-  it('should render the user button and the hamburger button', () => {
+  it('should render the home, user, and hamburger buttons', () => {
+    expect(element.querySelector('.home-btn')).toBeTruthy();
     expect(element.querySelector('.user-btn')).toBeTruthy();
     expect(element.querySelector('.hamburger')).toBeTruthy();
   });
