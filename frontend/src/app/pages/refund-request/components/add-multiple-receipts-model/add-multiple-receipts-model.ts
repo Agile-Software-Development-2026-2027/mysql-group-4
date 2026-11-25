@@ -141,6 +141,33 @@ export class AddMultipleReceiptsModel implements OnDestroy {
     this.detectBoxes(file);
   }
 
+  private extractErrorMessage(err: unknown, fallback: string): string {
+    const anyErr = err as { error?: { detail?: unknown; message?: unknown } } | null | undefined;
+    const detail = anyErr?.error?.detail;
+    if (typeof detail === 'string' && detail.trim()) {
+      return detail;
+    }
+    if (Array.isArray(detail) && detail.length > 0) {
+      const parts = detail
+        .map((item) => {
+          if (typeof item === 'string') return item;
+          if (item && typeof item === 'object' && 'msg' in item && typeof (item as { msg?: unknown }).msg === 'string') {
+            return (item as { msg: string }).msg;
+          }
+          return null;
+        })
+        .filter((v): v is string => Boolean(v));
+      if (parts.length > 0) {
+        return parts.join('; ');
+      }
+    }
+    const message = anyErr?.error?.message;
+    if (typeof message === 'string' && message.trim()) {
+      return message;
+    }
+    return fallback;
+  }
+
   private detectBoxes(file: File): void {
     this.isDetecting.set(true);
     this.refundService.detectReceipts(this.refundId, file).subscribe({
@@ -166,7 +193,7 @@ export class AddMultipleReceiptsModel implements OnDestroy {
       },
       error: (err) => {
         this.isDetecting.set(false);
-        const msg = err?.error?.detail ?? err?.error?.message ?? 'Could not detect receipts in the file.';
+        const msg = this.extractErrorMessage(err, 'Could not detect receipts in the file.');
         this.errorMessage.set(msg);
         this.toastService.showError(msg, 'Detection Error');
       },
@@ -438,7 +465,7 @@ export class AddMultipleReceiptsModel implements OnDestroy {
       },
       error: (err) => {
         this.isProcessing.set(false);
-        const msg = err?.error?.detail ?? err?.error?.message ?? 'Failed to process batch receipts.';
+        const msg = this.extractErrorMessage(err, 'Failed to process batch receipts.');
         this.errorMessage.set(msg);
         this.toastService.showError(msg, 'Batch Processing Error');
       },
