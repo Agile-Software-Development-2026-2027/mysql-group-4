@@ -2,22 +2,74 @@
   <a class="topbar__brand" routerLink="/">
     <span class="topbar_name">{{ siteName }}</span>
     <span class="topbar_logo">
-      <img src="assets/image/logo/SOLO_logo_unical_white.svg" alt="Logo">
+      <img src="assets/image/logo/SOLO_logo_unical_white.svg" alt="Unical logo">
     </span>
   </a>
 
   <div class="topbar__actions">
-    <a routerLink="/login" class="btn btn--outline landing-topbar-btn">Sign In</a>
+    <span class="topbar-org">University of Calabria</span>
   </div>
 </header>
 
 <main class="container landing-container">
-  <div class="landing-hero">
-    <h1>{{ siteName }}</h1>
-    <p class="landing-subtitle">University mission request and management portal.</p>
-    <p class="landing-text">Sign in with your institutional credentials to review your missions or submit a new request.</p>
-    <div class="landing-actions">
-      <a routerLink="/login" class="btn">Access Portal</a>
+  <section class="landing-hero" aria-labelledby="landing-title">
+    <div class="landing-copy">
+      <h1 id="landing-title">MySol: University Mission &amp; Refund Portal</h1>
+      <p class="landing-lead">
+        Submit mission authorizations, allocate research funds, and track travel expense reimbursements with your
+        institutional credentials.
+      </p>
+
+      <div class="landing-actions">
+        <a routerLink="/login" class="btn">Access Portal</a>
+        <a routerLink="/register" class="btn btn--outline">Create Account</a>
+      </div>
     </div>
-  </div>
+
+    <aside class="workflow-panel" aria-labelledby="workflow-heading">
+      <h2 id="workflow-heading" class="workflow-panel__title">From request to reimbursement</h2>
+      <ul class="workflow-list">
+        <li class="workflow-item">
+          <span class="workflow-item__icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+              <circle cx="12" cy="10" r="3" />
+            </svg>
+          </span>
+          <div>
+            <h3>Plan &amp; Authorize</h3>
+            <p>Specify mission destination, travel dates, and estimated costs on an active fund.</p>
+          </div>
+        </li>
+        <li class="workflow-item">
+          <span class="workflow-item__icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 11l3 3L22 4" />
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+            </svg>
+          </span>
+          <div>
+            <h3>Fund &amp; Approve</h3>
+            <p>Fund managers review requests, monitor committed budgets, and approve departures.</p>
+          </div>
+        </li>
+        <li class="workflow-item">
+          <span class="workflow-item__icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+            </svg>
+          </span>
+          <div>
+            <h3>Submit Receipts</h3>
+            <p>Attach travel, lodging, and meal invoices after return for administrative settlement.</p>
+          </div>
+        </li>
+      </ul>
+    </aside>
+  </section>
 </main>

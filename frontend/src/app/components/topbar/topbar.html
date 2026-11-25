@@ -1,47 +1,77 @@
 <header class="topbar">
   <a class="topbar__brand" [routerLink]="homeLink()">
     <span class="topbar_name">{{ siteName }}</span>
-<span class="topbar_logo"><img src="assets/image/logo/SOLO_logo_unical_white.svg" alt="Logo"></span>
+    <span class="topbar_logo"><img src="assets/image/logo/SOLO_logo_unical_white.svg" alt="Unical logo"></span>
   </a>
 
-  <div class="topbar__actions">
-    @if (!isAdmin()) {
-    <div class="bell">
-      <button class="icon-btn" type="button" aria-label="Missions to approve" (click)="toggleBell()">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22zm7-6v-5a7 7 0 0 0-5.5-6.84V3a1.5 1.5 0 0 0-3 0v1.16A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2z" />
-        </svg>
-        @if (missionsToApprove() > 0) {
-          <span class="bell__badge">{{ missionsToApprove() > 9 ? '9+' : missionsToApprove() }}</span>
-        }
-      </button>
-
-      @if (bellOpen()) {
-        <div class="bell__panel">
-          @if (missionsToApprove() > 0) {
-            <p>You have <strong>{{ missionsToApprove() }}</strong> {{ missionsToApprove() === 1 ? 'mission' : 'missions' }} to approve.</p>
-            <a class="bell__link" routerLink="/missionreview">Go to approvals →</a>
-          } @else {
-            <p>No missions to approve.</p>
+  <nav class="topbar__nav" aria-label="Primary navigation">
+    @for (item of navItems(); track item.label) {
+      <div class="nav-item" [class.is-tooltip-dismissed]="tooltipDismissed()" (mouseleave)="tooltipDismissed.set(false)">
+        <a
+          class="topbar__link"
+          [routerLink]="item.link"
+          [queryParams]="item.queryParams ?? null"
+          [routerLinkActiveOptions]="{ paths: 'exact', queryParams: 'subset', fragment: 'ignored', matrixParams: 'ignored' }"
+          routerLinkActive="is-active"
+          ariaCurrentWhenActive="page"
+          [attr.aria-label]="item.label"
+          [attr.title]="item.label"
+          [attr.aria-describedby]="item.label === 'Approve Missions' ? 'approvals-tooltip' : null"
+          (click)="tooltipDismissed.set(true)"
+          (blur)="tooltipDismissed.set(false)"
+        >
+          @switch (item.icon) {
+            @case ('missions') {
+              <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+              </svg>
+            }
+            @case ('approvals') {
+              <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+              </svg>
+            }
+            @case ('funds') {
+              <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>
+              </svg>
+            }
+            @case ('refunds') {
+              <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
+              </svg>
+            }
           }
-        </div>
-      }
-    </div>
+          <span class="topbar__label">{{ item.label }}</span>
+          @if (item.badge && item.badge > 0) {
+            <span class="nav-badge" [attr.aria-label]="item.badge + ' pending approvals'">{{ item.badge > 9 ? '9+' : item.badge }}</span>
+          }
+        </a>
+        @if (item.label === 'Approve Missions') {
+          <div class="nav-tooltip" id="approvals-tooltip" role="tooltip">
+            @if (missionsToApprove() > 0) {
+              You have <strong>{{ missionsToApprove() }}</strong> {{ missionsToApprove() === 1 ? 'mission' : 'missions' }} to approve.
+            } @else {
+              You have no missions to approve.
+            }
+          </div>
+        }
+      </div>
     }
-    <button class="icon-btn user-btn" type="button" routerLink="/settings" aria-label="User settings">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-4.4 0-8 2.2-8 5v2h16v-2c0-2.8-3.6-5-8-5z" />
+  </nav>
+
+  <div class="topbar__actions">
+    <a class="icon-btn user-btn desktop-action" routerLink="/settings" routerLinkActive="is-active" ariaCurrentWhenActive="page" aria-label="User settings" title="User settings">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+      </svg>
+    </a>
+    <button class="icon-btn desktop-action" type="button" aria-label="Logout" title="Logout" (click)="logout()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
       </svg>
     </button>
-
-    <button
-      class="hamburger"
-      type="button"
-      aria-label="Open menu"
-      [attr.aria-expanded]="menuOpen"
-      [class.is-open]="menuOpen"
-      (click)="toggleMenu()"
-    >
+    <button class="hamburger" type="button" aria-label="Open menu" [attr.aria-expanded]="menuOpen" aria-controls="mobile-nav" [class.is-open]="menuOpen" (click)="toggleMenu()">
       <span></span><span></span><span></span>
     </button>
   </div>
@@ -49,14 +79,8 @@
 
 <div class="overlay" [class.is-open]="menuOpen" (click)="closeMenu()"></div>
 
-<nav class="side-menu" [class.is-open]="menuOpen" aria-label="Main menu">
-  @for (item of visibleMenuItems(); track item.label) {
-    <a
-      [routerLink]="item.link !== '/logout' ? item.link : null"
-      [routerLinkActiveOptions]="{ exact: true }"
-      routerLinkActive="is-active"
-      [class.side-menu__bottom]="item.link === '/logout'"
-      (click)="onMenuClick(item, $event)"
-    >{{ item.label }}</a>
+<nav id="mobile-nav" class="side-menu" [class.is-open]="menuOpen" [attr.aria-hidden]="!menuOpen" [attr.inert]="!menuOpen ? '' : null" aria-label="Account menu">
+  @for (item of mobileMenuItems(); track item.label) {
+    <a [routerLink]="item.link !== '/logout' ? item.link : null" routerLinkActive="is-active" ariaCurrentWhenActive="page" [class.side-menu__bottom]="item.link === '/logout'" (click)="onMenuClick(item, $event)">{{ item.label }}</a>
   }
 </nav>

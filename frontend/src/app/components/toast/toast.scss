@@ -17,35 +17,37 @@
   align-items: flex-start;
   gap: 12px;
   padding: 14px 16px;
-  border-radius: 6px;
-  background: #ffffff;
-  box-shadow: 0 8px 24px rgba(0, 32, 64, 0.16);
-  border-left: 4px solid #1e7e4f;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
   animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  transition: all 0.2s ease;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 
-  &--success {
-    border-left-color: #1e7e4f;
-    .toast__icon {
-      color: #1e7e4f;
-      background: #e8f4ec;
-    }
+  &--success .toast__icon {
+    color: var(--color-success);
+    background: var(--color-success-tint);
   }
 
   &--error {
-    border-left-color: #be0e01;
+    border-color: rgba(190, 14, 1, 0.28);
     .toast__icon {
-      color: #be0e01;
-      background: #fdf2f2;
+      color: var(--color-primary);
+      background: var(--color-primary-tint);
     }
   }
 
-  &--info {
-    border-left-color: #17324d;
+  &--warning {
+    border-color: rgba(146, 64, 14, 0.28);
     .toast__icon {
-      color: #17324d;
-      background: #edf4fa;
+      color: var(--color-warning);
+      background: var(--color-warning-tint);
     }
+  }
+
+  &--info .toast__icon {
+    color: var(--color-text);
+    background: #edf4fa;
   }
 
   &__icon {
@@ -69,28 +71,36 @@
 
   &__title {
     font-size: 0.95rem;
-    color: #17324d;
+    color: var(--color-text);
   }
 
   &__message {
-    color: #5b6f82;
+    color: var(--color-text-muted);
   }
 
   &__close {
     background: transparent;
     border: none;
-    color: #5b6f82;
+    color: var(--color-text-muted);
     font-size: 1rem;
     cursor: pointer;
-    padding: 2px 6px;
-    border-radius: 4px;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
     line-height: 1;
 
     &:hover {
-      background: #edf2f7;
-      color: #17324d;
+      background: var(--color-surface-hover);
+      color: var(--color-text);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-primary);
     }
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast { animation: none; transition: none; }
 }
 
 @keyframes toastSlideIn {
