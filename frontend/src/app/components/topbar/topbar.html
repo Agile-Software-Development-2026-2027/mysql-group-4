@@ -89,3 +89,12 @@
     <a [routerLink]="item.link !== '/logout' ? item.link : null" routerLinkActive="is-active" ariaCurrentWhenActive="page" [class.side-menu__bottom]="item.link === '/logout'" (click)="onMenuClick(item, $event)">{{ item.label }}</a>
   }
 </nav>
+
+<dialog #logoutDialog class="logout-dialog" closedby="any" aria-labelledby="logout-dialog-title" (close)="onLogoutDialogClose()" (click)="onDialogBackdropClick($event)">
+  <h1 id="logout-dialog-title">Confirm Logout</h1>
+  <p>Are you sure you want to logout?</p>
+  <form method="dialog" class="logout-dialog__actions">
+    <button type="submit" value="cancel" class="btn btn--outline" autofocus>Cancel</button>
+    <button type="submit" value="confirm" class="btn">Logout</button>
+  </form>
+</dialog>

@@ -1,4 +1,4 @@
-import { Component, ChangeDetectorRef, HostListener, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, ChangeDetectorRef, ElementRef, HostListener, OnInit, computed, inject, signal, viewChild } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { API_CONFIG } from '../../core/config/api.config';
 import { RouterLink, RouterLinkActive } from '@angular/router';
@@ -22,6 +22,7 @@ export class Topbar implements OnInit {
   private http = inject(HttpClient);
   private cdr = inject(ChangeDetectorRef);
   private authService = inject(AuthService);
+  private logoutDialog = viewChild<ElementRef<HTMLDialogElement>>('logoutDialog');
 
   siteName = 'MYSOL';
   menuOpen = false;
@@ -64,7 +65,29 @@ export class Topbar implements OnInit {
 
   logout(): void {
     this.closeMenu();
-    this.authService.logout().subscribe();
+    const dialog = this.logoutDialog()?.nativeElement;
+    if (dialog?.showModal) {
+      dialog.showModal();
+    } else {
+      this.authService.logout().subscribe();
+    }
+  }
+
+  onLogoutDialogClose(): void {
+    const dialog = this.logoutDialog()?.nativeElement;
+    if (!dialog) return;
+    const confirmed = dialog.returnValue === 'confirm';
+    dialog.returnValue = '';
+    if (confirmed) this.authService.logout().subscribe();
+  }
+
+  onDialogBackdropClick(event: MouseEvent): void {
+    const dialog = this.logoutDialog()?.nativeElement;
+    if (!dialog || 'closedBy' in HTMLDialogElement.prototype || event.target !== dialog) return;
+    const r = dialog.getBoundingClientRect();
+    if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) {
+      dialog.close();
+    }
   }
 
   @HostListener('document:keydown.escape')
