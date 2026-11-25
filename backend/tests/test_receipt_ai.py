@@ -279,8 +279,9 @@ async def test_detect_receipt_boxes_image_and_pdf():
         )
     )
 
-
-    img_res = await service.detect_receipt_boxes(_make_upload_file())
+    buf = io.BytesIO()
+    Image.new("RGB", (400, 300), color=(255, 255, 255)).save(buf, format="JPEG")
+    img_res = await service.detect_receipt_boxes(_make_upload_file(content=buf.getvalue()))
     assert img_res.image_width == 400
     assert len(img_res.boxes) == 1
     assert img_res.pages == []
