@@ -48,4 +48,17 @@ export class Homepage implements OnInit {
         },
       });
   }
+
+  formatStartsIn(startsAt: string): string {
+    const start = new Date(startsAt);
+    const today = new Date();
+    const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const days = Math.round((startDay.getTime() - todayDay.getTime()) / 86_400_000);
+    if (days <= 0) return 'Starts today';
+    if (days === 1) return 'Starts tomorrow';
+    if (days < 14) return `Starts in ${days} days`;
+    if (days < 60) return `Starts in ${Math.round(days / 7)} weeks`;
+    return `Starts in ${Math.round(days / 30)} months`;
+  }
 }
