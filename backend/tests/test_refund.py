@@ -96,10 +96,18 @@ async def create_mission(
     fund_manager_id: UUID | None = None,
     status: MissionStatus = MissionStatus.ACCEPTED,
     ended: bool = True,
+    started: bool = True,
 ) -> Mission:
     now = datetime.now()
-    starts_at = now - timedelta(days=3) if ended else now - timedelta(hours=2)
-    ends_at = now - timedelta(hours=2) if ended else now + timedelta(days=2)
+    if not started:
+        starts_at = now + timedelta(days=1)
+        ends_at = now + timedelta(days=3)
+    elif ended:
+        starts_at = now - timedelta(days=3)
+        ends_at = now - timedelta(hours=2)
+    else:
+        starts_at = now - timedelta(hours=2)
+        ends_at = now + timedelta(days=2)
 
     mission = Mission(
         id=uuid4(),
@@ -160,20 +168,21 @@ async def test_create_refund_request_invalid_dto_extra_fields(
 
 
 @pytest.mark.asyncio
-async def test_create_refund_request_fails_if_mission_not_ended(client: AsyncClient, db_session: AsyncSession, requester: User):
-    mission = await create_mission(db_session, requester.id, ended=False)
-
+async def test_create_refund_request_fails_if_mission_not_accepted(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, status=MissionStatus.PENDING, ended=True)
     response = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
 
     assert response.status_code == 400
 
 
 @pytest.mark.asyncio
-async def test_create_refund_request_fails_if_mission_not_accepted(client: AsyncClient, db_session: AsyncSession, requester: User):
-    mission = await create_mission(db_session, requester.id, status=MissionStatus.PENDING, ended=True)
+async def test_create_refund_request_fails_if_mission_not_started(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, started=False, ended=False)
+
     response = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
 
     assert response.status_code == 400
+    assert "started" in response.json()["message"].lower()
 
 
 @pytest.mark.asyncio
@@ -1421,6 +1430,24 @@ async def test_submit_refund_request_fails_if_already_submitted(client: AsyncCli
 
     second_submit = await client.patch(f"/api/v1/refunds/{refund_id}/submit")
     assert second_submit.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_submit_refund_request_fails_if_mission_not_ended(
+    client: AsyncClient, db_session: AsyncSession, requester: User
+):
+    mission = await create_mission(db_session, requester.id, started=True, ended=False)
+    post_res = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    assert post_res.status_code == 201
+    refund_id = post_res.json()["id"]
+
+    item_payload = make_valid_transport_item_payload()
+    item_res = await client.post(f"/api/v1/refunds/{refund_id}/items", json=item_payload)
+    assert item_res.status_code == 201
+
+    response = await client.patch(f"/api/v1/refunds/{refund_id}/submit")
+    assert response.status_code == 400
+    assert "not ended" in response.json()["message"].lower()
 
 
 # ==============================================================================

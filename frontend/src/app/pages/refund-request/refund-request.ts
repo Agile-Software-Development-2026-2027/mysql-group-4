@@ -77,6 +77,10 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
   readonly isSubmitting = signal(false);
   readonly confirmSubmitOpen = signal(false);
   readonly isDraft = computed(() => this.refund()?.status === RefundStatus.DRAFT);
+  readonly isMissionEnded = computed(() => {
+    const m = this.mission();
+    return m ? new Date(m.endsAt) <= new Date() : false;
+  });
   readonly pendingReviewCount = computed(() => this.items().filter((it) => it.needsReview).length);
   readonly hasItemsPendingReview = computed(() => this.pendingReviewCount() > 0);
 
@@ -470,10 +474,17 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
     this.loadFilteredItems(true);
   }
 
+  openConfirmSubmit(): void {
+    if (!this.isMissionEnded() || this.items().length === 0 || this.isSubmitting() || !this.isDraft()) {
+      return;
+    }
+    this.confirmSubmitOpen.set(true);
+  }
+
   submitRefund(): void {
     this.confirmSubmitOpen.set(false);
     const ref = this.refund();
-    if (!ref || this.items().length === 0 || this.isSubmitting() || !this.isDraft() || this.hasItemsPendingReview()) {
+    if (!ref || !this.isMissionEnded() || this.items().length === 0 || this.isSubmitting() || !this.isDraft() || this.hasItemsPendingReview()) {
       return;
     }
     this.isSubmitting.set(true);

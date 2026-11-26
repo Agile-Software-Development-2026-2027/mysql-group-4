@@ -114,8 +114,8 @@ class RefundService:
                 raise AccessDeniedError("Only the mission requester can create a refund request")
             if mission.status != MissionStatus.ACCEPTED:
                 raise InvalidMissionStateError("A refund request can only be created for an accepted mission")
-            if mission.ends_at > datetime.now():
-                raise InvalidRefundRequestDateError("Refund request can only be created after the mission has ended")
+            if mission.starts_at > datetime.now():
+                raise InvalidRefundRequestDateError("Refund request can only be created after the mission has started")
 
             existing = await self.refund_repository.find_by_mission_id(self.session, mission.id)
             if existing is not None:
@@ -135,12 +135,21 @@ class RefundService:
             refund = await self.refund_repository.find_by_id(self.session, refund_id)
             if not refund:
                 raise RefundNotFoundError(refund_id)
+
+            mission = await self.mission_repository.find_by_id(mission_id=refund.mission_id)
+            if not mission:
+                raise MissionNotFoundError
+
             if refund.created_by != user.id:
                 raise AccessDeniedError("Only the requester can submit this refund request")
             if refund.status != RefundStatus.DRAFT:
                 raise InvalidRefundStateError("Only draft refund requests can be submitted")
             if not refund.items:
                 raise InvalidRefundStateError("Cannot submit a refund request without expense items")
+
+            mission_ends_at = mission.ends_at
+            if mission_ends_at > datetime.now():
+                raise InvalidRefundRequestDateError("You can't submit a refund request if the mission is not ended")
             if any(item.needs_review for item in refund.items):
                 raise InvalidRefundStateError("Cannot submit a refund request while items are pending review")
             await self._ensure_within_estimate(refund, refund.total_requested_amount)

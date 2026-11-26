@@ -88,6 +88,21 @@
         </div>
       </div>
 
+      @if (isDraft() && mission() && !isMissionEnded()) {
+        <div class="mission-pending-banner" role="status">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               aria-hidden="true">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+          <span>
+            <strong>Mission not ended yet.</strong>
+            You can add and edit receipts now, and you will be able to submit the refund request once the mission has ended (after {{ mission()!.endsAt | date:'dd/MM/yyyy HH:mm' }}).
+          </span>
+        </div>
+      }
+
       <div class="receipts-section">
         @if (items().length === 0) {
           <div class="empty-state">
@@ -133,10 +148,10 @@
                     <span class="btn-expand__label">Add Receipt</span>
                   </button>
                   <button class="btn btn-expand btn-expand--primary" type="button"
-                          [disabled]="items().length === 0 || isSubmitting() || hasItemsPendingReview()"
-                          (click)="confirmSubmitOpen.set(true)"
+                          [disabled]="!isMissionEnded() || items().length === 0 || isSubmitting() || hasItemsPendingReview()"
+                          (click)="openConfirmSubmit()"
                           aria-label="Submit Request"
-                          [title]="hasItemsPendingReview() ? 'Review all pending receipts before submitting' : 'Submit Request'">
+                          [title]="!isMissionEnded() ? 'You will be able to submit the refund request once the mission has ended' : hasItemsPendingReview() ? 'Review all pending receipts before submitting' : 'Submit Request'">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <line x1="22" y1="2" x2="11" y2="13"></line>
                       <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
