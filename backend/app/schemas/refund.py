@@ -94,6 +94,7 @@ class RefundItemDTO(RefundItemBase):
     refund_request_id: UUID
     reimbursed_amount: Decimal | None = None
     admin_notes: str | None = None
+    needs_review: bool = False
     created_at: datetime
     updated_at: datetime
     created_by: UUID | None = None

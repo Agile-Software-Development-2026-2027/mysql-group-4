@@ -7,6 +7,9 @@ import httpx
 import pytest
 from fastapi import HTTPException, UploadFile
 
+from PIL import Image
+
+from app.schemas.receipt_ai import BoundingBoxDTO, ReceiptDetectionResponseDTO
 from app.core.enums import ExpenseCategory, ExpenseSubtype
 from app.schemas.currency import CurrencyConversionDTO
 from app.services.currency_service import CurrencyConversionService
@@ -264,3 +267,69 @@ async def test_receipt_ai_accommodation_keeps_dates_strips_itinerary():
     assert result.itinerary_from is None
     assert result.itinerary_to is None
 
+@pytest.mark.asyncio
+async def test_detect_receipt_boxes_image_and_pdf():
+    service = ReceiptAIService(currency_service=CurrencyConversionService())
+    service.detector = MagicMock()
+    service.detector.detect = AsyncMock(
+        return_value=ReceiptDetectionResponseDTO(
+            image_width=400,
+            image_height=300,
+            boxes=[BoundingBoxDTO(x=15, y=20, width=150, height=220, page=0)],
+        )
+    )
+
+    buf = io.BytesIO()
+    Image.new("RGB", (400, 300), color=(255, 255, 255)).save(buf, format="JPEG")
+    img_res = await service.detect_receipt_boxes(_make_upload_file(content=buf.getvalue()))
+    assert img_res.image_width == 400
+    assert len(img_res.boxes) == 1
+    assert img_res.pages == []
+
+
+    with patch("app.services.receipt_ai_service.render_pdf_pages", return_value=[b"p0", b"p1"]):
+        pdf_res = await service.detect_receipt_boxes(
+            _make_upload_file(content=b"%PDF-1.4", filename="doc.pdf", content_type="application/pdf")
+        )
+    assert len(pdf_res.pages) == 2
+    assert [b.page for b in pdf_res.boxes] == [0, 1]
+
+
+@pytest.mark.asyncio
+async def test_detect_receipt_boxes_validation_errors():
+    service = ReceiptAIService(currency_service=CurrencyConversionService())
+
+    with pytest.raises(HTTPException) as exc_415:
+        await service.detect_receipt_boxes(
+            _make_upload_file(filename="notes.txt", content_type="text/plain")
+        )
+    assert exc_415.value.status_code == 415
+
+    with pytest.raises(HTTPException) as exc_400:
+        await service.detect_receipt_boxes(_make_upload_file(content=b""))
+    assert exc_400.value.status_code == 400
+
+    with pytest.raises(HTTPException) as exc_413:
+        await service.detect_receipt_boxes(_make_upload_file(content=b"x" * (10 * 1024 * 1024 + 1)))
+    assert exc_413.value.status_code == 413
+
+
+def test_crop_receipt_dimensions_and_clamping():
+    service = ReceiptAIService(currency_service=CurrencyConversionService())
+    buf = io.BytesIO()
+    Image.new("RGB", (200, 150), color=(100, 150, 200)).save(buf, format="JPEG")
+    raw_img = buf.getvalue()
+
+
+    cropped_bytes = service.crop_receipt(
+        raw_img, BoundingBoxDTO(x=20, y=30, width=80, height=60, page=0)
+    )
+    with Image.open(io.BytesIO(cropped_bytes)) as cropped:
+        assert cropped.size == (80, 60)
+
+
+    clamped_bytes = service.crop_receipt(
+        raw_img, BoundingBoxDTO(x=150, y=100, width=100, height=100, page=0)
+    )
+    with Image.open(io.BytesIO(clamped_bytes)) as clamped:
+        assert clamped.size == (50, 50)
