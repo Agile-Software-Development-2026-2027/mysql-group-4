@@ -7,7 +7,7 @@ import { AuthService } from '../../services/auth.service';
 interface NavItem {
   label: string;
   link: string;
-  icon?: 'missions' | 'approvals' | 'funds' | 'refunds';
+  icon?: 'home' | 'missions' | 'approvals' | 'funds' | 'refunds';
   queryParams?: Record<string, string>;
   badge?: number;
 }
@@ -36,6 +36,7 @@ export class Topbar implements OnInit {
     this.isAdmin()
       ? [{ label: 'Refunds', link: '/refundoverview', icon: 'refunds' }]
       : [
+          { label: 'Home', link: '/home', icon: 'home' },
           { label: 'My Missions', link: '/missionreview', icon: 'missions', queryParams: { view: 'requester' } },
           {
             label: 'Approve Missions',
