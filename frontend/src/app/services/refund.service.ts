@@ -146,9 +146,9 @@ export class RefundService {
     );
   }
 
-  convertCurrencyToEur(amount: number, currency: string): Observable<CurrencyConversionDTO> {
+  convertCurrencyToEur(amount: number, currency: string, issuedDate: string): Observable<CurrencyConversionDTO> {
     return this.http.get<CurrencyConversionDTO>(API_CONFIG.endpoints.refunds.convertCurrency, {
-      params: { amount: amount.toString(), currency },
+      params: { amount: amount.toString(), currency, issuedDate },
       withCredentials: true,
     });
   }

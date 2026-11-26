@@ -33,12 +33,11 @@ async def test_resolve_currency_for_destination_via_nominatim():
 @pytest.mark.asyncio
 async def test_currency_conversion_eur_noop():
     service = CurrencyConversionService()
-    res = await service.convert_to_eur(Decimal("120.50"), "EUR")
+    res = await service.convert_to_eur(Decimal("120.50"), "EUR", "2004-10-29")
     assert res is not None
     assert res.original_currency == "EUR"
     assert res.converted_amount == Decimal("120.50")
     assert res.rate == Decimal("1.0")
-    assert res.provider == "None (already EUR)"
 
 
 @pytest.mark.asyncio
@@ -48,13 +47,16 @@ async def test_currency_conversion_frankfurter():
     mock_resp.status_code = 200
     mock_resp.json.return_value = {"amount": 1.0, "base": "USD", "date": "2026-11-14", "rates": {"EUR": 0.92}}
 
-    with patch("httpx.AsyncClient.get", new=AsyncMock(return_value=mock_resp)):
-        res = await service.convert_to_eur(Decimal("100.00"), "USD")
+    mock_get = AsyncMock(return_value=mock_resp)
+    with patch("httpx.AsyncClient.get", new=mock_get):
+        res = await service.convert_to_eur(Decimal("100.00"), "USD", "2004-10-29")
         assert res is not None
         assert res.original_currency == "USD"
         assert res.converted_amount == Decimal("92.00")
         assert res.rate == Decimal("0.92")
-        assert res.provider == "Frankfurter API"
+        mock_get.assert_awaited_once_with(
+            "https://api.frankfurter.dev/v1/2004-10-29?base=USD&symbols=EUR"
+        )
 
 
 @pytest.mark.asyncio
@@ -66,12 +68,16 @@ async def test_currency_conversion_aed_peg_fallback():
         json=lambda: {"amount": 1.0, "base": "USD", "date": "2026-11-14", "rates": {"EUR": 0.92}},
     )
 
-    with patch("httpx.AsyncClient.get", new=AsyncMock(side_effect=[resp_404, resp_usd])):
-        res = await service.convert_to_eur(Decimal("367.25"), "AED")
+    mock_get = AsyncMock(side_effect=[resp_404, resp_usd])
+    with patch("httpx.AsyncClient.get", new=mock_get):
+        res = await service.convert_to_eur(Decimal("367.25"), "AED", "2004-10-29")
         assert res is not None
         assert res.original_currency == "AED"
         assert res.converted_amount == Decimal("92.00")
-        assert "USD peg" in res.provider
+        assert [call.args[0] for call in mock_get.await_args_list] == [
+            "https://api.frankfurter.dev/v1/2004-10-29?base=AED&symbols=EUR",
+            "https://api.frankfurter.dev/v1/2004-10-29?base=USD&symbols=EUR",
+        ]
 
 
 @pytest.mark.asyncio
@@ -84,8 +90,7 @@ async def test_currency_conversion_open_er_fallback():
     )
 
     with patch("httpx.AsyncClient.get", new=AsyncMock(side_effect=[resp_404, resp_er])):
-        res = await service.convert_to_eur(Decimal("420.00"), "RUB")
+        res = await service.convert_to_eur(Decimal("420.00"), "RUB", "2004-10-29")
         assert res is not None
         assert res.original_currency == "RUB"
         assert res.converted_amount == Decimal("4.62")
-        assert res.provider == "Open Exchange Rates API"

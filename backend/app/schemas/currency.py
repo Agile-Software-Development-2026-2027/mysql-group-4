@@ -10,8 +10,6 @@ class CurrencyConversionDTO(BaseModel):
     original_amount: Decimal
     converted_amount: Decimal
     rate: Decimal
-    date: str
-    provider: str
 
 
 class MissionCurrencyProfileDTO(BaseModel):

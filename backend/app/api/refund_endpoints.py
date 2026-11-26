@@ -62,10 +62,18 @@ async def convert_currency_to_eur(
     currency_service: CurrencyServiceDependency,
     amount: float = Query(..., gt=0),
     currency: str = Query(..., min_length=3, max_length=3, pattern=r"^[A-Za-z]{3}$"),
+    issued_date: str = Query(
+        ...,
+        alias="issuedDate",
+        min_length=10,
+        max_length=10,
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+    ),
 ) -> CurrencyConversionDTO:
     conversion = await currency_service.convert_to_eur(
         amount=Decimal(str(amount)),
         currency=currency,
+        issued_date=issued_date,
     )
     if conversion is None:
         raise HTTPException(

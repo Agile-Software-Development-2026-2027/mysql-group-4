@@ -105,6 +105,7 @@ export interface RefundReceiptUploadDTO {
 export interface RefundItemCreatePayload {
   category: ExpenseCategory;
   subtype?: ExpenseSubtype | null;
+  issuedDate?: string | null;
   itineraryFrom?: string | null;
   itineraryTo?: string | null;
   startsAt: string;
@@ -156,8 +157,6 @@ export interface CurrencyConversionDTO {
   originalAmount: number;
   convertedAmount: number;
   rate: number;
-  date: string;
-  provider: string;
 }
 
 export interface MissionCurrencyProfileDTO {
@@ -172,9 +171,9 @@ export interface ReceiptAutocompleteDTO {
   currency?: string | null;
   convertedAmountEur?: number | null;
   exchangeRate?: number | null;
-  rateDate?: string | null;
   startsAt?: string | null;
   endsAt?: string | null;
+  issuedDate?: string | null;
   merchant?: string | null;
   description?: string | null;
   itineraryFrom?: string | null;

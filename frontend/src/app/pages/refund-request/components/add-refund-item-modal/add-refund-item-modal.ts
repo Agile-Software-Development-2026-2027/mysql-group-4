@@ -102,6 +102,8 @@ export class AddRefundItemModal implements OnInit, OnChanges {
   ocrRawText = signal<string | null>(null);
   minDateTime = signal<string | null>(null);
   maxDateTime = signal<string | null>(null);
+  minIssuedDate = signal<string | null>(null);
+  maxIssuedDate = signal<string | null>(null);
   missionPeriodLabel = signal<string>('');
   form!: FormGroup;
 
@@ -185,6 +187,8 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     if (!this.missionStartsAt || !this.missionEndsAt) {
       this.minDateTime.set(null);
       this.maxDateTime.set(null);
+      this.minIssuedDate.set(null);
+      this.maxIssuedDate.set(null);
       this.missionPeriodLabel.set('');
       return;
     }
@@ -193,11 +197,15 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
       this.minDateTime.set(null);
       this.maxDateTime.set(null);
+      this.minIssuedDate.set(null);
+      this.maxIssuedDate.set(null);
       this.missionPeriodLabel.set('');
       return;
     }
     this.minDateTime.set(this.toDateTimeLocalString(start));
     this.maxDateTime.set(this.toDateTimeLocalString(end));
+    this.minIssuedDate.set(this.toDateTimeLocalString(start).slice(0, 10));
+    this.maxIssuedDate.set(this.toDateTimeLocalString(end).slice(0, 10));
     const startStr = start.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
     const endStr = end.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
     this.missionPeriodLabel.set(`${startStr} – ${endStr}`);
@@ -208,11 +216,45 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
   }
 
+  private toDateInputString(date: Date): string {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  }
+
+  isReceiptIssuedDateValid(): boolean {
+    const control = this.form?.get('issuedDate');
+    const issuedDate = control?.value;
+    if (
+      !control ||
+      control.invalid ||
+      typeof issuedDate !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(issuedDate)
+    ) {
+      return false;
+    }
+
+    const parsedDate = new Date(`${issuedDate}T00:00:00`);
+    if (isNaN(parsedDate.getTime()) || this.toDateInputString(parsedDate) !== issuedDate) {
+      return false;
+    }
+
+    const minIssuedDate = this.minIssuedDate();
+    const maxIssuedDate = this.maxIssuedDate();
+    return (
+      issuedDate <= this.toDateInputString(new Date()) &&
+      (!minIssuedDate || issuedDate >= minIssuedDate) &&
+      (!maxIssuedDate || issuedDate <= maxIssuedDate) &&
+      !this.form.hasError('issuedInFuture') &&
+      !this.form.hasError('issuedOutsideMission')
+    );
+  }
+
   private initForm(): void {
     this.form = this.fb.group(
       {
         category: [ExpenseCategory.TRANSPORT, Validators.required],
         subtype: [ExpenseSubtype.TRAIN, Validators.required],
+        issuedDate: ['', Validators.required],
         itineraryFrom: ['', [Validators.required, noWhitespaceValidator(), Validators.maxLength(255)]],
         itineraryTo: ['', [Validators.required, noWhitespaceValidator(), Validators.maxLength(255)]],
         startsAt: ['', Validators.required],
@@ -236,6 +278,7 @@ export class AddRefundItemModal implements OnInit, OnChanges {
       const category = group.get('category')?.value as ExpenseCategory;
       const startsAt = group.get('startsAt')?.value as string;
       const endsAt = group.get('endsAt')?.value as string;
+      const issuedDate = group.get('issuedDate')?.value as string;
       const from = (group.get('itineraryFrom')?.value as string | null)?.trim().toLowerCase();
       const to = (group.get('itineraryTo')?.value as string | null)?.trim().toLowerCase();
       const startDate = startsAt ? new Date(startsAt) : null;
@@ -258,6 +301,19 @@ export class AddRefundItemModal implements OnInit, OnChanges {
         }
         if (missionStart && missionEnd && (startDate < missionStart || startDate > missionEnd)) {
           errors['startOutsideMission'] = true;
+        }
+      }
+      if (issuedDate) {
+        if (issuedDate > this.toDateInputString(now)) {
+          errors['issuedInFuture'] = true;
+        }
+        const minIssuedDate = this.minIssuedDate();
+        const maxIssuedDate = this.maxIssuedDate();
+        if (
+          (minIssuedDate && issuedDate < minIssuedDate) ||
+          (maxIssuedDate && issuedDate > maxIssuedDate)
+        ) {
+          errors['issuedOutsideMission'] = true;
         }
       }
       if (
@@ -292,6 +348,7 @@ export class AddRefundItemModal implements OnInit, OnChanges {
       itineraryTo: data.itineraryTo ?? '',
       startsAt: data.startsAt ?? '',
       endsAt: data.endsAt ?? '',
+      issuedDate: data.issuedDate ?? '',
       requestedAmount: data.requestedAmount ?? null,
       currency: data.currency ?? 'EUR',
       isTraceable: data.isTraceable ?? true,
@@ -470,8 +527,19 @@ export class AddRefundItemModal implements OnInit, OnChanges {
   }
 
   convertToEur(): void {
+    if (!this.isReceiptIssuedDateValid()) {
+      this.form.get('issuedDate')?.markAsTouched();
+      this.form.updateValueAndValidity();
+      this.toastService.showError(
+        'Enter a valid receipt issue date within the mission period before converting.',
+        'Issued Date Required'
+      );
+      return;
+    }
+
     const rawAmount = Number(this.form.get('requestedAmount')?.value);
     const curr = this.foreignCurrency();
+    const issuedDate = this.form.get('issuedDate')?.value as string;
     if (!rawAmount || rawAmount <= 0) {
       this.toastService.showError('Enter a valid amount to convert.', 'Invalid Amount');
       return;
@@ -483,14 +551,12 @@ export class AddRefundItemModal implements OnInit, OnChanges {
         originalAmount: rawAmount,
         convertedAmount: Number(rawAmount.toFixed(2)),
         rate: 1,
-        date: 'latest',
-        provider: 'Already EUR',
       });
       return;
     }
 
     this.isConvertingCurrency.set(true);
-    this.refundService.convertCurrencyToEur(rawAmount, curr).subscribe({
+    this.refundService.convertCurrencyToEur(rawAmount, curr, issuedDate).subscribe({
       next: (res) => {
         this.isConvertingCurrency.set(false);
         this.conversionInfo.set(res);
@@ -546,6 +612,9 @@ export class AddRefundItemModal implements OnInit, OnChanges {
         if (dto.subtype) {
           patch.subtype = dto.subtype;
         }
+        if (dto.issuedDate) {
+          patch.issuedDate = dto.issuedDate;
+        }
         if (dto.amount != null) {
           patch.requestedAmount = dto.amount;
         }
@@ -585,8 +654,6 @@ export class AddRefundItemModal implements OnInit, OnChanges {
             originalAmount: dto.amount ?? 0,
             convertedAmount: dto.convertedAmountEur,
             rate: dto.exchangeRate,
-            date: dto.rateDate ?? '',
-            provider: 'AI Auto-Conversion',
           });
           this.euroEquivalent.set(dto.convertedAmountEur);
         } else if (this.foreignCurrency() === 'EUR' && dto.amount != null) {
@@ -597,8 +664,12 @@ export class AddRefundItemModal implements OnInit, OnChanges {
 
         const hasExtractedFields = Boolean(
           dto.category ||
+          dto.subtype ||
           dto.amount != null ||
+          dto.currency ||
           dto.startsAt ||
+          dto.endsAt ||
+          dto.issuedDate ||
           dto.merchant ||
           dto.description ||
           dto.itineraryFrom ||
@@ -609,8 +680,9 @@ export class AddRefundItemModal implements OnInit, OnChanges {
           if (dto.warnings?.length) {
             console.warn('AI receipt extraction returned warnings:', dto.warnings);
           }
+          const warningDetails = dto.warnings?.length ? ` ${dto.warnings.join(' ')}` : '';
           this.toastService.showWarning(
-            'Failed to extract data from the receipt. Please fill the fields manually.',
+            `Could not identify expense details on the receipt.${warningDetails} Please fill the fields manually.`,
             'AI Auto-Fill'
           );
           return;
@@ -625,8 +697,14 @@ export class AddRefundItemModal implements OnInit, OnChanges {
       error: (err) => {
         this.isExtractingOcr.set(false);
         console.warn('AI receipt extraction skipped/failed:', err);
+        const detail = err?.error?.detail;
+        const errorDetails = typeof detail === 'string'
+          ? ` ${detail}`
+          : typeof err?.message === 'string'
+            ? ` ${err.message}`
+            : '';
         this.toastService.showWarning(
-          'Failed to extract data from the receipt. Please fill the fields manually.',
+          `Receipt analysis failed.${errorDetails} Please fill the fields manually.`,
           'AI Auto-Fill'
         );
       },

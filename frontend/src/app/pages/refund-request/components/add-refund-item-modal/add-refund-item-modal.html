@@ -111,7 +111,7 @@
           <div class="ocr-conversion-banner" role="status">
             💱 <strong>Currency conversion:</strong>
             {{ conv.originalAmount }} {{ conv.originalCurrency }} = <strong>{{ conv.convertedAmount }} EUR</strong>
-            <span class="ocr-rate-note">(Rate: {{ conv.rate }} via {{ conv.provider }})</span>
+            <span class="ocr-rate-note">(Rate: {{ conv.rate }})</span>
           </div>
         }
         @if (isOcrPrefilled()) {
@@ -143,6 +143,30 @@
               </select>
             </div>
           }
+
+          <!-- Issued Date -->
+          <div class="form-group">
+            <label for="issuedDate">Receipt Issued Date *</label>
+            <input
+              id="issuedDate"
+              type="date"
+              formControlName="issuedDate"
+              class="form-control"
+              [min]="minIssuedDate()"
+              [max]="maxIssuedDate()"
+              [class.is-invalid]="
+                (form.get('issuedDate')?.invalid || form.hasError('issuedInFuture') || form.hasError('issuedOutsideMission')) &&
+                form.get('issuedDate')?.touched
+              "
+            />
+            @if (form.get('issuedDate')?.invalid && form.get('issuedDate')?.touched) {
+              <span class="form-error">Issued date is required.</span>
+            } @else if (form.hasError('issuedInFuture') && form.get('issuedDate')?.touched) {
+              <span class="form-error">Issued date cannot be in the future.</span>
+            } @else if (form.hasError('issuedOutsideMission') && form.get('issuedDate')?.touched) {
+              <span class="form-error">Must be within the mission period ({{ missionPeriodLabel() }}).</span>
+            }
+          </div>
 
           <!-- Itinerary  -->
           @if (form.get('category')?.value === ExpenseCategory.TRANSPORT) {
@@ -291,7 +315,7 @@
                   type="button"
                   class="btn-convert-currency"
                   (click)="convertToEur()"
-                  [disabled]="isConvertingCurrency() || form.get('requestedAmount')?.invalid"
+                  [disabled]="isConvertingCurrency() || form.get('requestedAmount')?.invalid || !isReceiptIssuedDateValid()"
                 >
                   {{ isConvertingCurrency() ? 'Converting...' : 'Convert ' + foreignCurrency() + ' to EUR' }}
                 </button>
