@@ -15,11 +15,9 @@ describe('Topbar', () => {
         provideHttpClient(),
         provideRouter([
           { path: 'home', component: Topbar },
-          { path: 'mission/new', component: Topbar },
-          { path: 'mission', component: Topbar },
           { path: 'missionreview', component: Topbar },
           { path: 'fund', component: Topbar },
-          { path: 'fund/add', component: Topbar },
+          { path: 'refundoverview', component: Topbar },
           { path: 'settings', component: Topbar },
         ])
       ],
@@ -72,9 +70,11 @@ describe('Topbar', () => {
     expect(element.querySelector('.side-menu')?.classList).not.toContain('is-open');
   });
 
-  it('should render one link for each menu item', () => {
-    const links = element.querySelectorAll('.side-menu a');
-    expect(links.length).toBe(component.menuItems.length);
+  it('should render primary nav links and mobile menu links', () => {
+    const desktopLinks = element.querySelectorAll('.topbar__nav a');
+    const mobileLinks = element.querySelectorAll('.side-menu a');
+    expect(desktopLinks.length).toBe(component.navItems().length);
+    expect(mobileLinks.length).toBe(component.mobileMenuItems().length);
   });
 
   it('should close the menu after clicking a menu link', async () => {

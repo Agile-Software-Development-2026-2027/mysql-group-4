@@ -40,7 +40,7 @@
   &__label { max-width: 0; opacity: 0; overflow: hidden; transition: max-width 0.2s ease, opacity 0.2s ease; }
   &:hover {
     padding: 0 14px 0 10px; gap: 6px;
-    .btn-expand__label { max-width: 130px; opacity: 1; }
+    .btn-expand__label { max-width: 220px; opacity: 1; }
   }
 }
 .btn-expand--secondary {
@@ -145,8 +145,17 @@
 .expense-row {
   cursor: pointer; transition: background-color 0.15s ease;
   &:focus-visible { outline: 2px solid var(--rr-primary); outline-offset: -2px; }
+  &--needs-review {
+    background-color: #fffbeb;
+    &:hover td { background-color: #fef3c7; }
+  }
 }
-.desc-cell { display: inline-flex; align-items: center; gap: 6px; }
+.desc-cell { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.needs-review-badge {
+  display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px;
+  background: #fef3c7; color: #92400e; border: 1px solid #f59e0b;
+  font-size: 0.75rem; font-weight: 700; white-space: nowrap;
+}
 .amount-cell { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .cat-badge {
   display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
@@ -160,6 +169,7 @@
   svg { color: var(--rr-primary); }
   p { margin: 0; max-inline-size: 46ch; font-size: 0.9rem; }
 }
+.empty-state__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 4px; }
 
 .modal-backdrop {
   position: fixed; inset: 0; background: var(--rr-backdrop); backdrop-filter: blur(2px);

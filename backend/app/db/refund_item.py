@@ -86,6 +86,10 @@ class RefundItem(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
     admin_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    needs_review: Mapped[bool] = mapped_column(
+            Boolean, nullable=False, default=False, server_default=text("false")
+        )
+
     refund_request: Mapped["RefundRequest"] = relationship(
         back_populates="items",
         lazy="raise",
