@@ -1,10 +1,12 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { Topbar } from '../../components/topbar/topbar';
 import { MissionDTO, MissionStatus } from '../../core/models';
 import { AuthService } from '../../services/auth.service';
 import { MissionService } from '../../services/mission.service';
+import { DashboardNotification, NotificationService } from '../../services/notification.service';
+import { NotificationBanners } from './components/notification-banners/notification-banners';
 
 let mobileFocusDismissedInMemory = false;
 
@@ -16,16 +18,19 @@ function toNaiveIso(date: Date): string {
 
 @Component({
   selector: 'app-homepage',
-  imports: [DatePipe, NgTemplateOutlet, RouterLink, Topbar],
+  imports: [DatePipe, NgTemplateOutlet, RouterLink, Topbar, NotificationBanners],
   templateUrl: './homepage.html',
   styleUrl: './homepage.scss',
 })
 export class Homepage implements OnInit {
   private missionService = inject(MissionService);
   private authService = inject(AuthService);
+  private notificationService = inject(NotificationService);
+  private router = inject(Router);
 
   siteName = 'MYSOL';
   readonly user = this.authService.currentUser;
+  readonly notifications = this.notificationService.notifications;
 
   missionsLoading = signal(true);
   currentMission = signal<MissionDTO | null>(null);
@@ -48,7 +53,24 @@ export class Homepage implements OnInit {
     this.selectedReceiptsCount.set(input.files?.length ?? 0);
   }
 
+  onOpenNotification(item: DashboardNotification): void {
+    this.notificationService.markAsSeen(item.key);
+    this.router.navigate(['/missionreview'], {
+      queryParams: { view: 'requester' },
+      state: { mission: item.mission },
+    });
+  }
+
+  onDismissNotification(key: string): void {
+    this.notificationService.markAsSeen(key);
+  }
+
+  onDismissAllNotifications(): void {
+    this.notificationService.markAllAsSeen();
+  }
+
   ngOnInit(): void {
+    this.notificationService.refresh(false);
     const now = toNaiveIso(new Date());
 
     this.missionService

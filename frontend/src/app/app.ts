@@ -1,6 +1,7 @@
-import { Component, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { ToastComponent } from './components/toast/toast';
+import { NotificationService } from './services/notification.service';
 
 @Component({
   selector: 'app-root',
@@ -10,4 +11,5 @@ import { ToastComponent } from './components/toast/toast';
 })
 export class App {
   protected readonly title = signal('frontend');
+  private readonly notificationService = inject(NotificationService);
 }
