@@ -41,6 +41,7 @@ export interface RefundItemDTO {
   receiptOriginalFilename: string;
   description: string;
   adminNotes?: string | null;
+  needsReview?: boolean;
   createdAt: string;
   updatedAt: string;
   createdBy?: string | null;
@@ -136,6 +137,7 @@ export interface RefundItemUpdatePayload {
   receiptOriginalFilename?: string | null;
   description?: string;
 }
+
 export interface RefundFilterPayload {
   status?: RefundStatus | null;
 }
@@ -151,6 +153,7 @@ export interface RefundOverviewDTO {
   submittedAt?: string | null;
   approvedAt?: string | null;
 }
+
 export interface CurrencyConversionDTO {
   originalCurrency: string;
   originalAmount: number;
@@ -186,3 +189,24 @@ export interface ReceiptAutocompleteDTO {
   warnings: string[];
 }
 
+export interface BoundingBoxDTO {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  page?: number;
+}
+
+export interface ReceiptPageDTO {
+  page: number;
+  imageWidth: number;
+  imageHeight: number;
+  imageDataUrl: string;
+}
+
+export interface ReceiptDetectionResponseDTO {
+  imageWidth: number;
+  imageHeight: number;
+  boxes: BoundingBoxDTO[];
+  pages?: ReceiptPageDTO[];
+}
