@@ -88,4 +88,9 @@ describe('Topbar', () => {
 
     expect(component.menuOpen).toBe(false);
   });
+
+  it('should render the logout confirmation dialog copy', () => {
+    const dialog = element.querySelector('.logout-dialog');
+    expect(dialog?.textContent).toContain('Are you sure you want to logout?');
+  });
 });

@@ -1,10 +1,9 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Topbar } from '../../components/topbar/topbar';
 import { MissionDTO, MissionStatus } from '../../core/models';
 import { AuthService } from '../../services/auth.service';
-import { FundService } from '../../services/fund.service';
 import { MissionService } from '../../services/mission.service';
 
 function toNaiveIso(date: Date): string {
@@ -15,23 +14,20 @@ function toNaiveIso(date: Date): string {
 
 @Component({
   selector: 'app-homepage',
-  imports: [DatePipe, DecimalPipe, RouterLink, Topbar],
+  imports: [DatePipe, NgTemplateOutlet, RouterLink, Topbar],
   templateUrl: './homepage.html',
   styleUrl: './homepage.scss',
 })
 export class Homepage implements OnInit {
   private missionService = inject(MissionService);
-  private fundService = inject(FundService);
   private authService = inject(AuthService);
 
   siteName = 'MYSOL';
+  readonly user = this.authService.currentUser;
 
-  nextMission = signal<MissionDTO | null | undefined>(undefined);
-  availableFunds = signal<number | null>(null);
-  activeFunds = signal(0);
-  totalFunds = signal(0);
-  availableAmount = signal(0);
-  completedMissions = signal<number | null>(null);
+  missionsLoading = signal(true);
+  currentMission = signal<MissionDTO | null>(null);
+  nextMission = signal<MissionDTO | null>(null);
 
   ngOnInit(): void {
     const now = toNaiveIso(new Date());
@@ -41,33 +37,28 @@ export class Homepage implements OnInit {
       .subscribe({
         next: (page) => {
           const sorted = [...page.content].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
-          this.nextMission.set(sorted[0] ?? null);
+          this.currentMission.set(sorted.find((m) => m.startsAt <= now) ?? null);
+          this.nextMission.set(sorted.find((m) => m.startsAt > now) ?? null);
+          this.missionsLoading.set(false);
         },
-        error: () => this.nextMission.set(null),
+        error: () => {
+          this.currentMission.set(null);
+          this.nextMission.set(null);
+          this.missionsLoading.set(false);
+        },
       });
-
-    this.missionService
-      .getMySentMissions({ status: MissionStatus.COMPLETED, endsAtTo: now }, 1)
-      .subscribe({
-        next: (page) => this.completedMissions.set(page.totalElements),
-        error: () => this.completedMissions.set(0),
-      });
-
-    this.fundService.getMyFunds().subscribe({
-      next: (page) => {
-        const myFiscalCode = this.authService.getUser()?.fiscalCode;
-        const mine = page.content.filter((fund) => fund.responsibleFc === myFiscalCode);
-        const usable = mine.filter((fund) => Number(fund.remainingAmount) > 0);
-        this.totalFunds.set(mine.length);
-        this.availableFunds.set(usable.length);
-        this.activeFunds.set(mine.filter((fund) => fund.missions.length > 0).length);
-        this.availableAmount.set(usable.reduce((sum, fund) => sum + Number(fund.remainingAmount), 0));
-      },
-      error: () => this.availableFunds.set(0),
-    });
   }
 
-  isInProgress(mission: MissionDTO): boolean {
-    return mission.startsAt <= toNaiveIso(new Date());
+  formatStartsIn(startsAt: string): string {
+    const start = new Date(startsAt);
+    const today = new Date();
+    const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const days = Math.round((startDay.getTime() - todayDay.getTime()) / 86_400_000);
+    if (days <= 0) return 'Starts today';
+    if (days === 1) return 'Starts tomorrow';
+    if (days < 14) return `Starts in ${days} days`;
+    if (days < 60) return `Starts in ${Math.round(days / 7)} weeks`;
+    return `Starts in ${Math.round(days / 30)} months`;
   }
 }
