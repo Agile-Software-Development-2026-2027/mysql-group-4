@@ -164,6 +164,11 @@ export class MissionReview implements OnInit {
     this.activeSection = this.activeSection === section ? '' : section;
   }
 
+  isMissionStarted(mission: MissionDTO | null): boolean {
+    if (!mission) return false;
+    return new Date(mission.startsAt) <= new Date();
+  }
+
   isMissionEnded(mission: MissionDTO | null): boolean {
     if (!mission) return false;
     return new Date(mission.endsAt) <= new Date();
@@ -328,6 +333,9 @@ export class MissionReview implements OnInit {
   }
 
   createAndGoToRefund(missionId: string): void {
+    if (!this.isMissionStarted(this.selectedMission)) {
+      return;
+    }
     this.isCreatingRefund.set(true);
     this.refundService.createRefundRequest(missionId).subscribe({
       next: (refund) => {
