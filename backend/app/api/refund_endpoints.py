@@ -56,6 +56,25 @@ async def get_refund_by_mission(mission_id: UUID, user: CurrentUser, service: Re
     return await service.get_refund_request_by_mission(mission_id, user)
 
 
+@refund_router.get("/convert-currency", response_model=CurrencyConversionDTO, status_code=status.HTTP_200_OK, summary="Convert foreign currency amount to EUR")
+async def convert_currency_to_eur(
+    user: CurrentUser,
+    currency_service: CurrencyServiceDependency,
+    amount: float = Query(..., gt=0),
+    currency: str = Query(..., min_length=3, max_length=3, pattern=r"^[A-Za-z]{3}$"),
+) -> CurrencyConversionDTO:
+    conversion = await currency_service.convert_to_eur(
+        amount=Decimal(str(amount)),
+        currency=currency,
+    )
+    if conversion is None:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Unable to retrieve exchange rate for currency '{currency.upper()}'.",
+        )
+    return conversion
+
+
 @refund_router.get("/{refund_id}/review", response_model=RefundReviewDTO, summary="Get refund request details for admin review")
 async def get_refund_for_review(refund_id: UUID, user: CurrentUser, service: RefundServiceDependency) -> RefundReviewDTO:
     return await service.get_refund_for_review(refund_id, user)
@@ -138,22 +157,6 @@ async def delete_refund_item(
     service: RefundServiceDependency,
 ) -> None:
     await service.delete_refund_item(refund_request_id=refund_id, item_id=item_id, user=user)
-@refund_router.get("/convert-currency", response_model=CurrencyConversionDTO, status_code=status.HTTP_200_OK, summary="Convert foreign currency amount to EUR")
-async def convert_currency_to_eur(
-    user: CurrentUser,
-    currency_service: CurrencyServiceDependency,
-    amount: Decimal = Query(..., gt=0),
-    currency: str = Query(..., min_length=3, max_length=5),
-) -> CurrencyConversionDTO:
-    conversion = await currency_service.convert_to_eur(amount=amount, currency=currency)
-    if conversion is None:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Unable to retrieve exchange rate for currency '{currency.upper()}'.",
-        )
-    return conversion
-
-
 @refund_router.get("/{refund_id}/currency-profile", response_model=MissionCurrencyProfileDTO, status_code=status.HTTP_200_OK, summary="Get default currency for a refund's mission destination")
 async def get_refund_currency_profile(
     refund_id: UUID,

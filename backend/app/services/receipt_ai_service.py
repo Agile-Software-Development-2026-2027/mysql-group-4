@@ -159,14 +159,13 @@ def get_ocr_engine():
 
 
 def _normalize_currency(raw: Any, hint_currency: str | None) -> str | None:
+    del hint_currency
     if isinstance(raw, str):
         cleaned = raw.strip().upper()
         if cleaned in CURRENCY_ALIASES:
             return CURRENCY_ALIASES[cleaned]
         if re.fullmatch(r"[A-Z]{3}", cleaned):
             return cleaned
-    if hint_currency and re.fullmatch(r"[A-Z]{3}", hint_currency.strip().upper()):
-        return hint_currency.strip().upper()
     return None
 
 

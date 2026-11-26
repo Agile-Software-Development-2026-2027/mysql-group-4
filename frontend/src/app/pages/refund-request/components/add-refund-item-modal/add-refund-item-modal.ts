@@ -89,7 +89,14 @@ export class AddRefundItemModal implements OnInit, OnChanges {
   isConvertingCurrency = signal(false);
   conversionInfo = signal<CurrencyConversionDTO | null>(null);
   foreignCurrency = signal<string>('EUR');
-  readonly availableCurrencies = ['EUR', 'USD', 'GBP', 'CHF', 'RUB', 'CNY', 'TWD', 'JPY', 'AED', 'CAD', 'AUD'];
+  euroEquivalent = signal<number | null>(null);
+  availableCurrencies = [
+    'EUR', 'USD', 'GBP', 'CHF', 'JPY', 'CNY', 'AUD', 'CAD', 'NZD', 'SEK', 'NOK',
+    'DKK', 'PLN', 'CZK', 'HUF', 'RON', 'BGN', 'TRY', 'RUB', 'UAH', 'AED',
+    'ARS', 'BRL', 'CLP', 'COP', 'MXN', 'PEN', 'EGP', 'MAD', 'NGN', 'ZAR',
+    'ILS', 'INR', 'IDR', 'MYR', 'PHP', 'QAR', 'SAR', 'SGD', 'THB', 'TWD', 'VND',
+    'KRW', 'HKD', 'ISK', 'RSD', 'BYN',
+  ];
   isOcrPrefilled = signal(false);
   isExtractingOcr = signal(false);
   ocrRawText = signal<string | null>(null);
@@ -124,7 +131,6 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     this.initForm();
     this.setupCategoryChangeListener();
     this.loadMissionBounds();
-    this.loadMissionCurrencyProfile();
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -438,25 +444,29 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     this.triggerOcrExtraction(file);
   }
 
-  private loadMissionCurrencyProfile(): void {
-    if (!this.refundId) {
-      return;
-    }
-    this.refundService.getCurrencyProfile(this.refundId).subscribe({
-      next: (profile) => {
-        if (profile?.defaultCurrency) {
-          this.foreignCurrency.set(profile.defaultCurrency);
-        }
-      },
-      error: (err) => {
-        console.warn('Could not load mission currency profile:', err);
-      },
-    });
-  }
-
   onForeignCurrencyChange(event: Event): void {
     const select = event.target as HTMLSelectElement;
     this.foreignCurrency.set(select.value || 'EUR');
+    this.conversionInfo.set(null);
+    this.updateEuroEquivalent();
+  }
+
+  onReceiptAmountChange(): void {
+    this.conversionInfo.set(null);
+    this.updateEuroEquivalent();
+  }
+
+  private updateEuroEquivalent(): void {
+    const amount = Number(this.form.get('requestedAmount')?.value);
+    if (!amount || amount <= 0) {
+      this.euroEquivalent.set(null);
+      return;
+    }
+    if (this.foreignCurrency() === 'EUR') {
+      this.euroEquivalent.set(Number(amount.toFixed(2)));
+    } else {
+      this.euroEquivalent.set(null);
+    }
   }
 
   convertToEur(): void {
@@ -467,6 +477,15 @@ export class AddRefundItemModal implements OnInit, OnChanges {
       return;
     }
     if (curr === 'EUR') {
+      this.euroEquivalent.set(Number(rawAmount.toFixed(2)));
+      this.conversionInfo.set({
+        originalCurrency: 'EUR',
+        originalAmount: rawAmount,
+        convertedAmount: Number(rawAmount.toFixed(2)),
+        rate: 1,
+        date: 'latest',
+        provider: 'Already EUR',
+      });
       return;
     }
 
@@ -475,10 +494,8 @@ export class AddRefundItemModal implements OnInit, OnChanges {
       next: (res) => {
         this.isConvertingCurrency.set(false);
         this.conversionInfo.set(res);
-        this.form.patchValue({
-          requestedAmount: res.convertedAmount,
-          currency: 'EUR',
-        });
+        this.euroEquivalent.set(res.convertedAmount);
+        this.form.patchValue({ currency: 'EUR' });
         const currentDesc = (this.form.get('description')?.value || '').trim();
         const note = `[Converted from ${res.originalAmount} ${res.originalCurrency} @ ${res.rate}]`;
         if (!currentDesc.includes(note)) {
@@ -492,7 +509,19 @@ export class AddRefundItemModal implements OnInit, OnChanges {
       },
       error: (err) => {
         this.isConvertingCurrency.set(false);
-        const msg = err?.error?.detail ?? 'Unable to convert currency right now.';
+        const body = err?.error;
+        let msg = 'Unable to convert currency right now.';
+        if (typeof body?.detail === 'string') {
+          msg = body.detail;
+        } else if (Array.isArray(body?.detail)) {
+          msg = body.detail
+            .map((item: { msg?: string; loc?: (string | number)[] }) =>
+              item.msg ?? String(item.loc?.join('.') ?? 'Invalid request')
+            )
+            .join('; ');
+        } else if (typeof body?.message === 'string') {
+          msg = body.message;
+        }
         this.toastService.showError(msg, 'Conversion Failed');
       },
     });
@@ -518,7 +547,7 @@ export class AddRefundItemModal implements OnInit, OnChanges {
           patch.subtype = dto.subtype;
         }
         if (dto.amount != null) {
-          patch.requestedAmount = dto.convertedAmountEur ?? dto.amount;
+          patch.requestedAmount = dto.amount;
         }
         if (dto.startsAt) {
           patch.startsAt = dto.startsAt;
@@ -537,15 +566,33 @@ export class AddRefundItemModal implements OnInit, OnChanges {
           patch.description = parts.join(' - ').slice(0, 255);
         }
 
-        if (dto.convertedAmountEur && dto.currency && dto.currency !== 'EUR' && dto.exchangeRate) {
+        if (dto.currency) {
+          const currency = dto.currency.toUpperCase();
+          if (!this.availableCurrencies.includes(currency)) {
+            this.availableCurrencies = [...this.availableCurrencies, currency].sort();
+          }
+          this.foreignCurrency.set(currency);
+          this.form.patchValue({ currency: 'EUR' });
+        } else {
+          this.foreignCurrency.set('EUR');
+          this.form.patchValue({ currency: 'EUR' });
+        }
+
+        if (dto.convertedAmountEur && dto.exchangeRate) {
+          const extractedCurrency = dto.currency?.toUpperCase() ?? 'EUR';
           this.conversionInfo.set({
-            originalCurrency: dto.currency,
+            originalCurrency: extractedCurrency,
             originalAmount: dto.amount ?? 0,
             convertedAmount: dto.convertedAmountEur,
             rate: dto.exchangeRate,
             date: dto.rateDate ?? '',
             provider: 'AI Auto-Conversion',
           });
+          this.euroEquivalent.set(dto.convertedAmountEur);
+        } else if (this.foreignCurrency() === 'EUR' && dto.amount != null) {
+          this.euroEquivalent.set(dto.amount);
+        } else {
+          this.euroEquivalent.set(null);
         }
 
         const hasExtractedFields = Boolean(
@@ -613,6 +660,9 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     this.ocrRawText.set(null);
     this.isConvertingCurrency.set(false);
     this.conversionInfo.set(null);
+    this.foreignCurrency.set('EUR');
+    this.euroEquivalent.set(null);
+    this.form.patchValue({ requestedAmount: null, currency: 'EUR' });
   }
 
 
@@ -643,6 +693,14 @@ export class AddRefundItemModal implements OnInit, OnChanges {
       return;
     }
 
+    if (this.foreignCurrency() !== 'EUR' && this.euroEquivalent() == null) {
+      this.toastService.showError(
+        'Convert the receipt amount to EUR before saving.',
+        'Currency Conversion Required'
+      );
+      return;
+    }
+
     const val = this.form.value;
 
     const payload: RefundItemCreatePayload = {
@@ -655,7 +713,7 @@ export class AddRefundItemModal implements OnInit, OnChanges {
         val.category === ExpenseCategory.TRANSPORT || val.category === ExpenseCategory.ACCOMMODATION
           ? val.endsAt
           : null,
-      requestedAmount: Number(val.requestedAmount),
+      requestedAmount: Number(this.euroEquivalent() ?? val.requestedAmount),
       currency: val.currency || 'EUR',
       isTraceable: !!val.isTraceable,
       receiptFilePath: this.uploadedReceipt()!.receiptFilePath,
