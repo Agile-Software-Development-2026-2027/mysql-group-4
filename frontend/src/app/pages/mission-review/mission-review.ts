@@ -78,8 +78,15 @@ export class MissionReview implements OnInit {
 
       this.returnToFundId = params['fundId'] ?? null;
       this.loadAllMissions();
-      if (params['missionId']) {
+      const stateMission = history.state?.mission as MissionDTO | undefined;
+      if (stateMission) {
+        this.isDetailView = true;
+        this.openDetail(stateMission);
+      } else if (params['missionId']) {
+        this.isDetailView = true;
         this.openMissionById(params['missionId']);
+      } else {
+        this.isDetailView = false;
       }
     });
   }
@@ -91,7 +98,10 @@ export class MissionReview implements OnInit {
         this.openDetail(mission);
         this.cdr.detectChanges();
       },
-      error: () => this.toastService.showError('Unable to load the mission.', 'Mission'),
+      error: () => {
+        this.isDetailView = false;
+        this.toastService.showError('Unable to load the mission.', 'Mission');
+      },
     });
   }
 
@@ -162,6 +172,11 @@ export class MissionReview implements OnInit {
 
   toggleSection(section: string) {
     this.activeSection = this.activeSection === section ? '' : section;
+  }
+
+  isMissionStarted(mission: MissionDTO | null): boolean {
+    if (!mission) return false;
+    return new Date(mission.startsAt) <= new Date();
   }
 
   isMissionEnded(mission: MissionDTO | null): boolean {
@@ -319,6 +334,9 @@ export class MissionReview implements OnInit {
     this.associatedFundName.set(null);
     this.associatedRefund.set(null);
     this.documents.set([]);
+    if (history.state?.mission) {
+      history.replaceState({ ...history.state, mission: undefined }, '');
+    }
     if (this.route.snapshot.queryParams['missionId']) {
       this.router.navigate([], {
         relativeTo: this.route,
@@ -328,6 +346,9 @@ export class MissionReview implements OnInit {
   }
 
   createAndGoToRefund(missionId: string): void {
+    if (!this.isMissionStarted(this.selectedMission)) {
+      return;
+    }
     this.isCreatingRefund.set(true);
     this.refundService.createRefundRequest(missionId).subscribe({
       next: (refund) => {

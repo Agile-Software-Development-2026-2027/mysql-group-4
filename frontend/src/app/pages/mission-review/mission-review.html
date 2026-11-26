@@ -222,14 +222,7 @@
 
           @if (viewMode === 'requester' && (selectedMission.status === 'ACCEPTED' || selectedMission.status === 'COMPLETED')) {
             <div class="refund-section">
-              @if (selectedMission.status === 'ACCEPTED' && !isMissionEnded(selectedMission)) {
-                <div class="refund-banner info">
-                  <div class="refund-banner__text">
-                    <strong>Refund Request</strong>
-                    <p>You can request a refund once the mission has ended (after {{ selectedMission.endsAt | date:'dd/MM/yyyy HH:mm' }}).</p>
-                  </div>
-                </div>
-              } @else if (selectedMission.status === 'ACCEPTED' && isMissionEnded(selectedMission)) {
+              @if (selectedMission.status === 'ACCEPTED') {
                 @if (associatedRefund(); as refund) {
                   <div class="refund-card">
                     <div class="refund-card__info">
@@ -243,11 +236,28 @@
                       Go to Refund &rarr;
                     </a>
                   </div>
+                } @else if (!isMissionStarted(selectedMission)) {
+                  <div class="refund-banner info">
+                    <div class="refund-banner__text">
+                      <strong>Refund Request</strong>
+                      <p>
+                        You will be able to create a refund request once the mission has started
+                        (after {{ selectedMission.startsAt | date:'dd/MM/yyyy HH:mm' }}).
+                      </p>
+                    </div>
+                  </div>
                 } @else {
                   <div class="refund-banner action">
                     <div class="refund-banner__text">
                       <strong>Refund Request</strong>
-                      <p>The mission has concluded. You can now initiate your reimbursement request.</p>
+                      @if (isMissionEnded(selectedMission)) {
+                        <p>The mission has concluded. You can now initiate your reimbursement request.</p>
+                      } @else {
+                        <p>
+                          This mission ends on {{ selectedMission.endsAt | date:'dd/MM/yyyy HH:mm' }}.
+                          You can create a draft and upload receipts now; you will be able to submit the refund request once the mission has ended.
+                        </p>
+                      }
                     </div>
                     <button
                       class="btn btn--primary"

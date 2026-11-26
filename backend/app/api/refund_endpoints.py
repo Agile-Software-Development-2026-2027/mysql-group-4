@@ -1,15 +1,17 @@
 from decimal import Decimal
+import json
 import mimetypes
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
+from pydantic import TypeAdapter, ValidationError
 
 from app.api.deps import get_currency_service, get_receipt_ai_service, get_refund_service
 from app.db.models import User
 from app.schemas.currency import CurrencyConversionDTO, MissionCurrencyProfileDTO
 from app.schemas.page import Page, PageRequest
-from app.schemas.receipt_ai import ReceiptAutocompleteDTO
+from app.schemas.receipt_ai import BoundingBoxDTO, ReceiptAutocompleteDTO, ReceiptDetectionResponseDTO
 from app.schemas.refund import (
     RefundApproveDTO,
     RefundItemCreateDTO,
@@ -111,6 +113,7 @@ async def approve_refund(refund_id: UUID, decisions: RefundApproveDTO, user: Cur
 async def upload_receipt(refund_id: UUID, user: CurrentUser, service: RefundServiceDependency, file: UploadFile = File(...)) -> RefundReceiptUploadDTO:
     return await service.upload_receipt(refund_request_id=refund_id, file=file, user=user)
 
+
 @refund_router.get("/{refund_id}/items/{item_id}/receipt", summary="Download the receipt of a refund item")
 async def download_receipt(refund_id: UUID, item_id: UUID, user: CurrentUser, service: RefundServiceDependency) -> Response:
     content, filename = await service.download_receipt(refund_request_id=refund_id, item_id=item_id, user=user)
@@ -125,6 +128,7 @@ async def download_receipt(refund_id: UUID, item_id: UUID, user: CurrentUser, se
 @refund_router.post("/{refund_id}/items", response_model=RefundItemDTO, status_code=status.HTTP_201_CREATED, summary="Create refund item")
 async def create_refund_item(refund_id: UUID, user: CurrentUser, service: RefundServiceDependency, data: RefundItemCreateDTO) -> RefundItemDTO:
     return await service.create_refund_item(refund_request_id=refund_id, user=user, data=data)
+
 
 @refund_router.post("/filter", response_model=list[RefundOverviewDTO], summary="Filter refunds by status (admin only)")
 async def filter_refunds(
@@ -181,6 +185,7 @@ async def get_refund_currency_profile(
         default_currency=default_currency,
     )
 
+
 @refund_router.post(
     "/{refund_id}/receipts/extract",
     response_model=ReceiptAutocompleteDTO,
@@ -203,4 +208,54 @@ async def extract_receipt_fields(
         file=file,
         hint_currency=hint_currency,
         hint_country=destination,
+    )
+
+
+@refund_router.post(
+    "/{refund_id}/receipts/detect",
+    response_model=ReceiptDetectionResponseDTO,
+    status_code=status.HTTP_200_OK,
+    summary="Detect individual receipt bounding boxes in a single image",
+)
+async def detect_receipt_boxes(
+    refund_id: UUID,
+    user: CurrentUser,
+    refund_service: RefundServiceDependency,
+    receipt_ai_service: ReceiptAIServiceDependency,
+    file: UploadFile = File(...),
+) -> ReceiptDetectionResponseDTO:
+    await refund_service.get_refund_request_by_id(refund_id, user)
+    return await receipt_ai_service.detect_receipt_boxes(file=file)
+
+
+@refund_router.post(
+    "/{refund_id}/receipts/batch-process",
+    response_model=list[RefundItemDTO],
+    status_code=status.HTTP_201_CREATED,
+    summary="Crop receipts using confirmed bounding boxes, run OCR/AI, and create draft items pending review",
+)
+async def batch_process_receipts(
+    refund_id: UUID,
+    user: CurrentUser,
+    refund_service: RefundServiceDependency,
+    currency_service: CurrencyServiceDependency,
+    receipt_ai_service: ReceiptAIServiceDependency,
+    file: UploadFile = File(...),
+    boxes: str = Form(...),
+) -> list[RefundItemDTO]:
+    try:
+        parsed_boxes = TypeAdapter(list[BoundingBoxDTO]).validate_json(boxes)
+    except (ValidationError, json.JSONDecodeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid boxes JSON payload: {exc}",
+        )
+
+    return await refund_service.process_batch_receipts(
+        refund_request_id=refund_id,
+        file=file,
+        boxes=parsed_boxes,
+        user=user,
+        currency_service=currency_service,
+        receipt_ai_service=receipt_ai_service,
     )

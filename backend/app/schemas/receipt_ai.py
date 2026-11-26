@@ -27,3 +27,31 @@ class ReceiptAutocompleteDTO(BaseModel):
     ocr_engine: str = ""
     llm_model: str = ""
     warnings: list[str] = Field(default_factory=list)
+
+
+class BoundingBoxDTO(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    x: int = Field(ge=0)
+    y: int = Field(ge=0)
+    width: int = Field(gt=0)
+    height: int = Field(gt=0)
+    page: int = Field(default=0, ge=0)
+
+
+class ReceiptPageDTO(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    page: int = Field(ge=0)
+    image_width: int
+    image_height: int
+    image_data_url: str
+
+
+class ReceiptDetectionResponseDTO(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    image_width: int
+    image_height: int
+    boxes: list[BoundingBoxDTO] = Field(default_factory=list)
+    pages: list[ReceiptPageDTO] = Field(default_factory=list)

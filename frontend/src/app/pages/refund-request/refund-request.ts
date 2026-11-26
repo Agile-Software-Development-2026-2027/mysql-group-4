@@ -15,6 +15,7 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 
 import { Topbar } from '../../components/topbar/topbar';
 import { AddRefundItemModal } from './components/add-refund-item-modal/add-refund-item-modal';
+import { AddMultipleReceiptsModel } from './components/add-multiple-receipts-model/add-multiple-receipts-model';
 import { API_CONFIG } from '../../core/config/api.config';
 import { ExpenseCategory, ExpenseSubtype, MissionDTO, RefundItemDTO, RefundItemFilterPayload, RefundItemUpdatePayload, RefundRequestDTO, RefundStatus } from '../../core/models';
 import { RefundService } from '../../services/refund.service';
@@ -23,7 +24,7 @@ import { ToastService } from '../../services/toast.service';
 @Component({
   selector: 'app-refund-request',
   standalone: true,
-  imports: [CommonModule, DatePipe, DecimalPipe, ReactiveFormsModule, RouterLink, Topbar, AddRefundItemModal],
+  imports: [CommonModule, DatePipe, DecimalPipe, ReactiveFormsModule, RouterLink, Topbar, AddRefundItemModal, AddMultipleReceiptsModel],
   templateUrl: './refund-request.html',
   styleUrl: './refund-request.scss',
 })
@@ -65,6 +66,7 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
   readonly isLoading = signal(true);
   readonly loadError = signal(false);
   readonly isAddModalOpen = signal(false);
+  readonly isBatchModalOpen = signal(false);
 
   readonly selectedItem = signal<RefundItemDTO | null>(null);
   readonly isReceiptLoading = signal(false);
@@ -75,6 +77,12 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
   readonly isSubmitting = signal(false);
   readonly confirmSubmitOpen = signal(false);
   readonly isDraft = computed(() => this.refund()?.status === RefundStatus.DRAFT);
+  readonly isMissionEnded = computed(() => {
+    const m = this.mission();
+    return m ? new Date(m.endsAt) <= new Date() : false;
+  });
+  readonly pendingReviewCount = computed(() => this.items().filter((it) => it.needsReview).length);
+  readonly hasItemsPendingReview = computed(() => this.pendingReviewCount() > 0);
 
   editForm: FormGroup = this.fb.group({
     category: [ExpenseCategory.TRANSPORT, Validators.required],
@@ -466,10 +474,17 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
     this.loadFilteredItems(true);
   }
 
+  openConfirmSubmit(): void {
+    if (!this.isMissionEnded() || this.items().length === 0 || this.isSubmitting() || !this.isDraft()) {
+      return;
+    }
+    this.confirmSubmitOpen.set(true);
+  }
+
   submitRefund(): void {
     this.confirmSubmitOpen.set(false);
     const ref = this.refund();
-    if (!ref || this.items().length === 0 || this.isSubmitting() || !this.isDraft()) {
+    if (!ref || !this.isMissionEnded() || this.items().length === 0 || this.isSubmitting() || !this.isDraft() || this.hasItemsPendingReview()) {
       return;
     }
     this.isSubmitting.set(true);
@@ -519,6 +534,14 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
     this.items.update((current) => [...current, item]);
     this.closeAddModal();
     this.loadFilteredItems();
+  }
+
+  openBatchModal(): void { this.isBatchModalOpen.set(true); }
+  closeBatchModal(): void { this.isBatchModalOpen.set(false); }
+  onBatchItemsAdded(newItems: RefundItemDTO[]): void {
+    this.items.update((current) => [...current, ...newItems]);
+    this.closeBatchModal();
+    this.loadFilteredItems(true);
   }
 
   formatCategory(cat: ExpenseCategory): string {

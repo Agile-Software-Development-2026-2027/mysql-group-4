@@ -33,6 +33,9 @@ export const API_CONFIG = {
         `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/items/${itemId}/receipt`,
       receipts: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/receipts`,
       extractReceipt: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/receipts/extract`,
+      detectReceipts: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/receipts/detect`,
+      batchProcessReceipts: (refundId: string) =>
+        `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/receipts/batch-process`,
       items: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/items`,
       item: (refundId: string, itemId: string) =>
         `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/items/${itemId}`,

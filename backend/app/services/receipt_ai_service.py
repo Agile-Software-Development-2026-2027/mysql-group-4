@@ -16,12 +16,19 @@ from PIL import Image, ImageOps
 
 from app.core.config import settings
 from app.core.enums import ExpenseCategory, ExpenseSubtype
-from app.schemas.receipt_ai import ReceiptAutocompleteDTO
+from app.core.receipt_detector import get_receipt_detector
+from app.schemas.receipt_ai import (
+    BoundingBoxDTO,
+    ReceiptAutocompleteDTO,
+    ReceiptDetectionResponseDTO,
+    ReceiptPageDTO,
+)
 from app.services.currency_service import CurrencyConversionService
 
 logger = logging.getLogger(__name__)
 
-MAX_EXTRACT_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_EXTRACT_FILE_SIZE = 10 * 1024 * 1024
+MAX_PDF_DETECTION_PAGES = 10
 DEFAULT_MAX_IMAGE_DIMENSION = 1600
 VISION_MAX_IMAGE_DIMENSION = 1024
 
@@ -124,9 +131,8 @@ def _prepare_vision_base64(raw_bytes: bytes) -> str | None:
 
 
 def extract_pdf_content(raw_bytes: bytes) -> tuple[str, bytes | None]:
-    """Extract embedded text or embedded image from a PDF document."""
     try:
-        import pypdf  # type: ignore[import-not-found]
+        import pypdf
         reader = pypdf.PdfReader(io.BytesIO(raw_bytes))
         pages_text: list[str] = []
         first_image_bytes: bytes | None = None
@@ -145,6 +151,28 @@ def extract_pdf_content(raw_bytes: bytes) -> tuple[str, bytes | None]:
         return "", None
 
 
+def render_pdf_pages(raw_bytes: bytes, max_pages: int = MAX_PDF_DETECTION_PAGES) -> list[bytes]:
+    import pypdfium2 as pdfium
+
+    pdf = pdfium.PdfDocument(raw_bytes)
+    pages_bytes: list[bytes] = []
+    try:
+        total_pages = min(len(pdf), max_pages)
+        for idx in range(total_pages):
+            page = pdf[idx]
+            bitmap = page.render(scale=2.0)
+            pil_image = bitmap.to_pil()
+            if pil_image.mode != "RGB":
+                pil_image = pil_image.convert("RGB")
+            out = io.BytesIO()
+            pil_image.save(out, format="JPEG", quality=90)
+            pages_bytes.append(out.getvalue())
+            page.close()
+    finally:
+        pdf.close()
+    return pages_bytes
+
+
 _ocr_engine_instance: Any = None
 
 
@@ -152,7 +180,7 @@ def get_ocr_engine():
     global _ocr_engine_instance
     if _ocr_engine_instance is None:
         try:
-            from rapidocr_onnxruntime import RapidOCR  # type: ignore[import-not-found]
+            from rapidocr_onnxruntime import RapidOCR
             _ocr_engine_instance = RapidOCR()
         except ImportError:
             logger.warning("rapidocr_onnxruntime not installed; OCR will be disabled.")
@@ -225,10 +253,9 @@ def _normalize_category_and_subtype(
 
 
 class ReceiptAIService:
-    """Integrated Receipt OCR (RapidOCR) + PDF parser + Multimodal LLM extraction service."""
-
     def __init__(self, currency_service: CurrencyConversionService) -> None:
         self.currency_service = currency_service
+        self.detector = get_receipt_detector()
 
     def _sync_ocr(self, image_bytes: bytes) -> tuple[str, list[str], float | None]:
         engine = get_ocr_engine()
@@ -261,7 +288,7 @@ class ReceiptAIService:
         text_section = f"\n\nDOCUMENT / OCR TEXT:\n{raw_text[:4000]}" if raw_text.strip() else ""
         user_prompt = f"{hint_block}{text_section}".strip()
         if not user_prompt:
-            user_prompt = "Extract travel expense details from this receipt image."
+            user_prompt = "Extract travel expense details from the receipt image."
 
         user_message: dict[str, Any] = {"role": "user", "content": user_prompt}
         if settings.OLLAMA_VISION_ENABLED and image_bytes:
@@ -292,6 +319,124 @@ class ReceiptAIService:
             content = re.sub(r"\s*```$", "", content.strip())
         parsed = json.loads(content) if content else {}
         return parsed if isinstance(parsed, dict) else {}
+
+    def render_pdf_pages(self, raw_bytes: bytes) -> list[bytes]:
+        return render_pdf_pages(raw_bytes)
+
+    async def detect_receipt_boxes(self, file: UploadFile) -> ReceiptDetectionResponseDTO:
+        content_type = (file.content_type or "").lower()
+        filename = (file.filename or "").lower()
+        is_pdf = content_type == "application/pdf" or filename.endswith(".pdf")
+        is_image = content_type.startswith("image/") or any(
+            filename.endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".webp")
+        )
+        if not is_image and not is_pdf:
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail="Receipt detection supports image files (JPEG, PNG, WEBP) and PDF documents.",
+            )
+
+        raw_bytes = await file.read()
+        if not raw_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Uploaded receipt file is empty.",
+            )
+        if len(raw_bytes) > MAX_EXTRACT_FILE_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="Receipt file exceeds 10 MB limit.",
+            )
+
+        if not is_pdf:
+            try:
+                with Image.open(io.BytesIO(raw_bytes)) as img:
+                    img.verify()
+                return await self.detector.detect(raw_bytes)
+            except HTTPException:
+                raise
+            except Exception as exc:
+                logger.warning("Invalid or corrupted image during receipt detection: %s", exc)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Uploaded image file is corrupted or unreadable.",
+                )
+
+        try:
+            pdf_pages = await anyio.to_thread.run_sync(render_pdf_pages, raw_bytes)
+        except Exception as exc:
+            logger.warning("PDF rendering failed during receipt detection: %s", exc)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unable to render PDF pages for receipt detection.",
+            )
+
+        if not pdf_pages:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Uploaded PDF contains no pages.",
+            )
+
+        all_boxes: list[BoundingBoxDTO] = []
+        pages_dtos: list[ReceiptPageDTO] = []
+
+        for page_idx, page_bytes in enumerate(pdf_pages):
+            try:
+                detection = await self.detector.detect(page_bytes)
+            except Exception as exc:
+                logger.warning("Detection failed on rendered PDF page %s: %s", page_idx, exc)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Unable to process rendered PDF page {page_idx}.",
+                )
+            for box in detection.boxes:
+                all_boxes.append(
+                    BoundingBoxDTO(
+                        x=box.x,
+                        y=box.y,
+                        width=box.width,
+                        height=box.height,
+                        page=page_idx,
+                    )
+                )
+            encoded = base64.b64encode(page_bytes).decode("utf-8")
+            pages_dtos.append(
+                ReceiptPageDTO(
+                    page=page_idx,
+                    image_width=detection.image_width,
+                    image_height=detection.image_height,
+                    image_data_url=f"data:image/jpeg;base64,{encoded}",
+                )
+            )
+
+        return ReceiptDetectionResponseDTO(
+            image_width=pages_dtos[0].image_width,
+            image_height=pages_dtos[0].image_height,
+            boxes=all_boxes,
+            pages=pages_dtos,
+        )
+
+    def crop_receipt(self, raw_bytes: bytes, box: BoundingBoxDTO) -> bytes:
+        try:
+            with Image.open(io.BytesIO(raw_bytes)) as img:
+                img = ImageOps.exif_transpose(img)
+                if img.mode != "RGB":
+                    img = img.convert("RGB")
+                img_w, img_h = img.size
+                left = max(0, min(box.x, img_w - 1))
+                top = max(0, min(box.y, img_h - 1))
+                right = max(left + 1, min(box.x + box.width, img_w))
+                bottom = max(top + 1, min(box.y + box.height, img_h))
+                cropped = img.crop((left, top, right, bottom))
+                out = io.BytesIO()
+                cropped.save(out, format="JPEG", quality=92)
+                return out.getvalue()
+        except Exception as exc:
+            logger.warning("Failed to crop receipt image: %s", exc)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Uploaded image file is corrupted or cannot be cropped.",
+            )
 
     async def extract_receipt(
         self,
@@ -326,6 +471,21 @@ class ReceiptAIService:
                 detail="Receipt file exceeds 10 MB limit.",
             )
 
+        return await self.extract_receipt_from_bytes(
+            raw_bytes,
+            is_pdf=is_pdf,
+            hint_currency=hint_currency,
+            hint_country=hint_country,
+        )
+
+    async def extract_receipt_from_bytes(
+        self,
+        raw_bytes: bytes,
+        *,
+        is_pdf: bool = False,
+        hint_currency: str | None = None,
+        hint_country: str | None = None,
+    ) -> ReceiptAutocompleteDTO:
         warnings: list[str] = []
         raw_text = ""
         confidence: float | None = None
@@ -335,13 +495,11 @@ class ReceiptAIService:
         if is_pdf:
             pdf_text, embedded_image = await anyio.to_thread.run_sync(extract_pdf_content, raw_bytes)
             if len(pdf_text) >= 20:
-                # Native digital PDF: direct text extraction bypasses OCR completely!
                 raw_text = pdf_text
                 confidence = 1.0
                 engine_name = "pdf_text"
                 image_for_vision = embedded_image
             elif embedded_image:
-                # Scanned PDF with embedded receipt image: run OCR on the image
                 raw_text, _, confidence = await anyio.to_thread.run_sync(self._sync_ocr, embedded_image)
                 engine_name = "rapidocr"
                 image_for_vision = embedded_image
@@ -396,7 +554,6 @@ class ReceiptAIService:
         norm_from = itin_from.strip()[:120] if isinstance(itin_from, str) and itin_from.strip() else None
         norm_to = itin_to.strip()[:120] if isinstance(itin_to, str) and itin_to.strip() else None
 
-        # Enforce RefundItemBase category field rules so the form never gets disallowed fields
         if category in (ExpenseCategory.MEALS, ExpenseCategory.OTHER):
             norm_from = None
             norm_to = None

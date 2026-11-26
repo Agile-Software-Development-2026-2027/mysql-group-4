@@ -5,9 +5,11 @@ import { Observable } from 'rxjs';
 import { API_CONFIG } from '../core/config/api.config';
 import { Page } from '../core/models/page';
 import {
+  BoundingBoxDTO,
   CurrencyConversionDTO,
   MissionCurrencyProfileDTO,
   ReceiptAutocompleteDTO,
+  ReceiptDetectionResponseDTO,
   RefundApprovePayload,
   RefundItemCreatePayload,
   RefundItemDTO,
@@ -95,6 +97,31 @@ export class RefundService {
     formData.append('file', file);
     return this.http.post<ReceiptAutocompleteDTO>(
       API_CONFIG.endpoints.refunds.extractReceipt(refundId),
+      formData,
+      { withCredentials: true }
+    );
+  }
+
+  detectReceipts(refundId: string, file: File): Observable<ReceiptDetectionResponseDTO> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<ReceiptDetectionResponseDTO>(
+      API_CONFIG.endpoints.refunds.detectReceipts(refundId),
+      formData,
+      { withCredentials: true }
+    );
+  }
+
+  batchProcessReceipts(
+    refundId: string,
+    file: File,
+    boxes: BoundingBoxDTO[]
+  ): Observable<RefundItemDTO[]> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('boxes', JSON.stringify(boxes));
+    return this.http.post<RefundItemDTO[]>(
+      API_CONFIG.endpoints.refunds.batchProcessReceipts(refundId),
       formData,
       { withCredentials: true }
     );

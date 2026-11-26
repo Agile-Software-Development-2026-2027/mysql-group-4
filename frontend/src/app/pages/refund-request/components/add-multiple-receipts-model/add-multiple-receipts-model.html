@@ -1,0 +1,243 @@
+<div class="modal-backdrop" (click)="close()">
+  <div class="modal-dialog card" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="batchModalTitle">
+    <header class="modal-header">
+      <div class="modal-title" id="batchModalTitle">
+        <h3>Add Several Tickets at Once</h3>
+      </div>
+      <button class="close-btn" type="button" (click)="close()" [disabled]="isProcessing()" aria-label="Close modal">✕</button>
+    </header>
+
+    <div class="modal-body" [class.modal-body--single]="!selectedFile()">
+      @if (!selectedFile()) {
+        <section class="upload-stage">
+          <div
+            class="dropzone"
+            [class.is-dragover]="isDraggingFile()"
+            (dragover)="onDragOver($event)"
+            (dragleave)="onDragLeave($event)"
+            (drop)="onDrop($event)"
+            (click)="fileInput.click()"
+          >
+            <div class="dropzone__content">
+              <svg class="dropzone__icon" width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
+              </svg>
+              <p class="dropzone__title">Drag & drop an image or PDF with multiple receipts, or <strong>browse files</strong></p>
+              <p class="dropzone__hint">Supported formats: JPG, PNG, WEBP, PDF (max 10MB)</p>
+            </div>
+            <input
+              #fileInput
+              type="file"
+              accept=".png,.jpg,.jpeg,.webp,.pdf"
+              class="hidden-input"
+              (change)="onFileInputChange($event)"
+            />
+          </div>
+
+          @if (errorMessage()) {
+            <div class="error-alert">⚠ {{ errorMessage() }}</div>
+          }
+        </section>
+      } @else {
+        <section class="editor-pane">
+          <div class="pane-header">
+            <div class="pane-header__info">
+              <h4>Adjust Receipt Borders</h4>
+              <span class="file-name" [title]="selectedFile()?.name">{{ selectedFile()?.name }}</span>
+            </div>
+            <div class="pane-header__actions">
+              <button class="btn btn--outline btn--sm" type="button" (click)="addManualBox()" [disabled]="isDetecting() || isProcessing()">
+                + Add Border
+              </button>
+              <button class="btn btn--outline btn--sm" type="button" (click)="resetFile()" [disabled]="isDetecting() || isProcessing()">
+                Change File
+              </button>
+            </div>
+          </div>
+
+          @if (pages().length > 1 && !isDetecting()) {
+            <div class="page-nav" role="navigation" aria-label="PDF pages">
+              <button
+                class="btn btn--outline btn--sm"
+                type="button"
+                (click)="goToPage(currentPage() - 1)"
+                [disabled]="currentPage() === 0 || isProcessing()"
+              >
+                Previous
+              </button>
+              <span class="page-nav__indicator">Page {{ currentPage() + 1 }} of {{ pages().length }}</span>
+              <button
+                class="btn btn--outline btn--sm"
+                type="button"
+                (click)="goToPage(currentPage() + 1)"
+                [disabled]="currentPage() >= pages().length - 1 || isProcessing()"
+              >
+                Next
+              </button>
+            </div>
+          }
+
+          @if (isDetecting()) {
+            <div class="loading-state">
+              <div class="circular-spinner"></div>
+              <p>Detecting receipts in the file...</p>
+            </div>
+          } @else if (previewUrl() && imageWidth() > 0 && imageHeight() > 0) {
+            <div class="canvas-wrapper">
+              <div class="image-stage">
+                <img [src]="previewUrl()" alt="Uploaded receipts" class="stage-image" draggable="false" />
+                <svg
+                  #overlaySvg
+                  class="overlay-svg"
+                  [class.is-dragging]="isDraggingBox()"
+                  [attr.viewBox]="'0 0 ' + imageWidth() + ' ' + imageHeight()"
+                  preserveAspectRatio="none"
+                  (pointerdown)="onSvgPointerDown($event)"
+                >
+                  @for (box of visibleBoxes(); track box.uid) {
+                    <g
+                      class="bbox-group"
+                      [class.is-selected]="selectedBoxUid() === box.uid"
+                      (pointerdown)="onBoxPointerDown(box, $event)"
+                    >
+                      <rect
+                        class="bbox-rect"
+                        [attr.x]="box.x"
+                        [attr.y]="box.y"
+                        [attr.width]="box.width"
+                        [attr.height]="box.height"
+                        [attr.stroke-width]="strokeWidth()"
+                      ></rect>
+                      <text
+                        class="bbox-label"
+                        [attr.x]="box.x + strokeWidth() * 2"
+                        [attr.y]="box.y + labelFontSize() + strokeWidth()"
+                        [attr.font-size]="labelFontSize()"
+                      >
+                        #{{ getBoxIndex(box.uid) + 1 }}
+                      </text>
+
+                      @if (selectedBoxUid() === box.uid) {
+                        <circle
+                          class="bbox-handle bbox-handle--nw"
+                          [attr.cx]="box.x"
+                          [attr.cy]="box.y"
+                          [attr.r]="handleRadius()"
+                          (pointerdown)="onHandlePointerDown(box, 'nw', $event)"
+                        ></circle>
+                        <circle
+                          class="bbox-handle bbox-handle--ne"
+                          [attr.cx]="box.x + box.width"
+                          [attr.cy]="box.y"
+                          [attr.r]="handleRadius()"
+                          (pointerdown)="onHandlePointerDown(box, 'ne', $event)"
+                        ></circle>
+                        <circle
+                          class="bbox-handle bbox-handle--sw"
+                          [attr.cx]="box.x"
+                          [attr.cy]="box.y + box.height"
+                          [attr.r]="handleRadius()"
+                          (pointerdown)="onHandlePointerDown(box, 'sw', $event)"
+                        ></circle>
+                        <circle
+                          class="bbox-handle bbox-handle--se"
+                          [attr.cx]="box.x + box.width"
+                          [attr.cy]="box.y + box.height"
+                          [attr.r]="handleRadius()"
+                          (pointerdown)="onHandlePointerDown(box, 'se', $event)"
+                        ></circle>
+                      }
+                    </g>
+                  }
+                </svg>
+              </div>
+            </div>
+          }
+
+          @if (errorMessage()) {
+            <div class="error-alert">⚠ {{ errorMessage() }}</div>
+          }
+        </section>
+
+        <aside class="sidebar-pane">
+          <div class="sidebar-header">
+            <h4>Detected Receipts ({{ boxes().length }})</h4>
+            <p class="sidebar-hint">
+              Drag any border to move it, drag the corners to resize, or click and drag on an empty area to draw a new border.
+            </p>
+          </div>
+
+          @if (boxes().length === 0 && !isDetecting()) {
+            <div class="sidebar-empty">
+              <p>No borders selected. Draw a rectangle on the image or click <strong>+ Add Border</strong>.</p>
+            </div>
+          } @else {
+            <ul class="box-list">
+              @for (box of boxes(); track box.uid; let i = $index) {
+                <li
+                  class="box-item"
+                  [class.is-selected]="selectedBoxUid() === box.uid"
+                  (click)="selectBox(box.uid)"
+                >
+                  <div class="box-item__info">
+                    <strong>Receipt #{{ i + 1 }}</strong>
+                    <span>
+                      @if (pages().length > 1) { Page {{ (box.page ?? 0) + 1 }} · }
+                      {{ box.width }} × {{ box.height }} px
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    class="remove-box-btn"
+                    (click)="removeBox(box.uid, $event)"
+                    [disabled]="isProcessing()"
+                    aria-label="Remove border"
+                    title="Remove border"
+                  >
+                    ✕
+                  </button>
+                </li>
+              }
+            </ul>
+          }
+
+          @if (isProcessing()) {
+            <div class="processing-banner" role="status">
+              <span class="spinner-badge"></span>
+              <span>Cropping receipts and running OCR/AI extraction...</span>
+            </div>
+          }
+        </aside>
+      }
+    </div>
+
+    <footer class="modal-footer">
+      <div class="footer-hint">
+        @if (selectedFile() && boxes().length > 0) {
+          <span class="hint-text">Each receipt will be created as a draft item waiting for your review.</span>
+        }
+      </div>
+      <div class="footer-actions">
+        <button class="btn btn--outline" type="button" (click)="close()" [disabled]="isProcessing()">
+          Cancel
+        </button>
+        @if (selectedFile()) {
+          <button
+            class="btn btn-submit"
+            type="button"
+            (click)="confirmAndExtract()"
+            [disabled]="boxes().length === 0 || isDetecting() || isProcessing()"
+          >
+            @if (isProcessing()) {
+              <span class="btn-spinner" aria-label="Extracting..."></span>
+            } @else {
+              Extract {{ boxes().length }} {{ boxes().length === 1 ? 'Receipt' : 'Receipts' }}
+            }
+          </button>
+        }
+      </div>
+    </footer>
+  </div>
+</div>

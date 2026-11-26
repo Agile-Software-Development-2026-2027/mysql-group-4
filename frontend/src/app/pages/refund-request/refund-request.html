@@ -2,520 +2,557 @@
 
 <main class="container refund-page">
   @if (isLoading()) {
-  <header class="page-header">
-    <div class="page-header__left">
-      <div class="sk sk-btn" style="border-radius: 50%; width: 36px; height: 36px;"></div>
-      <h1>Refund Receipts</h1>
-    </div>
-  </header>
-  <section class="card refund-main-card" aria-busy="true" aria-label="Loading refund details">
-    <div class="mission-overview">
-      <div class="sk" style="width: 220px; height: 28px; margin: 0 auto 16px;"></div>
-    </div>
-    <div class="summary-totals">
-      <div class="total-block total-block--costs">
-        <div class="sk" style="width: 140px; height: 16px; margin: 0 auto 8px;"></div>
-        <div class="sk" style="width: 180px; height: 24px; margin: 0 auto;"></div>
+    <header class="page-header">
+      <div class="page-header__left">
+        <div class="sk sk-btn" style="border-radius: 50%; width: 36px; height: 36px;"></div>
+        <h1>Refund Receipts</h1>
       </div>
-    </div>
-    <div class="receipts-section">
-      <ng-container *ngTemplateOutlet="receiptsSkeleton"></ng-container>
-    </div>
-  </section>
+    </header>
+    <section class="card refund-main-card" aria-busy="true" aria-label="Loading refund details">
+      <div class="mission-overview">
+        <div class="sk" style="width: 220px; height: 28px; margin: 0 auto 16px;"></div>
+      </div>
+      <div class="summary-totals">
+        <div class="total-block total-block--costs">
+          <div class="sk" style="width: 140px; height: 16px; margin: 0 auto 8px;"></div>
+          <div class="sk" style="width: 180px; height: 24px; margin: 0 auto;"></div>
+        </div>
+      </div>
+      <div class="receipts-section">
+        <ng-container *ngTemplateOutlet="receiptsSkeleton"></ng-container>
+      </div>
+    </section>
   } @else if (loadError()) {
-  <section class="card empty-state">
-    <h2>Unable to load refund request</h2>
-    <p>The refund request could not be retrieved or you do not have permission to view it.</p>
-  </section>
+    <section class="card empty-state">
+      <h2>Unable to load refund request</h2>
+      <p>The refund request could not be retrieved or you do not have permission to view it.</p>
+    </section>
   } @else if (refund(); as ref) {
-  <header class="page-header">
-    <div class="page-header__left">
-      <button class="back-btn" type="button" (click)="goBack()" aria-label="Go back" title="Go back">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-          aria-hidden="true">
-          <line x1="19" y1="12" x2="5" y2="12"></line>
-          <polyline points="12 19 5 12 12 5"></polyline>
-        </svg>
-      </button>
-      <h1>Refund Receipts</h1>
-    </div>
-    <span class="status status--{{ ref.status.toLowerCase() }}">
+    <header class="page-header">
+      <div class="page-header__left">
+        <button class="back-btn" type="button" (click)="goBack()" aria-label="Go back" title="Go back">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+               aria-hidden="true">
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+        </button>
+        <h1>Refund Receipts</h1>
+      </div>
+      <span class="status status--{{ ref.status.toLowerCase() }}">
       {{ ref.status }}
     </span>
-  </header>
+    </header>
 
-  <section class="card refund-main-card" aria-label="Refund request details">
-    @if (mission(); as m) {
-    <div class="mission-overview">
-      <h2 class="mission-title">
-        <a class="mission-link" [routerLink]="['/missionreview']" [queryParams]="{ view: 'requester', missionId: m.id }"
-          title="View mission details">
-          {{ m.subject }}
-          <svg class="mission-link__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-            <polyline points="15 3 21 3 21 9"></polyline>
-            <line x1="10" y1="14" x2="21" y2="3"></line>
-          </svg>
-        </a>
-      </h2>
-    </div>
-    }
+    <section class="card refund-main-card" aria-label="Refund request details">
+      @if (mission(); as m) {
+        <div class="mission-overview">
+          <h2 class="mission-title">
+            <a class="mission-link" [routerLink]="['/missionreview']" [queryParams]="{ view: 'requester', missionId: m.id }"
+               title="View mission details">
+              {{ m.subject }}
+              <svg class="mission-link__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <line x1="10" y1="14" x2="21" y2="3"></line>
+              </svg>
+            </a>
+          </h2>
+        </div>
+      }
 
-    <div class="summary-totals">
-      <div class="total-block total-block--costs">
-        <span class="meta-label">Requested / Estimated</span>
-        <span class="total-value">
+      <div class="summary-totals">
+        <div class="total-block total-block--costs">
+          <span class="meta-label">Requested / Estimated</span>
+          <span class="total-value">
           <strong class="total-value__requested">€ {{ totalRequested() | number:'1.2-2' }}</strong>
-          @if (mission(); as m) {
-          <span class="total-value__sep"> / </span>
-          <strong class="total-value__estimated">€ {{ m.estimatedCost | number:'1.2-2' }}</strong>
-          }
-          @if (exceedsEstimatedCost()) {
-          <button type="button" class="budget-alert-badge" role="status"
-            aria-label="Total requested exceeds the mission estimated cost."
-            title="Total requested exceeds the mission estimated cost.">
+            @if (mission(); as m) {
+              <span class="total-value__sep"> / </span>
+              <strong class="total-value__estimated">€ {{ m.estimatedCost | number:'1.2-2' }}</strong>
+            }
+            @if (exceedsEstimatedCost()) {
+              <button type="button" class="budget-alert-badge" role="status"
+                      aria-label="Total requested exceeds the mission estimated cost."
+                      title="Total requested exceeds the mission estimated cost.">
             !
             <span class="budget-alert-tooltip" aria-hidden="true">Total requested exceeds the mission estimated
               cost.</span>
           </button>
-          }
+            }
         </span>
+        </div>
+        <div class="total-block total-block--receipts">
+          <span class="meta-label">Receipts</span>
+          <span class="total-value">{{ items().length }}</span>
+        </div>
       </div>
-      <div class="total-block total-block--receipts">
-        <span class="meta-label">Receipts</span>
-        <span class="total-value">{{ items().length }}</span>
-      </div>
-    </div>
 
-    <div class="receipts-section">
-      @if (items().length === 0) {
-      <div class="empty-state">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-          aria-hidden="true">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-          <polyline points="14 2 14 8 20 8"></polyline>
-          <line x1="9" y1="15" x2="15" y2="15"></line>
-        </svg>
-        <h2>No receipts uploaded yet</h2>
-        <p>There are no expense receipts attached to this refund request yet. Add your first receipt to get started.</p>
-        @if (isDraft()) {
-        <button class="btn btn--outline" type="button" (click)="openAddModal()">Add your first receipt</button>
-        }
-      </div>
-      } @else {
-      <div class="receipts-toolbar">
-        <div class="receipts-header-row">
-          <div class="receipts-heading">
-            <h2>Receipts</h2>
-            <p class="receipts-hint">Click any row to view{{ isDraft() ? ' or edit' : '' }} its details.</p>
-          </div>
-          <div class="receipts-actions">
+      @if (isDraft() && mission() && !isMissionEnded()) {
+        <div class="mission-pending-banner" role="status">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               aria-hidden="true">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+          <span>
+            <strong>Mission not ended yet.</strong>
+            You can add and edit receipts now, and you will be able to submit the refund request once the mission has ended (after {{ mission()!.endsAt | date:'dd/MM/yyyy HH:mm' }}).
+          </span>
+        </div>
+      }
+
+      <div class="receipts-section">
+        @if (items().length === 0) {
+          <div class="empty-state">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                 aria-hidden="true">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="9" y1="15" x2="15" y2="15"></line>
+            </svg>
+            <h2>No receipts uploaded yet</h2>
+            <p>There are no expense receipts attached to the refund request yet. Add your first receipt to get started.</p>
             @if (isDraft()) {
-            <button class="btn btn-expand btn-expand--secondary" type="button" (click)="openAddModal()" aria-label="Add Receipt" title="Add Receipt">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                aria-hidden="true">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-              <span class="btn-expand__label">Add Receipt</span>
-            </button>
-            <button class="btn btn-expand btn-expand--primary" type="button"
-              [disabled]="items().length === 0 || isSubmitting()"
-              (click)="confirmSubmitOpen.set(true)"
-              aria-label="Submit Request" title="Submit Request">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <line x1="22" y1="2" x2="11" y2="13"></line>
-                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-              </svg>
-              <span class="btn-expand__label">{{ isSubmitting() ? 'Submitting...' : 'Submit Request' }}</span>
-            </button>
+              <div class="empty-state__actions">
+                <button class="btn btn--outline" type="button" (click)="openAddModal()">Add your first receipt</button>
+                <button class="btn" type="button" (click)="openBatchModal()">Add several tickets at once</button>
+              </div>
             }
           </div>
-        </div>
+        } @else {
+          <div class="receipts-toolbar">
+            <div class="receipts-header-row">
+              <div class="receipts-heading">
+                <h2>Receipts</h2>
+                <p class="receipts-hint">Click any row to view{{ isDraft() ? ' or edit' : '' }} its details.</p>
+              </div>
+              <div class="receipts-actions">
+                @if (isDraft()) {
+                  <button class="btn btn-expand btn-expand--secondary" type="button" (click)="openBatchModal()"
+                          aria-label="Add several tickets at once" title="Add several tickets at once">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <rect x="8" y="2" width="13" height="16" rx="2"></rect>
+                      <path d="M4 6H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-1"></path>
+                    </svg>
+                    <span class="btn-expand__label">Add several tickets at once</span>
+                  </button>
+                  <button class="btn btn-expand btn-expand--secondary" type="button" (click)="openAddModal()" aria-label="Add Receipt" title="Add Receipt">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                         aria-hidden="true">
+                      <line x1="12" y1="5" x2="12" y2="19"></line>
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    <span class="btn-expand__label">Add Receipt</span>
+                  </button>
+                  <button class="btn btn-expand btn-expand--primary" type="button"
+                          [disabled]="!isMissionEnded() || items().length === 0 || isSubmitting() || hasItemsPendingReview()"
+                          (click)="openConfirmSubmit()"
+                          aria-label="Submit Request"
+                          [title]="!isMissionEnded() ? 'You will be able to submit the refund request once the mission has ended' : hasItemsPendingReview() ? 'Review all pending receipts before submitting' : 'Submit Request'">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <line x1="22" y1="2" x2="11" y2="13"></line>
+                      <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                    <span class="btn-expand__label">{{ isSubmitting() ? 'Submitting...' : 'Submit Request' }}</span>
+                  </button>
+                }
+              </div>
+            </div>
 
-        <ng-template #categoryIcon let-cat>
-          @switch (cat) {
-          @case (ExpenseCategory.TRANSPORT) {
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path
-              d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3 3 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
-            <circle cx="7" cy="17" r="2" />
-            <path d="M9 17h6" />
-            <circle cx="17" cy="17" r="2" />
-          </svg>
-          }
-          @case (ExpenseCategory.ACCOMMODATION) {
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M2 4v16" />
-            <path d="M2 8h18a2 2 0 0 1 2 2v10" />
-            <path d="M2 17h20" />
-            <path d="M6 8v9" />
-          </svg>
-          }
-          @case (ExpenseCategory.MEALS) {
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M18 2v6a3 3 0 0 1-3 3 3 3 0 0 1-3-3V2" />
-            <path d="M15 2v16" />
-            <path d="M21 2v4a3 3 0 0 1-3 3" />
-            <path d="M21 9v11" />
-          </svg>
-          }
-          @case (ExpenseCategory.OTHER) {
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-            <line x1="7" y1="7" x2="7.01" y2="7" />
-          </svg>
-          }
-          }
-        </ng-template>
-
-        <div class="filter-bar" role="group" aria-label="Filter and sort receipts">
-          <span class="filter-label">Filter:</span>
-          <button type="button" class="filter-pill" [class.is-active]="isAllCategoriesSelected()"
-            [attr.aria-pressed]="isAllCategoriesSelected()" (click)="selectAllCategories()">
-            <span>All</span>
-            <span class="filter-pill__count">{{ items().length }}</span>
-          </button>
-          @for (cat of categories; track cat) {
-          <button type="button" class="filter-pill" [class.is-active]="isCategorySelected(cat)"
-            [attr.aria-pressed]="isCategorySelected(cat)" (click)="toggleCategory(cat)">
-            <ng-container *ngTemplateOutlet="categoryIcon; context: { $implicit: cat }"></ng-container>
-            <span>{{ formatCategory(cat) }}</span>
-            <span class="filter-pill__count">{{ categoryCounts()[cat] }}</span>
-          </button>
-          }
-          <label class="sort-control">
-            <span class="filter-label">Sort:</span>
-            <select class="filter-select" aria-label="Sort receipts by price" [value]="priceSort()"
-              (change)="setPriceSort($any($event.target).value)">
-              <option value="none">Default</option>
-              <option value="asc">Price: Low to High</option>
-              <option value="desc">Price: High to Low</option>
-            </select>
-          </label>
-        </div>
-      </div>
-
-      @if (isFiltering()) {
-      <ng-container *ngTemplateOutlet="receiptsSkeleton"></ng-container>
-      } @else if (filteredItems().length === 0) {
-      <div class="empty-state">
-        <h3>No receipts match the active filters</h3>
-        <p>
-          @if (selectedCategories().size === 0) {
-          No category is selected. Select at least one category or reset filters to view receipts.
-          } @else {
-          Your current filters are too restrictive. Adjust or reset them to view receipts.
-          }
-        </p>
-        <button class="btn btn--outline" type="button" (click)="resetFilters()">Reset filters</button>
-      </div>
-      } @else {
-      <div tabindex="0" role="region" aria-labelledby="receipts-table-caption" class="table-wrapper">
-        <table>
-          <caption id="receipts-table-caption" class="sr-only">Uploaded refund receipts</caption>
-          <thead>
-            <tr>
-              <th>Category</th>
-              <th>Description</th>
-              <th>Date</th>
-              <th>Amount</th>
-              @if (isDraft()) {
-              <th><span class="sr-only">Actions</span></th>
+            <ng-template #categoryIcon let-cat>
+              @switch (cat) {
+                @case (ExpenseCategory.TRANSPORT) {
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path
+                      d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3 3 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
+                    <circle cx="7" cy="17" r="2" />
+                    <path d="M9 17h6" />
+                    <circle cx="17" cy="17" r="2" />
+                  </svg>
+                }
+                @case (ExpenseCategory.ACCOMMODATION) {
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M2 4v16" />
+                    <path d="M2 8h18a2 2 0 0 1 2 2v10" />
+                    <path d="M2 17h20" />
+                    <path d="M6 8v9" />
+                  </svg>
+                }
+                @case (ExpenseCategory.MEALS) {
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M18 2v6a3 3 0 0 1-3 3 3 3 0 0 1-3-3V2" />
+                    <path d="M15 2v16" />
+                    <path d="M21 2v4a3 3 0 0 1-3 3" />
+                    <path d="M21 9v11" />
+                  </svg>
+                }
+                @case (ExpenseCategory.OTHER) {
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+                    <line x1="7" y1="7" x2="7.01" y2="7" />
+                  </svg>
+                }
               }
-            </tr>
-          </thead>
-          <tbody>
-            @for (item of filteredItems(); track item.id) {
-            <tr class="expense-row" tabindex="0" [title]="isDraft() ? 'Click to edit receipt' : 'Click to view receipt'" (click)="openItemModal(item)"
-              (keydown.enter)="openItemModal(item)">
-              <td data-label="Category">
+            </ng-template>
+
+            <div class="filter-bar" role="group" aria-label="Filter and sort receipts">
+              <span class="filter-label">Filter:</span>
+              <button type="button" class="filter-pill" [class.is-active]="isAllCategoriesSelected()"
+                      [attr.aria-pressed]="isAllCategoriesSelected()" (click)="selectAllCategories()">
+                <span>All</span>
+                <span class="filter-pill__count">{{ items().length }}</span>
+              </button>
+              @for (cat of categories; track cat) {
+                <button type="button" class="filter-pill" [class.is-active]="isCategorySelected(cat)"
+                        [attr.aria-pressed]="isCategorySelected(cat)" (click)="toggleCategory(cat)">
+                  <ng-container *ngTemplateOutlet="categoryIcon; context: { $implicit: cat }"></ng-container>
+                  <span>{{ formatCategory(cat) }}</span>
+                  <span class="filter-pill__count">{{ categoryCounts()[cat] }}</span>
+                </button>
+              }
+              <label class="sort-control">
+                <span class="filter-label">Sort:</span>
+                <select class="filter-select" aria-label="Sort receipts by price" [value]="priceSort()"
+                        (change)="setPriceSort($any($event.target).value)">
+                  <option value="none">Default</option>
+                  <option value="asc">Price: Low to High</option>
+                  <option value="desc">Price: High to Low</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          @if (isFiltering()) {
+            <ng-container *ngTemplateOutlet="receiptsSkeleton"></ng-container>
+          } @else if (filteredItems().length === 0) {
+            <div class="empty-state">
+              <h3>No receipts match the active filters</h3>
+              <p>
+                @if (selectedCategories().size === 0) {
+                  No category is selected. Select at least one category or reset filters to view receipts.
+                } @else {
+                  Your current filters are too restrictive. Adjust or reset them to view receipts.
+                }
+              </p>
+              <button class="btn btn--outline" type="button" (click)="resetFilters()">Reset filters</button>
+            </div>
+          } @else {
+            <div tabindex="0" role="region" aria-labelledby="receipts-table-caption" class="table-wrapper">
+              <table>
+                <caption id="receipts-table-caption" class="sr-only">Uploaded refund receipts</caption>
+                <thead>
+                <tr>
+                  <th>Category</th>
+                  <th>Description</th>
+                  <th>Date</th>
+                  <th>Amount</th>
+                  @if (isDraft()) {
+                    <th><span class="sr-only">Actions</span></th>
+                  }
+                </tr>
+                </thead>
+                <tbody>
+                  @for (item of filteredItems(); track item.id) {
+                    <tr class="expense-row" [class.expense-row--needs-review]="item.needsReview" tabindex="0"
+                        [title]="isDraft() ? 'Click to edit receipt' : 'Click to view receipt'" (click)="openItemModal(item)"
+                        (keydown.enter)="openItemModal(item)">
+                      <td data-label="Category">
                 <span class="cat-badge">
                   <ng-container *ngTemplateOutlet="categoryIcon; context: { $implicit: item.category }"></ng-container>
                   {{ formatCategory(item.category) }}
                 </span>
-              </td>
-              <td data-label="Description">
-                <div class="desc-cell">
-                  <span>{{ item.description }}</span>
-                </div>
-              </td>
-              <td data-label="Date">
-                {{ item.startsAt | date:'dd/MM/yyyy' }}
-                @if (item.endsAt) { → {{ item.endsAt | date:'dd/MM/yyyy' }} }
-              </td>
-              <td data-label="Amount" class="amount-cell">€ {{ item.requestedAmount | number:'1.2-2' }}</td>
-              @if (isDraft()) {
-              <td class="actions-cell">
-                <button type="button" class="row-action-btn" aria-label="Edit receipt" title="Edit receipt"
-                  (click)="$event.stopPropagation(); openItemModal(item)">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    aria-hidden="true">
-                    <path d="M12 20h9"></path>
-                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
-                  </svg>
-                </button>
-                <button type="button" class="row-action-btn row-action-btn--danger" aria-label="Delete receipt"
-                  title="Delete receipt" (click)="deleteItem(item, $event)">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    aria-hidden="true">
-                    <polyline points="3 6 5 6 21 6"></polyline>
-                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
-                    <path d="M10 11v6"></path>
-                    <path d="M14 11v6"></path>
-                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
-                  </svg>
-                </button>
-              </td>
-              }
-            </tr>
-            }
-          </tbody>
-        </table>
-      </div>
+                      </td>
+                      <td data-label="Description">
+                        <div class="desc-cell">
+                          <span>{{ item.description }}</span>
+                          @if (item.needsReview) {
+                            <span class="needs-review-badge">Needs review</span>
+                          }
+                        </div>
+                      </td>
+                      <td data-label="Date">
+                        {{ item.startsAt | date:'dd/MM/yyyy' }}
+                        @if (item.endsAt) { → {{ item.endsAt | date:'dd/MM/yyyy' }} }
+                      </td>
+                      <td data-label="Amount" class="amount-cell">€ {{ item.requestedAmount | number:'1.2-2' }}</td>
+                      @if (isDraft()) {
+                        <td class="actions-cell">
+                          <button type="button" class="row-action-btn" aria-label="Edit receipt" title="Edit receipt"
+                                  (click)="$event.stopPropagation(); openItemModal(item)">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                              <path d="M12 20h9"></path>
+                              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+                            </svg>
+                          </button>
+                          <button type="button" class="row-action-btn row-action-btn--danger" aria-label="Delete receipt"
+                                  title="Delete receipt" (click)="deleteItem(item, $event)">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                 aria-hidden="true">
+                              <polyline points="3 6 5 6 21 6"></polyline>
+                              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                              <path d="M10 11v6"></path>
+                              <path d="M14 11v6"></path>
+                              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
+                            </svg>
+                          </button>
+                        </td>
+                      }
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
 
-      @if (totalPages() > 1) {
-      <nav class="pagination-bar" aria-label="Receipts pagination">
+            @if (totalPages() > 1) {
+              <nav class="pagination-bar" aria-label="Receipts pagination">
         <span class="pagination-summary">Showing {{ currentPage() * pageSize + 1 }}–{{ mathMin((currentPage() + 1) *
           pageSize, totalFilteredCount()) }} of {{ totalFilteredCount() }} receipts</span>
-        <div class="pagination-actions">
-          <button type="button" class="btn btn--outline btn--sm" [disabled]="currentPage() === 0"
-            (click)="goToPage(currentPage() - 1)">Previous</button>
-          <span class="pagination-page-indicator">Page {{ currentPage() + 1 }} of {{ totalPages() }}</span>
-          <button type="button" class="btn btn--outline btn--sm" [disabled]="currentPage() >= totalPages() - 1"
-            (click)="goToPage(currentPage() + 1)">Next</button>
-        </div>
-      </nav>
-      }
-      }
-      }
-    </div>
-  </section>
+                <div class="pagination-actions">
+                  <button type="button" class="btn btn--outline btn--sm" [disabled]="currentPage() === 0"
+                          (click)="goToPage(currentPage() - 1)">Previous</button>
+                  <span class="pagination-page-indicator">Page {{ currentPage() + 1 }} of {{ totalPages() }}</span>
+                  <button type="button" class="btn btn--outline btn--sm" [disabled]="currentPage() >= totalPages() - 1"
+                          (click)="goToPage(currentPage() + 1)">Next</button>
+                </div>
+              </nav>
+            }
+          }
+        }
+      </div>
+    </section>
   }
 
   @if (selectedItem(); as item) {
-  <div class="modal-backdrop" (click)="closeItemModal()">
-    <div class="modal-dialog card" (click)="$event.stopPropagation()" role="dialog" aria-modal="true"
-      aria-labelledby="detailModalTitle">
-      <header class="modal-header">
-        <h2 id="detailModalTitle">{{ isDraft() ? 'Edit Expense Item' : 'Expense Item Details' }}</h2>
-        <button class="close-btn" type="button" (click)="closeItemModal()" aria-label="Close modal">✕</button>
-      </header>
+    <div class="modal-backdrop" (click)="closeItemModal()">
+      <div class="modal-dialog card" (click)="$event.stopPropagation()" role="dialog" aria-modal="true"
+           aria-labelledby="detailModalTitle">
+        <header class="modal-header">
+          <h2 id="detailModalTitle">{{ isDraft() ? 'Edit Expense Item' : 'Expense Item Details' }}</h2>
+          <button class="close-btn" type="button" (click)="closeItemModal()" aria-label="Close modal">✕</button>
+        </header>
 
-      <div class="modal-body">
-        <section class="receipt-pane" aria-label="Receipt file">
-          <div class="pane-header">
-            <h3>Receipt / Invoice</h3>
-            <div class="pane-actions">
+        <div class="modal-body">
+          <section class="receipt-pane" aria-label="Receipt file">
+            <div class="pane-header">
+              <h3>Receipt / Invoice</h3>
+              <div class="pane-actions">
               <span class="file-name" [title]="receiptPreview()?.filename ?? item.receiptOriginalFilename">
                 {{ receiptPreview()?.filename ?? item.receiptOriginalFilename }}
               </span>
-              @if (isDraft()) {
-              <button class="btn btn--outline btn--sm" type="button" (click)="replaceInput.click()">Replace</button>
-              }
-              <input #replaceInput type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" hidden
-                (change)="onReplaceReceipt($event)" />
-            </div>
-          </div>
-
-          @if (isReceiptLoading()) {
-          <div class="pane-status pane-status--loading">
-            <div class="sk sk-box"></div>
-            <span>Loading receipt preview…</span>
-          </div>
-          } @else if (receiptError()) {
-          <div class="pane-status pane-status--error">Unable to load the receipt file from storage.</div>
-          } @else if (receiptPreview(); as preview) {
-          @if (preview.isPdf) {
-          <iframe [src]="preview.url" class="pdf-iframe" title="Receipt PDF preview"></iframe>
-          } @else {
-          <div class="preview-image-wrapper">
-            <img [src]="preview.url" [alt]="preview.filename" class="image-preview" />
-          </div>
-          }
-          } @else {
-          <div class="pane-status pane-status--empty">
-            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-              aria-hidden="true">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-              <polyline points="14 2 14 8 20 8"></polyline>
-            </svg>
-            <p>No receipt file uploaded for this expense.</p>
-            @if (isDraft()) {
-            <button class="btn btn--outline btn--sm" type="button" (click)="replaceInput.click()">Upload receipt</button>
-            }
-          </div>
-          }
-        </section>
-
-        <form class="form-pane" [formGroup]="editForm" (ngSubmit)="saveItemChanges()">
-          <div class="detail-grid">
-            <div class="form-group">
-              <label for="editCategory">Expense Category *</label>
-              <select id="editCategory" formControlName="category" class="form-control"
-                (change)="onEditCategoryChange()">
-                <option [value]="ExpenseCategory.TRANSPORT">Transport</option>
-                <option [value]="ExpenseCategory.ACCOMMODATION">Accommodation</option>
-                <option [value]="ExpenseCategory.MEALS">Meals</option>
-                <option [value]="ExpenseCategory.OTHER">Other</option>
-              </select>
-            </div>
-
-            @if (currentSubtypes.length) {
-            <div class="form-group">
-              <label for="editSubtype">Subtype</label>
-              <select id="editSubtype" formControlName="subtype" class="form-control">
-                @for (opt of currentSubtypes; track opt.value) {
-                <option [value]="opt.value">{{ opt.label }}</option>
+                @if (isDraft()) {
+                  <button class="btn btn--outline btn--sm" type="button" (click)="replaceInput.click()">Replace</button>
                 }
-              </select>
-            </div>
-            }
-
-            @if (editForm.value.category === ExpenseCategory.TRANSPORT) {
-            <div class="form-row">
-              <div class="form-group">
-                <label for="editFrom">From</label>
-                <input id="editFrom" class="form-control" type="text" formControlName="itineraryFrom" />
-              </div>
-              <div class="form-group">
-                <label for="editTo">To</label>
-                <input id="editTo" class="form-control" type="text" formControlName="itineraryTo" />
+                <input #replaceInput type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" hidden
+                       (change)="onReplaceReceipt($event)" />
               </div>
             </div>
-            }
 
-            <div class="form-row">
+            @if (isReceiptLoading()) {
+              <div class="pane-status pane-status--loading">
+                <div class="sk sk-box"></div>
+                <span>Loading receipt preview…</span>
+              </div>
+            } @else if (receiptError()) {
+              <div class="pane-status pane-status--error">Unable to load the receipt file from storage.</div>
+            } @else if (receiptPreview(); as preview) {
+              @if (preview.isPdf) {
+                <iframe [src]="preview.url" class="pdf-iframe" title="Receipt PDF preview"></iframe>
+              } @else {
+                <div class="preview-image-wrapper">
+                  <img [src]="preview.url" [alt]="preview.filename" class="image-preview" />
+                </div>
+              }
+            } @else {
+              <div class="pane-status pane-status--empty">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                     aria-hidden="true">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+                <p>No receipt file uploaded for the expense.</p>
+                @if (isDraft()) {
+                  <button class="btn btn--outline btn--sm" type="button" (click)="replaceInput.click()">Upload receipt</button>
+                }
+              </div>
+            }
+          </section>
+
+          <form class="form-pane" [formGroup]="editForm" (ngSubmit)="saveItemChanges()">
+            <div class="detail-grid">
               <div class="form-group">
-                <label for="editStart">Start Date & Time *</label>
-                <input id="editStart" class="form-control" type="datetime-local" formControlName="startsAt"
-                  [min]="missionMinDateTime()" [max]="missionMaxDateTime()" [class.is-invalid]="
+                <label for="editCategory">Expense Category *</label>
+                <select id="editCategory" formControlName="category" class="form-control"
+                        (change)="onEditCategoryChange()">
+                  <option [value]="ExpenseCategory.TRANSPORT">Transport</option>
+                  <option [value]="ExpenseCategory.ACCOMMODATION">Accommodation</option>
+                  <option [value]="ExpenseCategory.MEALS">Meals</option>
+                  <option [value]="ExpenseCategory.OTHER">Other</option>
+                </select>
+              </div>
+
+              @if (currentSubtypes.length) {
+                <div class="form-group">
+                  <label for="editSubtype">Subtype</label>
+                  <select id="editSubtype" formControlName="subtype" class="form-control">
+                    @for (opt of currentSubtypes; track opt.value) {
+                      <option [value]="opt.value">{{ opt.label }}</option>
+                    }
+                  </select>
+                </div>
+              }
+
+              @if (editForm.value.category === ExpenseCategory.TRANSPORT) {
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="editFrom">From</label>
+                    <input id="editFrom" class="form-control" type="text" formControlName="itineraryFrom" />
+                  </div>
+                  <div class="form-group">
+                    <label for="editTo">To</label>
+                    <input id="editTo" class="form-control" type="text" formControlName="itineraryTo" />
+                  </div>
+                </div>
+              }
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="editStart">Start Date & Time *</label>
+                  <input id="editStart" class="form-control" type="datetime-local" formControlName="startsAt"
+                         [min]="missionMinDateTime()" [max]="missionMaxDateTime()" [class.is-invalid]="
                     (editForm.get('startsAt')?.invalid || editForm.hasError('startOutsideMission')) &&
                     editForm.get('startsAt')?.touched
                   " />
-                @if (editForm.get('startsAt')?.invalid && editForm.get('startsAt')?.touched) {
-                <span class="form-error">Start date and time is required.</span>
-                } @else if (editForm.hasError('startOutsideMission') && editForm.get('startsAt')?.touched) {
-                <span class="form-error">Must be within the mission period ({{ missionPeriodLabel() }}).</span>
-                }
-              </div>
-              @if (editForm.value.category === ExpenseCategory.TRANSPORT || editForm.value.category ===
-              ExpenseCategory.ACCOMMODATION) {
-              <div class="form-group">
-                <label for="editEnd">End Date & Time</label>
-                <input id="editEnd" class="form-control" type="datetime-local" formControlName="endsAt"
-                  [min]="missionMinDateTime()" [max]="missionMaxDateTime()" [class.is-invalid]="
+                  @if (editForm.get('startsAt')?.invalid && editForm.get('startsAt')?.touched) {
+                    <span class="form-error">Start date and time is required.</span>
+                  } @else if (editForm.hasError('startOutsideMission') && editForm.get('startsAt')?.touched) {
+                    <span class="form-error">Must be within the mission period ({{ missionPeriodLabel() }}).</span>
+                  }
+                </div>
+                @if (editForm.value.category === ExpenseCategory.TRANSPORT || editForm.value.category ===
+                ExpenseCategory.ACCOMMODATION) {
+                  <div class="form-group">
+                    <label for="editEnd">End Date & Time</label>
+                    <input id="editEnd" class="form-control" type="datetime-local" formControlName="endsAt"
+                           [min]="missionMinDateTime()" [max]="missionMaxDateTime()" [class.is-invalid]="
                     (editForm.get('endsAt')?.invalid || editForm.hasError('endOutsideMission') || editForm.hasError('endBeforeStart')) &&
                     editForm.get('endsAt')?.touched
                   " />
-                @if (editForm.get('endsAt')?.invalid && editForm.get('endsAt')?.touched) {
-                <span class="form-error">End date and time is required.</span>
-                } @else if (editForm.hasError('endOutsideMission') && editForm.get('endsAt')?.touched) {
-                <span class="form-error">Must be within the mission period ({{ missionPeriodLabel() }}).</span>
-                } @else if (editForm.hasError('endBeforeStart') && editForm.get('endsAt')?.touched) {
-                <span class="form-error">End date and time must be after the start.</span>
+                    @if (editForm.get('endsAt')?.invalid && editForm.get('endsAt')?.touched) {
+                      <span class="form-error">End date and time is required.</span>
+                    } @else if (editForm.hasError('endOutsideMission') && editForm.get('endsAt')?.touched) {
+                      <span class="form-error">Must be within the mission period ({{ missionPeriodLabel() }}).</span>
+                    } @else if (editForm.hasError('endBeforeStart') && editForm.get('endsAt')?.touched) {
+                      <span class="form-error">End date and time must be after the start.</span>
+                    }
+                  </div>
                 }
               </div>
-              }
-            </div>
 
-            <div class="form-row">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="editAmount">Requested Amount ({{ item.currency }}) *</label>
+                  <input id="editAmount" class="form-control" type="number" step="0.01" min="0.01"
+                         formControlName="requestedAmount" />
+                </div>
+                <div class="form-group checkbox-group">
+                  <label><input type="checkbox" formControlName="isTraceable" /> Traceable Payment</label>
+                </div>
+              </div>
+
               <div class="form-group">
-                <label for="editAmount">Requested Amount ({{ item.currency }}) *</label>
-                <input id="editAmount" class="form-control" type="number" step="0.01" min="0.01"
-                  formControlName="requestedAmount" />
-              </div>
-              <div class="form-group checkbox-group">
-                <label><input type="checkbox" formControlName="isTraceable" /> Traceable Payment</label>
+                <label for="editDesc">Description *</label>
+                <textarea id="editDesc" class="form-control" rows="3" formControlName="description"></textarea>
               </div>
             </div>
+          </form>
+        </div>
 
-            <div class="form-group">
-              <label for="editDesc">Description *</label>
-              <textarea id="editDesc" class="form-control" rows="3" formControlName="description"></textarea>
-            </div>
-          </div>
-        </form>
+        <footer class="modal-footer">
+          <button class="btn btn--outline" type="button" (click)="closeItemModal()"
+                  [disabled]="isSaving()">{{ isDraft() ? 'Cancel' : 'Close' }}</button>
+          @if (isDraft()) {
+            <button class="btn" type="button" (click)="saveItemChanges()" [disabled]="editForm.invalid || isSaving()">
+              {{ isSaving() ? 'Saving...' : 'Save Changes' }}
+            </button>
+          }
+        </footer>
       </div>
-
-      <footer class="modal-footer">
-        <button class="btn btn--outline" type="button" (click)="closeItemModal()"
-          [disabled]="isSaving()">{{ isDraft() ? 'Cancel' : 'Close' }}</button>
-        @if (isDraft()) {
-        <button class="btn" type="button" (click)="saveItemChanges()" [disabled]="editForm.invalid || isSaving()">
-          {{ isSaving() ? 'Saving...' : 'Save Changes' }}
-        </button>
-        }
-      </footer>
     </div>
-  </div>
   }
 
   @if (isAddModalOpen() && refundId()) {
-  <app-add-refund-item-modal [refundId]="refundId()!" [missionStartsAt]="mission()?.startsAt ?? null"
-    [missionEndsAt]="mission()?.endsAt ?? null" (itemCreated)="onItemAdded($event)"
-    (closed)="closeAddModal()"></app-add-refund-item-modal>
+    <app-add-refund-item-modal [refundId]="refundId()!" [missionStartsAt]="mission()?.startsAt ?? null"
+                               [missionEndsAt]="mission()?.endsAt ?? null" (itemCreated)="onItemAdded($event)"
+                               (closed)="closeAddModal()"></app-add-refund-item-modal>
+  }
+
+  @if (isBatchModalOpen() && refundId()) {
+    <app-add-multiple-receipts-model [refundId]="refundId()!" (itemsCreated)="onBatchItemsAdded($event)"
+                                     (closed)="closeBatchModal()"></app-add-multiple-receipts-model>
   }
 
   @if (confirmSubmitOpen()) {
-  <div class="modal-backdrop" (click)="confirmSubmitOpen.set(false)">
-    <div class="modal-dialog modal-dialog--confirm card" (click)="$event.stopPropagation()" role="dialog"
-      aria-modal="true" aria-labelledby="confirmSubmitTitle">
-      <header class="modal-header">
-        <h2 id="confirmSubmitTitle">Submit refund request?</h2>
-      </header>
-      <div class="modal-body">
-        <p>Receipts: <strong>{{ items().length }}</strong></p>
-        <p>Total requested: <strong>€ {{ totalRequested() | number:'1.2-2' }}</strong></p>
-        <p>Once submitted, you will no longer be able to edit it.</p>
+    <div class="modal-backdrop" (click)="confirmSubmitOpen.set(false)">
+      <div class="modal-dialog modal-dialog--confirm card" (click)="$event.stopPropagation()" role="dialog"
+           aria-modal="true" aria-labelledby="confirmSubmitTitle">
+        <header class="modal-header">
+          <h2 id="confirmSubmitTitle">Submit refund request?</h2>
+        </header>
+        <div class="modal-body">
+          <p>Receipts: <strong>{{ items().length }}</strong></p>
+          <p>Total requested: <strong>€ {{ totalRequested() | number:'1.2-2' }}</strong></p>
+          <p>Once submitted, you will no longer be able to edit it.</p>
+        </div>
+        <footer class="modal-footer">
+          <button class="btn btn--outline" type="button" (click)="confirmSubmitOpen.set(false)">Cancel</button>
+          <button class="btn" type="button" (click)="submitRefund()">Submit</button>
+        </footer>
       </div>
-      <footer class="modal-footer">
-        <button class="btn btn--outline" type="button" (click)="confirmSubmitOpen.set(false)">Cancel</button>
-        <button class="btn" type="button" (click)="submitRefund()">Submit</button>
-      </footer>
     </div>
-  </div>
   }
   <ng-template #receiptsSkeleton>
     <div tabindex="0" role="region" aria-labelledby="receipts-table-caption" class="table-wrapper">
       <table class="table-skeleton" aria-busy="true" aria-label="Loading receipts">
         <caption id="receipts-table-caption" class="sr-only">Loading receipts</caption>
         <thead>
-          <tr>
-            <th>Category</th>
-            <th>Description</th>
-            <th>Date</th>
-            <th>Amount</th>
-            <th><span class="sr-only">Actions</span></th>
-          </tr>
+        <tr>
+          <th>Category</th>
+          <th>Description</th>
+          <th>Date</th>
+          <th>Amount</th>
+          <th><span class="sr-only">Actions</span></th>
+        </tr>
         </thead>
         <tbody>
           @for (placeholder of skeletonPlaceholders; track placeholder) {
-          <tr class="skeleton-row" aria-hidden="true">
-            <td data-label="Category">
-              <div class="sk sk-pill"></div>
-            </td>
-            <td data-label="Description">
-              <div class="sk sk-desc"></div>
-            </td>
-            <td data-label="Date">
-              <div class="sk sk-date"></div>
-            </td>
-            <td data-label="Amount">
-              <div class="sk sk-amount"></div>
-            </td>
-            <td class="actions-cell">
-              <div class="sk-actions">
-                <div class="sk sk-btn"></div>
-                <div class="sk sk-btn"></div>
-              </div>
-            </td>
-          </tr>
+            <tr class="skeleton-row" aria-hidden="true">
+              <td data-label="Category">
+                <div class="sk sk-pill"></div>
+              </td>
+              <td data-label="Description">
+                <div class="sk sk-desc"></div>
+              </td>
+              <td data-label="Date">
+                <div class="sk sk-date"></div>
+              </td>
+              <td data-label="Amount">
+                <div class="sk sk-amount"></div>
+              </td>
+              <td class="actions-cell">
+                <div class="sk-actions">
+                  <div class="sk sk-btn"></div>
+                  <div class="sk sk-btn"></div>
+                </div>
+              </td>
+            </tr>
           }
         </tbody>
       </table>

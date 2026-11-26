@@ -364,3 +364,56 @@ async def test_other_category_requires_null_subtype_in_db(db_session: AsyncSessi
     with pytest.raises(IntegrityError):
         await db_session.commit()
     await db_session.rollback()
+
+@pytest.mark.asyncio
+async def test_refund_item_needs_review_default_and_toggle(db_session: AsyncSession):
+    user = make_user(
+        email="review_db@unical.it",
+        fiscal_code="RVWMRA80A01H501U",
+        name="Elena",
+        surname="Russo",
+        department="DIMES",
+        employment_level="ricercatore",
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    mission = make_mission(requester_id=user.id, fund_manager_id=user.id)
+    db_session.add(mission)
+    await db_session.flush()
+
+    refund_request = RefundRequest(mission_id=mission.id)
+    db_session.add(refund_request)
+    await db_session.flush()
+
+    standard_item = RefundItem(
+        refund_request_id=refund_request.id,
+        category=ExpenseCategory.OTHER,
+        starts_at=datetime(2026, 11, 1, 10, 0),
+        requested_amount=Decimal("15.00"),
+        receipt_file_path="missions/123/std.pdf",
+        receipt_original_filename="std.pdf",
+        description="Voce standard",
+    )
+    batch_item = RefundItem(
+        refund_request_id=refund_request.id,
+        category=ExpenseCategory.OTHER,
+        starts_at=datetime(2026, 11, 1, 11, 0),
+        requested_amount=Decimal("20.00"),
+        receipt_file_path="missions/123/batch.jpg",
+        receipt_original_filename="batch.jpg",
+        description="Voce da batch",
+        needs_review=True,
+    )
+    db_session.add_all([standard_item, batch_item])
+    await db_session.commit()
+
+    await db_session.refresh(standard_item)
+    await db_session.refresh(batch_item)
+    assert standard_item.needs_review is False
+    assert batch_item.needs_review is True
+
+    batch_item.needs_review = False
+    await db_session.commit()
+    await db_session.refresh(batch_item)
+    assert batch_item.needs_review is False

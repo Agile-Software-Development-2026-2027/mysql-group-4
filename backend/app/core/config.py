@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     OLLAMA_KEEP_ALIVE: str = "2m"
     OLLAMA_VISION_ENABLED: bool = True
 
+    RECEIPT_DETECTOR_PROVIDER: str = "remote"
+    DETECTOR_API_URL: str = ""
+
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),
         env_file_encoding="utf-8",

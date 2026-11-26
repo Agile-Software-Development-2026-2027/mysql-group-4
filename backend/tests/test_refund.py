@@ -20,6 +20,14 @@ from app.db.refund_item import RefundItem
 from app.db.refund_request import RefundRequest
 from main import app
 
+import json
+from unittest.mock import AsyncMock, MagicMock, patch
+from PIL import Image
+from app.api.deps import get_receipt_ai_service
+from app.schemas.receipt_ai import BoundingBoxDTO, ReceiptDetectionResponseDTO, ReceiptPageDTO
+from app.services.currency_service import CurrencyConversionService
+from app.services.receipt_ai_service import ReceiptAIService
+
 
 @pytest.fixture
 async def requester(db_session: AsyncSession) -> User:
@@ -88,10 +96,18 @@ async def create_mission(
     fund_manager_id: UUID | None = None,
     status: MissionStatus = MissionStatus.ACCEPTED,
     ended: bool = True,
+    started: bool = True,
 ) -> Mission:
     now = datetime.now()
-    starts_at = now - timedelta(days=3) if ended else now - timedelta(hours=2)
-    ends_at = now - timedelta(hours=2) if ended else now + timedelta(days=2)
+    if not started:
+        starts_at = now + timedelta(days=1)
+        ends_at = now + timedelta(days=3)
+    elif ended:
+        starts_at = now - timedelta(days=3)
+        ends_at = now - timedelta(hours=2)
+    else:
+        starts_at = now - timedelta(hours=2)
+        ends_at = now + timedelta(days=2)
 
     mission = Mission(
         id=uuid4(),
@@ -152,20 +168,21 @@ async def test_create_refund_request_invalid_dto_extra_fields(
 
 
 @pytest.mark.asyncio
-async def test_create_refund_request_fails_if_mission_not_ended(client: AsyncClient, db_session: AsyncSession, requester: User):
-    mission = await create_mission(db_session, requester.id, ended=False)
-
+async def test_create_refund_request_fails_if_mission_not_accepted(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, status=MissionStatus.PENDING, ended=True)
     response = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
 
     assert response.status_code == 400
 
 
 @pytest.mark.asyncio
-async def test_create_refund_request_fails_if_mission_not_accepted(client: AsyncClient, db_session: AsyncSession, requester: User):
-    mission = await create_mission(db_session, requester.id, status=MissionStatus.PENDING, ended=True)
+async def test_create_refund_request_fails_if_mission_not_started(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, started=False, ended=False)
+
     response = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
 
     assert response.status_code == 400
+    assert "started" in response.json()["message"].lower()
 
 
 @pytest.mark.asyncio
@@ -1415,6 +1432,24 @@ async def test_submit_refund_request_fails_if_already_submitted(client: AsyncCli
     assert second_submit.status_code == 400
 
 
+@pytest.mark.asyncio
+async def test_submit_refund_request_fails_if_mission_not_ended(
+    client: AsyncClient, db_session: AsyncSession, requester: User
+):
+    mission = await create_mission(db_session, requester.id, started=True, ended=False)
+    post_res = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    assert post_res.status_code == 201
+    refund_id = post_res.json()["id"]
+
+    item_payload = make_valid_transport_item_payload()
+    item_res = await client.post(f"/api/v1/refunds/{refund_id}/items", json=item_payload)
+    assert item_res.status_code == 201
+
+    response = await client.patch(f"/api/v1/refunds/{refund_id}/submit")
+    assert response.status_code == 400
+    assert "not ended" in response.json()["message"].lower()
+
+
 # ==============================================================================
 # TEST limite sul costo stimato e regolazione del fondo all'approvazione
 # ==============================================================================
@@ -1496,3 +1531,330 @@ async def test_approve_refund_fails_when_reimbursed_exceeds_requested(client: As
     assert fund.committed_amount == Decimal("250.00")
     assert refund.status == RefundStatus.SUBMITTED
 
+
+def _make_jpeg_bytes(width: int = 200, height: int = 120) -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", (width, height), color=(240, 240, 240)).save(buf, format="JPEG")
+    return buf.getvalue()
+
+
+@pytest.mark.asyncio
+async def test_submit_blocked_while_item_needs_review_and_unlocked_after_update(
+    client: AsyncClient, db_session: AsyncSession, requester: User
+):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    create_resp = await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})
+    refund_id = UUID(create_resp.json()["id"])
+
+    item = _make_test_item(refund_id, requester.id, Decimal("30.00"), needs_review=True)
+    db_session.add(item)
+    await db_session.flush()
+    item_id = item.id
+
+    refund = (await db_session.execute(select(RefundRequest).where(RefundRequest.id == refund_id))).scalar_one()
+    refund.total_requested_amount = Decimal("30.00")
+    await db_session.commit()
+
+    blocked_resp = await client.patch(f"/api/v1/refunds/{refund_id}/submit")
+    assert blocked_resp.status_code == 400
+    assert "pending review" in blocked_resp.json()["message"].lower()
+
+    await db_session.refresh(requester)
+
+    patch_resp = await client.patch(
+        f"/api/v1/refunds/{refund_id}/items/{item_id}",
+        json={"description": "Spesa verificata"},
+    )
+    assert patch_resp.status_code == 200
+    assert patch_resp.json()["needsReview"] is False
+
+    submit_resp = await client.patch(f"/api/v1/refunds/{refund_id}/submit")
+    assert submit_resp.status_code == 200
+    assert submit_resp.json()["status"] == "SUBMITTED"
+
+
+@pytest.mark.asyncio
+async def test_detect_receipt_boxes_happy_path_image(
+    client: AsyncClient, db_session: AsyncSession, requester: User
+):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund_id = (await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})).json()["id"]
+
+    mock_detector = MagicMock()
+    mock_detector.detect = AsyncMock(
+        return_value=ReceiptDetectionResponseDTO(
+            image_width=200,
+            image_height=120,
+            boxes=[
+                BoundingBoxDTO(x=10, y=10, width=80, height=100, page=0),
+                BoundingBoxDTO(x=105, y=10, width=85, height=100, page=0),
+            ],
+            pages=[],
+        )
+    )
+
+    ai_service = ReceiptAIService(currency_service=CurrencyConversionService())
+    ai_service.detector = mock_detector
+    app.dependency_overrides[get_receipt_ai_service] = lambda: ai_service
+
+    try:
+        files = {"file": ("multi.jpg", io.BytesIO(_make_jpeg_bytes()), "image/jpeg")}
+        response = await client.post(f"/api/v1/refunds/{refund_id}/receipts/detect", files=files)
+    finally:
+        app.dependency_overrides.pop(get_receipt_ai_service, None)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["imageWidth"] == 200
+    assert data["imageHeight"] == 120
+    assert len(data["boxes"]) == 2
+    assert data["boxes"][0]["x"] == 10
+    assert data["pages"] == []
+
+
+@pytest.mark.asyncio
+async def test_detect_receipt_boxes_happy_path_multipage_pdf(
+    client: AsyncClient, db_session: AsyncSession, requester: User
+):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund_id = (await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})).json()["id"]
+
+    page_1 = _make_jpeg_bytes(300, 400)
+    page_2 = _make_jpeg_bytes(300, 400)
+
+    mock_detector = MagicMock()
+    mock_detector.detect = AsyncMock(
+        side_effect=[
+            ReceiptDetectionResponseDTO(
+                image_width=300,
+                image_height=400,
+                boxes=[BoundingBoxDTO(x=20, y=20, width=200, height=300, page=0)],
+            ),
+            ReceiptDetectionResponseDTO(
+                image_width=300,
+                image_height=400,
+                boxes=[BoundingBoxDTO(x=30, y=40, width=210, height=310, page=0)],
+            ),
+        ]
+    )
+
+    with (
+        patch("app.services.receipt_ai_service.get_receipt_detector", return_value=mock_detector),
+        patch("app.services.receipt_ai_service.render_pdf_pages", return_value=[page_1, page_2]),
+    ):
+        files = {"file": ("scontrini.pdf", io.BytesIO(b"%PDF-1.4 fake"), "application/pdf")}
+        response = await client.post(f"/api/v1/refunds/{refund_id}/receipts/detect", files=files)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["pages"]) == 2
+    assert data["pages"][0]["page"] == 0
+    assert data["pages"][1]["page"] == 1
+    assert data["pages"][0]["imageDataUrl"].startswith("data:image/jpeg;base64,")
+    assert [b["page"] for b in data["boxes"]] == [0, 1]
+
+
+@pytest.mark.asyncio
+async def test_detect_receipt_boxes_validation_missing_file(
+    client: AsyncClient, db_session: AsyncSession, requester: User
+):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund_id = (await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})).json()["id"]
+
+    response = await client.post(f"/api/v1/refunds/{refund_id}/receipts/detect")
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_detect_receipt_boxes_security_unauthorized_and_forbidden(
+    client: AsyncClient, db_session: AsyncSession, requester: User, other_user: User
+):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund_id = (await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})).json()["id"]
+
+    app.dependency_overrides.pop(current_active_user, None)
+    files_unauth = {"file": ("multi.jpg", io.BytesIO(_make_jpeg_bytes()), "image/jpeg")}
+    resp_401 = await client.post(f"/api/v1/refunds/{refund_id}/receipts/detect", files=files_unauth)
+    assert resp_401.status_code == 401
+
+    app.dependency_overrides[current_active_user] = lambda: other_user
+    files_forbidden = {"file": ("multi.jpg", io.BytesIO(_make_jpeg_bytes()), "image/jpeg")}
+    resp_403 = await client.post(f"/api/v1/refunds/{refund_id}/receipts/detect", files=files_forbidden)
+    assert resp_403.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_detect_receipt_boxes_rejects_unsupported_and_empty_files(
+    client: AsyncClient, db_session: AsyncSession, requester: User
+):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund_id = (await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})).json()["id"]
+
+    bad_files = {"file": ("script.exe", io.BytesIO(b"MZ..."), "application/octet-stream")}
+    resp_415 = await client.post(f"/api/v1/refunds/{refund_id}/receipts/detect", files=bad_files)
+    assert resp_415.status_code == 415
+
+    empty_files = {"file": ("empty.jpg", io.BytesIO(b""), "image/jpeg")}
+    resp_400 = await client.post(f"/api/v1/refunds/{refund_id}/receipts/detect", files=empty_files)
+    assert resp_400.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_batch_process_receipts_happy_path_and_inconsistent_fallback(
+    client: AsyncClient, db_session: AsyncSession, requester: User
+):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund_id = UUID((await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})).json()["id"])
+
+    ollama_outputs = [
+        {
+            "category": "MEALS",
+            "subtype": "MEALS_EXPENSE",
+            "amount": 18.50,
+            "currency": "EUR",
+            "starts_at": "2026-11-20T13:00",
+            "merchant": "Trattoria Roma",
+            "description": "Lunch in Rome",
+        },
+        {
+            "category": "TRANSPORT",
+            "subtype": "TRAIN",
+            "amount": None,
+            "currency": "EUR",
+            "itinerary_from": None,
+            "itinerary_to": None,
+            "description": "",
+        },
+    ]
+
+    boxes_payload = json.dumps([
+        {"x": 5, "y": 5, "width": 80, "height": 100, "page": 0},
+        {"x": 100, "y": 5, "width": 90, "height": 100, "page": 0},
+    ])
+
+    with (
+        patch("app.services.refund_service.minio_client") as mock_minio,
+        patch("app.services.receipt_ai_service.ReceiptAIService._sync_ocr", return_value=("OCR TEXT", ["OCR TEXT"], 0.9)),
+        patch("app.services.receipt_ai_service.ReceiptAIService._query_ollama", new=AsyncMock(side_effect=ollama_outputs)),
+    ):
+        mock_minio.put_object.return_value = None
+        files = {"file": ("batch_tickets.jpg", io.BytesIO(_make_jpeg_bytes()), "image/jpeg")}
+        response = await client.post(
+            f"/api/v1/refunds/{refund_id}/receipts/batch-process",
+            files=files,
+            data={"boxes": boxes_payload},
+        )
+
+    assert response.status_code == 201
+    items = response.json()
+    assert len(items) == 2
+
+    assert items[0]["category"] == "MEALS"
+    assert items[0]["requestedAmount"] == "18.50"
+    assert items[0]["needsReview"] is True
+
+    assert items[1]["category"] == "OTHER"
+    assert items[1]["subtype"] is None
+    assert items[1]["requestedAmount"] == "0.01"
+    assert items[1]["description"] == "Pending review"
+    assert items[1]["needsReview"] is True
+
+    assert mock_minio.put_object.call_count == 2
+    refund = (await db_session.execute(select(RefundRequest).where(RefundRequest.id == refund_id))).scalar_one()
+    assert refund.total_requested_amount == Decimal("18.51")
+
+
+@pytest.mark.asyncio
+async def test_batch_process_receipts_validation_errors(
+    client: AsyncClient, db_session: AsyncSession, requester: User
+):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund_id = (await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})).json()["id"]
+
+    files_1 = {"file": ("batch.jpg", io.BytesIO(_make_jpeg_bytes()), "image/jpeg")}
+    resp_invalid_json = await client.post(
+        f"/api/v1/refunds/{refund_id}/receipts/batch-process",
+        files=files_1,
+        data={"boxes": "{not-valid-json"},
+    )
+    assert resp_invalid_json.status_code == 422
+
+    files_2 = {"file": ("batch.jpg", io.BytesIO(_make_jpeg_bytes()), "image/jpeg")}
+    resp_invalid_box = await client.post(
+        f"/api/v1/refunds/{refund_id}/receipts/batch-process",
+        files=files_2,
+        data={"boxes": json.dumps([{"x": -5, "y": 0, "width": 0, "height": 50}])},
+    )
+    assert resp_invalid_box.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_batch_process_receipts_security_unauthorized_and_forbidden(
+    client: AsyncClient, db_session: AsyncSession, requester: User, other_user: User
+):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund_id = (await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})).json()["id"]
+    boxes_payload = json.dumps([{"x": 10, "y": 10, "width": 50, "height": 50, "page": 0}])
+
+    app.dependency_overrides.pop(current_active_user, None)
+    files_401 = {"file": ("batch.jpg", io.BytesIO(_make_jpeg_bytes()), "image/jpeg")}
+    resp_401 = await client.post(
+        f"/api/v1/refunds/{refund_id}/receipts/batch-process",
+        files=files_401,
+        data={"boxes": boxes_payload},
+    )
+    assert resp_401.status_code == 401
+
+    app.dependency_overrides[current_active_user] = lambda: other_user
+    files_403 = {"file": ("batch.jpg", io.BytesIO(_make_jpeg_bytes()), "image/jpeg")}
+    resp_403 = await client.post(
+        f"/api/v1/refunds/{refund_id}/receipts/batch-process",
+        files=files_403,
+        data={"boxes": boxes_payload},
+    )
+    assert resp_403.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_batch_process_receipts_business_errors(
+    client: AsyncClient, db_session: AsyncSession, requester: User
+):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund_id = UUID((await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})).json()["id"])
+
+    files_empty_boxes = {"file": ("batch.jpg", io.BytesIO(_make_jpeg_bytes()), "image/jpeg")}
+    resp_empty = await client.post(
+        f"/api/v1/refunds/{refund_id}/receipts/batch-process",
+        files=files_empty_boxes,
+        data={"boxes": "[]"},
+    )
+    assert resp_empty.status_code == 400
+
+    files_404 = {"file": ("batch.jpg", io.BytesIO(_make_jpeg_bytes()), "image/jpeg")}
+    resp_404 = await client.post(
+        f"/api/v1/refunds/{uuid4()}/receipts/batch-process",
+        files=files_404,
+        data={"boxes": json.dumps([{"x": 10, "y": 10, "width": 50, "height": 50}])},
+    )
+    assert resp_404.status_code == 404
+
+    with patch("app.services.receipt_ai_service.render_pdf_pages", return_value=[_make_jpeg_bytes()]):
+        files_pdf = {"file": ("one_page.pdf", io.BytesIO(b"%PDF-1.4"), "application/pdf")}
+        resp_bad_page = await client.post(
+            f"/api/v1/refunds/{refund_id}/receipts/batch-process",
+            files=files_pdf,
+            data={"boxes": json.dumps([{"x": 10, "y": 10, "width": 50, "height": 50, "page": 3}])},
+        )
+    assert resp_bad_page.status_code == 400
+
+    refund = (await db_session.execute(select(RefundRequest).where(RefundRequest.id == refund_id))).scalar_one()
+    refund.status = RefundStatus.SUBMITTED
+    await db_session.commit()
+
+    files_submitted = {"file": ("batch.jpg", io.BytesIO(_make_jpeg_bytes()), "image/jpeg")}
+    resp_submitted = await client.post(
+        f"/api/v1/refunds/{refund_id}/receipts/batch-process",
+        files=files_submitted,
+        data={"boxes": json.dumps([{"x": 10, "y": 10, "width": 50, "height": 50}])},
+    )
+    assert resp_submitted.status_code == 400

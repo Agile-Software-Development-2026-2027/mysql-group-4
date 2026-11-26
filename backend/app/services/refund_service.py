@@ -11,10 +11,11 @@ import anyio
 from fastapi import UploadFile
 from minio import Minio
 from minio.error import S3Error
+from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.enums import MissionStatus, RefundStatus
+from app.core.enums import ExpenseCategory, ExpenseSubtype, MissionStatus, RefundStatus
 from app.core.exceptions import (
     AccessDeniedError,
     InvalidMissionStateError,
@@ -34,6 +35,7 @@ from app.db.models import User
 from app.db.refund_item import RefundItem
 from app.db.refund_request import RefundRequest
 from app.schemas.page import Page, PageRequest
+from app.schemas.receipt_ai import BoundingBoxDTO, ReceiptAutocompleteDTO
 from app.schemas.refund import (
     RefundApproveDTO,
     RefundItemFilterDTO,
@@ -47,11 +49,13 @@ from app.schemas.refund import (
     RefundFilterDTO,
     RefundOverviewDTO
 )
+from app.services.currency_service import CurrencyConversionService
 from app.services.fund_service import FundService
+from app.services.receipt_ai_service import ReceiptAIService
 
 logger = logging.getLogger(__name__)
 
-MAX_RECEIPT_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_RECEIPT_FILE_SIZE = 10 * 1024 * 1024
 
 minio_client = Minio(
     endpoint=settings.MINIO_ENDPOINT,
@@ -110,8 +114,8 @@ class RefundService:
                 raise AccessDeniedError("Only the mission requester can create a refund request")
             if mission.status != MissionStatus.ACCEPTED:
                 raise InvalidMissionStateError("A refund request can only be created for an accepted mission")
-            if mission.ends_at > datetime.now():
-                raise InvalidRefundRequestDateError("Refund request can only be created after the mission has ended")
+            if mission.starts_at > datetime.now():
+                raise InvalidRefundRequestDateError("Refund request can only be created after the mission has started")
 
             existing = await self.refund_repository.find_by_mission_id(self.session, mission.id)
             if existing is not None:
@@ -131,12 +135,23 @@ class RefundService:
             refund = await self.refund_repository.find_by_id(self.session, refund_id)
             if not refund:
                 raise RefundNotFoundError(refund_id)
+
+            mission = await self.mission_repository.find_by_id(mission_id=refund.mission_id)
+            if not mission:
+                raise MissionNotFoundError
+
             if refund.created_by != user.id:
                 raise AccessDeniedError("Only the requester can submit this refund request")
             if refund.status != RefundStatus.DRAFT:
                 raise InvalidRefundStateError("Only draft refund requests can be submitted")
             if not refund.items:
                 raise InvalidRefundStateError("Cannot submit a refund request without expense items")
+
+            mission_ends_at = mission.ends_at
+            if mission_ends_at > datetime.now():
+                raise InvalidRefundRequestDateError("You can't submit a refund request if the mission is not ended")
+            if any(item.needs_review for item in refund.items):
+                raise InvalidRefundStateError("Cannot submit a refund request while items are pending review")
             await self._ensure_within_estimate(refund, refund.total_requested_amount)
 
             refund.status = RefundStatus.SUBMITTED
@@ -145,7 +160,8 @@ class RefundService:
 
             await self.session.flush()
             await self.session.refresh(refund)
-            result = RefundRequestDTO.model_validate(refund)
+            loaded = await self.refund_repository.find_by_id(self.session, refund_id)
+            result = RefundRequestDTO.model_validate(loaded)
 
         logger.info("Refund request %s submitted by user %s", refund_id, user.id)
         return result
@@ -333,8 +349,8 @@ class RefundService:
                 submitted_at=r.submitted_at,
                 approved_at=r.approved_at
             ) for r in refunds
-        ]    
-        
+        ]
+
     async def get_refund_items(
         self,
         refund_id: UUID,
@@ -385,6 +401,7 @@ class RefundService:
             for field, value in updates.items():
                 setattr(item, field, value)
             item.updated_by = user.id
+            item.needs_review = False
 
             if "requested_amount" in updates:
                 new_total = refund_request.total_requested_amount + item.requested_amount - old_amount
@@ -395,7 +412,6 @@ class RefundService:
             await self.session.refresh(item)
             result = RefundItemDTO.model_validate(item)
 
-        # Remove the replaced receipt only after the new path has been committed.
         if old_receipt_path and old_receipt_path != result.receipt_file_path:
             try:
                 await anyio.to_thread.run_sync(
@@ -444,4 +460,258 @@ class RefundService:
                 except Exception as e:
                     logger.warning("Could not delete receipt file from MinIO: %s", e)
 
+    async def _upload_receipt_bytes(
+        self,
+        refund_request_id: UUID,
+        content: bytes,
+        filename: str,
+        content_type: str = "image/jpeg",
+    ) -> RefundReceiptUploadDTO:
+        object_name = f"refunds/{refund_request_id}/receipts/{uuid4()}_{filename}"
+        file_stream = io.BytesIO(content)
+        try:
+            await anyio.to_thread.run_sync(
+                lambda: minio_client.put_object(
+                    bucket_name=settings.MINIO_BUCKET_NAME,
+                    object_name=object_name,
+                    data=file_stream,
+                    length=len(content),
+                    content_type=content_type,
+                )
+            )
+        except S3Error as e:
+            logger.error("Error saving receipt to MinIO: %s", e)
+            raise RefundItemCreateError(f"Error during saving on MinIO: {str(e)}")
 
+        return RefundReceiptUploadDTO(
+            receipt_file_path=object_name,
+            receipt_original_filename=filename,
+        )
+
+    def _build_batch_refund_item(
+        self,
+        refund_request_id: UUID,
+        user_id: UUID,
+        extracted: ReceiptAutocompleteDTO,
+        upload_dto: RefundReceiptUploadDTO,
+        fallback_start: datetime,
+    ) -> RefundItem:
+        category = extracted.category or ExpenseCategory.OTHER
+        subtype = extracted.subtype
+        itinerary_from = extracted.itinerary_from
+        itinerary_to = extracted.itinerary_to
+
+        starts_at = fallback_start
+        if extracted.starts_at:
+            try:
+                starts_at = datetime.strptime(extracted.starts_at, "%Y-%m-%dT%H:%M")
+            except ValueError:
+                starts_at = fallback_start
+
+        ends_at: datetime | None = None
+        if extracted.ends_at:
+            try:
+                parsed_end = datetime.strptime(extracted.ends_at, "%Y-%m-%dT%H:%M")
+                if parsed_end >= starts_at:
+                    ends_at = parsed_end
+            except ValueError:
+                ends_at = None
+
+        if category == ExpenseCategory.TRANSPORT:
+            if not subtype or not itinerary_from or not itinerary_to or ends_at is None:
+                category = ExpenseCategory.OTHER
+                subtype = None
+                itinerary_from = None
+                itinerary_to = None
+                ends_at = None
+        elif category == ExpenseCategory.ACCOMMODATION:
+            itinerary_from = None
+            itinerary_to = None
+            if not subtype or ends_at is None:
+                category = ExpenseCategory.OTHER
+                subtype = None
+                ends_at = None
+        elif category == ExpenseCategory.MEALS:
+            itinerary_from = None
+            itinerary_to = None
+            ends_at = None
+            if not subtype:
+                subtype = ExpenseSubtype.MEALS_EXPENSE
+        else:
+            subtype = None
+            itinerary_from = None
+            itinerary_to = None
+            ends_at = None
+
+        raw_amount = extracted.converted_amount_eur or extracted.amount
+        if raw_amount is None or raw_amount <= Decimal("0.00") or raw_amount > Decimal("10000.00"):
+            requested_amount = Decimal("0.01")
+        else:
+            requested_amount = raw_amount.quantize(Decimal("0.01"))
+
+        description = (extracted.description or extracted.merchant or "Pending review").strip()[:255]
+        if not description:
+            description = "Pending review"
+
+        return RefundItem(
+            refund_request_id=refund_request_id,
+            category=category,
+            subtype=subtype,
+            itinerary_from=itinerary_from,
+            itinerary_to=itinerary_to,
+            starts_at=starts_at,
+            ends_at=ends_at,
+            requested_amount=requested_amount,
+            currency="EUR",
+            is_traceable=True,
+            receipt_file_path=upload_dto.receipt_file_path,
+            receipt_original_filename=upload_dto.receipt_original_filename,
+            description=description,
+            needs_review=True,
+            created_by=user_id,
+            updated_by=user_id,
+        )
+
+    async def _cleanup_minio_objects(self, object_names: list[str]) -> None:
+        for object_name in object_names:
+            try:
+                await anyio.to_thread.run_sync(
+                    lambda name=object_name: minio_client.remove_object(
+                        bucket_name=settings.MINIO_BUCKET_NAME,
+                        object_name=name,
+                    )
+                )
+            except Exception as exc:
+                logger.warning("Could not remove orphaned MinIO object %s: %s", object_name, exc)
+
+    async def process_batch_receipts(
+        self,
+        refund_request_id: UUID,
+        file: UploadFile,
+        boxes: list[BoundingBoxDTO],
+        user: User,
+        currency_service: CurrencyConversionService,
+        receipt_ai_service: ReceiptAIService,
+    ) -> list[RefundItemDTO]:
+        if not boxes:
+            raise RefundItemCreateError("At least one bounding box is required.")
+
+        content_type = (file.content_type or "").lower()
+        filename_lower = (file.filename or "").lower()
+        is_pdf = content_type == "application/pdf" or filename_lower.endswith(".pdf")
+        is_image = content_type.startswith("image/") or any(
+            filename_lower.endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".webp")
+        )
+        if not is_image and not is_pdf:
+            raise RefundItemCreateError(
+                "Batch receipt processing supports image files (JPEG, PNG, WEBP) and PDF documents."
+            )
+
+        refund_request = await self.refund_repository.find_by_id(self.session, refund_request_id)
+        if not refund_request:
+            raise RefundNotFoundError(refund_request_id)
+        if refund_request.created_by != user.id:
+            raise AccessDeniedError("Only the requester can process batch receipts.")
+        if refund_request.status != RefundStatus.DRAFT:
+            raise RefundItemCreateError("Cannot add items to a non-draft refund request.")
+
+        raw_bytes = await file.read()
+        if not raw_bytes:
+            raise RefundItemCreateError("Receipt file cannot be empty.")
+        if len(raw_bytes) > MAX_RECEIPT_FILE_SIZE:
+            raise RefundItemCreateError("Receipt file exceeds the maximum allowed size of 10MB.")
+
+        pdf_pages: list[bytes] = []
+        if is_pdf:
+            try:
+                pdf_pages = await anyio.to_thread.run_sync(receipt_ai_service.render_pdf_pages, raw_bytes)
+            except Exception as exc:
+                logger.warning("PDF rendering failed during batch processing: %s", exc)
+                raise RefundItemCreateError("Unable to render PDF pages.")
+            if not pdf_pages:
+                raise RefundItemCreateError("Uploaded PDF contains no pages.")
+        else:
+            try:
+                with Image.open(io.BytesIO(raw_bytes)) as img:
+                    img.verify()
+            except Exception as exc:
+                logger.warning("Invalid or corrupted image during batch processing: %s", exc)
+                raise RefundItemCreateError("Uploaded image file is corrupted or unreadable.")
+
+        for box in boxes:
+            if is_pdf:
+                if box.page < 0 or box.page >= len(pdf_pages):
+                    raise RefundItemCreateError(f"Invalid page index {box.page} for PDF document.")
+            elif box.page != 0:
+                raise RefundItemCreateError(
+                    f"Invalid page index {box.page} for single-image receipt; expected page 0."
+                )
+
+        mission = await self.mission_repository.find_by_id(refund_request.mission_id)
+        destination = mission.destination if mission else None
+        hint_currency = await currency_service.resolve_currency_for_destination(destination)
+        fallback_start = mission.starts_at if mission else datetime.now().replace(second=0, microsecond=0)
+        base_stem = Path(file.filename).stem if file.filename else "receipt"
+
+        prepared_items: list[RefundItem] = []
+        uploaded_object_names: list[str] = []
+
+        try:
+            for idx, box in enumerate(boxes, start=1):
+                source_bytes = pdf_pages[box.page] if is_pdf else raw_bytes
+                try:
+                    cropped_bytes = await anyio.to_thread.run_sync(
+                        receipt_ai_service.crop_receipt, source_bytes, box
+                    )
+                except Exception as exc:
+                    raise RefundItemCreateError(f"Unable to crop receipt box #{idx}: {exc}") from exc
+
+                crop_filename = f"{base_stem}_part_{idx}.jpg"
+                upload_dto = await self._upload_receipt_bytes(
+                    refund_request_id=refund_request_id,
+                    content=cropped_bytes,
+                    filename=crop_filename,
+                    content_type="image/jpeg",
+                )
+                uploaded_object_names.append(upload_dto.receipt_file_path)
+
+                extracted = await receipt_ai_service.extract_receipt_from_bytes(
+                    cropped_bytes,
+                    is_pdf=False,
+                    hint_currency=hint_currency,
+                    hint_country=destination,
+                )
+                item = self._build_batch_refund_item(
+                    refund_request_id=refund_request_id,
+                    user_id=user.id,
+                    extracted=extracted,
+                    upload_dto=upload_dto,
+                    fallback_start=fallback_start,
+                )
+                prepared_items.append(item)
+
+            created_dtos: list[RefundItemDTO] = []
+            async with self.transaction():
+                current_refund = await self.refund_repository.find_by_id(self.session, refund_request_id)
+                if not current_refund:
+                    raise RefundNotFoundError(refund_request_id)
+                if current_refund.created_by != user.id:
+                    raise AccessDeniedError("Only the requester can process batch receipts.")
+                if current_refund.status != RefundStatus.DRAFT:
+                    raise RefundItemCreateError("Cannot add items to a non-draft refund request.")
+
+                batch_total = sum((item.requested_amount for item in prepared_items), Decimal("0.00"))
+                await self._ensure_within_estimate(
+                    current_refund, current_refund.total_requested_amount + batch_total
+                )
+
+                for item in prepared_items:
+                    saved = await self.refund_repository.save_item(self.session, item)
+                    current_refund.total_requested_amount += item.requested_amount
+                    await self.session.flush()
+                    created_dtos.append(RefundItemDTO.model_validate(saved))
+
+            return created_dtos
+        except BaseException:
+            await self._cleanup_minio_objects(uploaded_object_names)
+            raise
