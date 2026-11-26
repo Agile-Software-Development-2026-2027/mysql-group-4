@@ -78,10 +78,37 @@
 }
 
 .mission-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 16px;
   min-inline-size: 0;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+
+  &:hover, &:focus-within {
+    border-color: var(--color-primary);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+    .mission-card__arrow { transform: translateX(3px); opacity: 1; }
+  }
+
+  &__link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    text-decoration: none;
+    &:hover { text-decoration: none; }
+    &::after { content: ''; position: absolute; inset: 0; z-index: 1; }
+  }
+
+  &__arrow {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    opacity: 0.65;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+  }
 
   &__status {
     margin: 0;
@@ -120,16 +147,79 @@
     }
   }
 
-  .btn {
-    align-self: flex-start;
-    margin-top: auto;
-  }
-
   &__date {
     color: var(--color-text);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
   }
+
+  &__receipts {
+    position: relative;
+    z-index: 2;
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid var(--color-border-subtle);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
+  }
+
+  &__receipts-copy {
+    margin: 0;
+    max-width: 44ch;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    color: var(--color-text-muted);
+  }
+}
+
+.mobile-active-focus {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px;
+  background: var(--color-surface);
+
+  &__top { display: flex; justify-content: flex-end; }
+  &__close {
+    width: 44px; height: 44px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+    border: 0; border-radius: 50%; background: var(--color-bg); color: var(--color-text); cursor: pointer;
+  }
+
+  &__content { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px; margin: 44px 0 auto; }
+  &__heading { margin: 0; font-size: 1.75rem; font-weight: 700; color: var(--color-primary); line-height: 1.2; }
+  &__subject { margin: 0; font-size: 1.35rem; font-weight: 700; color: var(--color-text); line-height: 1.25; overflow-wrap: anywhere; }
+  &__meta {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    .mission-card__meta { display: block; text-align: center; svg { display: inline-block; vertical-align: -2px; margin-right: 6px; } }
+  }
+  &__copy { margin: 4px 0 0; max-width: 34ch; font-size: 0.95rem; line-height: 1.5; color: var(--color-text-muted); }
+  &__skip { width: 100%; justify-content: center; }
+}
+
+.mobile-upload-zone {
+  width: 100%;
+  margin-top: 8px;
+  padding: 36px 20px;
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+
+  svg { color: var(--color-text-muted); }
+  &__cta { font-size: 1.15rem; font-weight: 700; }
+  &__hint { font-size: 0.9rem; color: var(--color-text-muted); }
 }
 
 .skeleton-stack {

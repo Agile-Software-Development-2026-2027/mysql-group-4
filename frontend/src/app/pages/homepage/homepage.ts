@@ -1,10 +1,12 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Topbar } from '../../components/topbar/topbar';
 import { MissionDTO, MissionStatus } from '../../core/models';
 import { AuthService } from '../../services/auth.service';
 import { MissionService } from '../../services/mission.service';
+
+let mobileFocusDismissedInMemory = false;
 
 function toNaiveIso(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -28,6 +30,23 @@ export class Homepage implements OnInit {
   missionsLoading = signal(true);
   currentMission = signal<MissionDTO | null>(null);
   nextMission = signal<MissionDTO | null>(null);
+
+  readonly isMobileDevice = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+  mobileFocusDismissed = signal(mobileFocusDismissedInMemory);
+  selectedReceiptsCount = signal(0);
+  readonly showMobileActiveFocus = computed(
+    () => this.isMobileDevice && !this.mobileFocusDismissed() && !!this.currentMission()
+  );
+
+  dismissMobileFocus(): void {
+    mobileFocusDismissedInMemory = true;
+    this.mobileFocusDismissed.set(true);
+  }
+
+  onReceiptsSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.selectedReceiptsCount.set(input.files?.length ?? 0);
+  }
 
   ngOnInit(): void {
     const now = toNaiveIso(new Date());
