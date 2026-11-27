@@ -90,6 +90,8 @@ export class AddRefundItemModal implements OnInit, OnChanges {
   conversionInfo = signal<CurrencyConversionDTO | null>(null);
   foreignCurrency = signal<string>('EUR');
   euroEquivalent = signal<number | null>(null);
+  private defaultCurrency = 'EUR';
+  private hasExplicitCurrencySelection = false;
   availableCurrencies = [
     'EUR', 'USD', 'GBP', 'CHF', 'JPY', 'CNY', 'AUD', 'CAD', 'NZD', 'SEK', 'NOK',
     'DKK', 'PLN', 'CZK', 'HUF', 'RON', 'BGN', 'TRY', 'RUB', 'UAH', 'AED',
@@ -134,6 +136,7 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     this.setupCategoryChangeListener();
     this.setupIssuedDateChangeListener();
     this.loadMissionBounds();
+    this.loadCurrencyProfile();
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -182,6 +185,32 @@ export class AddRefundItemModal implements OnInit, OnChanges {
           console.error('Failed to load mission dates:', err);
         },
       });
+  }
+
+  private loadCurrencyProfile(): void {
+    if (!this.refundId) {
+      return;
+    }
+    this.refundService.getCurrencyProfile(this.refundId).subscribe({
+      next: (profile) => {
+        const currency = profile.defaultCurrency?.trim().toUpperCase();
+        if (!currency) {
+          return;
+        }
+        if (!this.availableCurrencies.includes(currency)) {
+          this.availableCurrencies = [...this.availableCurrencies, currency].sort();
+        }
+        this.defaultCurrency = currency;
+        if (this.hasExplicitCurrencySelection) {
+          return;
+        }
+        this.foreignCurrency.set(currency);
+        this.updateEuroEquivalent();
+      },
+      error: (err) => {
+        console.error('Failed to load mission currency:', err);
+      },
+    });
   }
 
   private updateMissionBounds(): void {
@@ -333,6 +362,16 @@ export class AddRefundItemModal implements OnInit, OnChanges {
   }
 
   populateFromOcr(data: Partial<RefundItemCreatePayload>): void {
+    if (data.currency) {
+      const currency = data.currency.toUpperCase();
+      if (!this.availableCurrencies.includes(currency)) {
+        this.availableCurrencies = [...this.availableCurrencies, currency].sort();
+      }
+      this.hasExplicitCurrencySelection = true;
+      this.foreignCurrency.set(currency);
+    } else if (!this.hasExplicitCurrencySelection) {
+      this.foreignCurrency.set(this.defaultCurrency);
+    }
     if (data.category) {
       this.form.get('category')?.setValue(data.category);
     }
@@ -344,7 +383,7 @@ export class AddRefundItemModal implements OnInit, OnChanges {
       endsAt: data.endsAt ?? '',
       issuedDate: data.issuedDate ?? '',
       requestedAmount: data.requestedAmount ?? null,
-      currency: data.currency ?? 'EUR',
+      currency: 'EUR',
       isTraceable: data.isTraceable ?? true,
       description: data.description ?? '',
     });
@@ -510,6 +549,7 @@ export class AddRefundItemModal implements OnInit, OnChanges {
   onForeignCurrencyChange(event: Event): void {
     const select = event.target as HTMLSelectElement;
     this.currencyConversionRequestVersion++;
+    this.hasExplicitCurrencySelection = true;
     this.foreignCurrency.set(select.value || 'EUR');
     this.conversionInfo.set(null);
     this.updateEuroEquivalent();
@@ -655,10 +695,11 @@ export class AddRefundItemModal implements OnInit, OnChanges {
           if (!this.availableCurrencies.includes(currency)) {
             this.availableCurrencies = [...this.availableCurrencies, currency].sort();
           }
+          this.hasExplicitCurrencySelection = true;
           this.foreignCurrency.set(currency);
           this.form.patchValue({ currency: 'EUR' });
         } else {
-          this.foreignCurrency.set('EUR');
+          this.foreignCurrency.set(this.defaultCurrency);
           this.form.patchValue({ currency: 'EUR' });
         }
 
@@ -753,7 +794,8 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     this.ocrRawText.set(null);
     this.isConvertingCurrency.set(false);
     this.conversionInfo.set(null);
-    this.foreignCurrency.set('EUR');
+    this.hasExplicitCurrencySelection = false;
+    this.foreignCurrency.set(this.defaultCurrency);
     this.euroEquivalent.set(null);
     this.form.patchValue({ requestedAmount: null, currency: 'EUR' });
   }
