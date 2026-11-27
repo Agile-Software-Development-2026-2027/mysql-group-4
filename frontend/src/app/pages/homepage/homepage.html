@@ -32,17 +32,28 @@
       Tap below to upload photos of your receipts now—they'll be ready when you submit your reimbursement request.
     </p>
 
-    <label class="mobile-upload-zone">
-      <input type="file" multiple accept="image/*,.pdf" (change)="onReceiptsSelected($event)" hidden />
+    <label class="mobile-upload-zone" [class.is-busy]="isMobileUploading()">
+      <input
+        type="file"
+        multiple
+        accept=".pdf,.png,.jpg,.jpeg,.webp"
+        [disabled]="isMobileUploading()"
+        (change)="onReceiptsSelected($event)"
+        hidden
+      />
       <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
       </svg>
-      <span class="mobile-upload-zone__cta">Upload receipts</span>
+      <span class="mobile-upload-zone__cta">
+        {{ isMobileUploading() ? 'Processing receipts…' : 'Upload receipts' }}
+      </span>
       <span class="mobile-upload-zone__hint">
-        @if (selectedReceiptsCount() > 0) {
-          {{ selectedReceiptsCount() }} {{ selectedReceiptsCount() === 1 ? 'document' : 'documents' }} selected
+        @if (isMobileUploading()) {
+          Uploading &amp; running OCR/AI extraction…
+        } @else if (selectedReceiptsCount() > 0) {
+          {{ selectedReceiptsCount() }} {{ selectedReceiptsCount() === 1 ? 'document' : 'documents' }} processed
         } @else {
-          Photos or PDF documents
+          Photos or PDF documents (max 10MB)
         }
       </span>
     </label>
@@ -152,11 +163,36 @@
     </div>
     @if (live) {
     <div class="mission-card__receipts">
+      @if (refundLoading()) {
+      <p class="mission-card__receipts-copy">Checking refund request status…</p>
+      } @else if (canUploadReceipts()) {
       <p class="mission-card__receipts-copy">
         Start uploading your receipt photos as you go—once your mission ends, your reimbursement request will be ready to submit.
       </p>
-      <button type="button" class="btn">Upload receipts</button>
+      <button type="button" class="btn" (click)="openQuickUploadModal($event)">Upload receipt</button>
+      } @else {
+      <p class="mission-card__receipts-copy">
+        Start a refund request from your mission details to enable quick receipt uploads here.
+      </p>
+      <a
+        routerLink="/missionreview"
+        [queryParams]="{ view: 'requester', missionId: mission.id }"
+        class="btn btn--outline"
+        (click)="$event.stopPropagation()"
+      >
+        Start refund request →
+      </a>
+      }
     </div>
     }
   </article>
 </ng-template>
+
+@if (isQuickUploadOpen() && currentMissionRefund(); as refund) {
+  <app-quick-upload-receipt-modal
+    [refundId]="refund.id"
+    [missionSubject]="currentMission()?.subject ?? null"
+    (itemCreated)="onReceiptUploaded($event)"
+    (closed)="closeQuickUploadModal()"
+  />
+}

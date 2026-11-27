@@ -280,7 +280,7 @@ async def batch_process_receipts(
 
 @refund_router.post("/{refund_id}/receipts/quick-upload",response_model=RefundItemDTO,status_code=status.HTTP_201_CREATED,summary="Upload a single receipt, run OCR/AI extraction, and create a draft item pending review")
 async def quick_upload_receipt(refund_id: UUID,user: CurrentUser,refund_service: RefundServiceDependency,currency_service: CurrencyServiceDependency,receipt_ai_service: ReceiptAIServiceDependency,file: UploadFile = File(...)) -> RefundItemDTO:
-    return await refund_service.pro qcess_single_receipt(
+    return await refund_service.process_single_receipt(
         refund_request_id=refund_id,
         file=file,
         user=user,
