@@ -703,21 +703,6 @@ export class AddRefundItemModal implements OnInit, OnChanges {
           this.form.patchValue({ currency: 'EUR' });
         }
 
-        if (dto.convertedAmountEur && dto.exchangeRate) {
-          const extractedCurrency = dto.currency?.toUpperCase() ?? 'EUR';
-          this.conversionInfo.set({
-            originalCurrency: extractedCurrency,
-            originalAmount: dto.amount ?? 0,
-            convertedAmount: dto.convertedAmountEur,
-            rate: dto.exchangeRate,
-          });
-          this.euroEquivalent.set(dto.convertedAmountEur);
-        } else if (this.foreignCurrency() === 'EUR' && dto.amount != null) {
-          this.euroEquivalent.set(dto.amount);
-        } else {
-          this.euroEquivalent.set(null);
-        }
-
         const hasExtractedFields = Boolean(
           dto.category ||
           dto.subtype ||
@@ -745,6 +730,20 @@ export class AddRefundItemModal implements OnInit, OnChanges {
         }
 
         this.populateFromOcr(patch);
+        if (dto.convertedAmountEur && dto.exchangeRate) {
+          const extractedCurrency = dto.currency?.toUpperCase() ?? 'EUR';
+          this.conversionInfo.set({
+            originalCurrency: extractedCurrency,
+            originalAmount: dto.amount ?? 0,
+            convertedAmount: dto.convertedAmountEur,
+            rate: dto.exchangeRate,
+          });
+          this.euroEquivalent.set(dto.convertedAmountEur);
+        } else if (this.foreignCurrency() === 'EUR' && dto.amount != null) {
+          this.euroEquivalent.set(dto.amount);
+        } else {
+          this.euroEquivalent.set(null);
+        }
         this.toastService.showSuccess(
           'Receipt analyzed with AI. Fields have been pre-filled.',
           'AI Auto-Fill'
