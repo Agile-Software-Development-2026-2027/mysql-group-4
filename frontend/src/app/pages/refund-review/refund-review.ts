@@ -1,15 +1,15 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { DatePipe, DecimalPipe } from '@angular/common';
-import { ActivatedRoute } from '@angular/router';
+import { DatePipe, DecimalPipe, Location, NgTemplateOutlet } from '@angular/common';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Topbar } from '../../components/topbar/topbar';
-import { RefundApprovePayload, RefundItemDTO, RefundReviewDTO, RefundStatus } from '../../core/models';
+import { ExpenseCategory, RefundApprovePayload, RefundItemDTO, RefundReviewDTO, RefundStatus } from '../../core/models';
 import { RefundService } from '../../services/refund.service';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { ToastService } from '../../services/toast.service';
 
 @Component({
   selector: 'app-refund-review',
-  imports: [Topbar, DatePipe, DecimalPipe],
+  imports: [Topbar, DatePipe, DecimalPipe, NgTemplateOutlet],
   templateUrl: './refund-review.html',
   styleUrl: './refund-review.scss',
 })
@@ -18,6 +18,11 @@ export class RefundReview {
   private refundService = inject(RefundService);
   private toastService = inject(ToastService);
   private sanitizer = inject(DomSanitizer);
+  private location = inject(Location);
+  private router = inject(Router);
+
+  readonly ExpenseCategory = ExpenseCategory;
+  readonly skeletonRows = [1, 2, 3];
 
   readonly refund = signal<RefundReviewDTO | null>(null);
   readonly loadError = signal(false);
@@ -233,5 +238,19 @@ export class RefundReview {
     if (receipt) URL.revokeObjectURL(receipt.fileURL);
     this.zoomed.set(false);
     this.receipt.set(null);
+  }
+
+    goBack(): void {
+    if (window.history.length > 1) {
+      this.location.back();
+    } else {
+      this.router.navigate(['/']);
+    }
+  }
+
+  humanize(value: string | null | undefined): string {
+    if (!value) return '—';
+    const text = value.replace(/_/g, ' ').toLowerCase();
+    return text.charAt(0).toUpperCase() + text.slice(1);
   }
 }
