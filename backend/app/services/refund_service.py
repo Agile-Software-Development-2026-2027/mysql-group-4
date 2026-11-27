@@ -37,11 +37,13 @@ from app.db.refund_request import RefundRequest
 from app.schemas.page import Page, PageRequest
 from app.schemas.receipt_ai import BoundingBoxDTO, ReceiptAutocompleteDTO
 from app.schemas.refund import (
+    MarkNotificationsSeenDTO,
     RefundApproveDTO,
     RefundItemFilterDTO,
     RefundItemUpdateDTO,
     RefundItemCreateDTO,
     RefundItemDTO,
+    RefundNotificationDTO,
     RefundReceiptUploadDTO,
     RefundRequestCreateDTO,
     RefundRequestDTO,
@@ -327,6 +329,38 @@ class RefundService:
             await self.session.flush()
 
             return RefundItemDTO.model_validate(saved)
+
+    async def get_unseen_notifications(self, user: User) -> list[RefundNotificationDTO]:
+        refunds = await self.refund_repository.find_unseen_approved_for_requester(
+            self.session, user.id
+        )
+        return [
+            RefundNotificationDTO(
+                refund_id=r.id,
+                mission_id=r.mission_id,
+                mission_subject=r.mission.subject,
+                mission_destination=r.mission.destination,
+                total_requested_amount=r.total_requested_amount,
+                total_reimbursed_amount=r.total_reimbursed_amount,
+                approved_at=r.approved_at or r.updated_at,
+                admin_notes=list(
+                    dict.fromkeys(
+                        item.admin_notes.strip()
+                        for item in r.items
+                        if item.admin_notes and item.admin_notes.strip()
+                    )
+                ),
+            )
+            for r in refunds
+        ]
+
+    async def mark_notifications_seen(
+        self, user: User, payload: MarkNotificationsSeenDTO
+    ) -> None:
+        async with self.transaction():
+            await self.refund_repository.mark_seen_for_requester(
+                self.session, user.id, payload.refund_ids
+            )
 
     async def get_filtered_refunds(self, user: User, filters: RefundFilterDTO | None = None) -> list[RefundOverviewDTO]:
         if not user.is_superuser:

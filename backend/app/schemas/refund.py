@@ -115,11 +115,29 @@ class RefundRequestDTO(CamelModel):
     total_reimbursed_amount: Decimal
     submitted_at: datetime | None = None
     approved_at: datetime | None = None
+    seen_by_requester: bool = False
     created_at: datetime
     updated_at: datetime
     created_by: UUID | None = None
     updated_by: UUID | None = None
     items: list[RefundItemDTO] = Field(default_factory=list)
+
+
+class RefundNotificationDTO(CamelModel):
+    refund_id: UUID
+    mission_id: UUID
+    mission_subject: str
+    mission_destination: str
+    total_requested_amount: Decimal
+    total_reimbursed_amount: Decimal
+    approved_at: datetime
+    admin_notes: list[str] = Field(default_factory=list)
+
+
+class MarkNotificationsSeenDTO(CamelModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    refund_ids: list[UUID] = Field(min_length=1)
 
 
 class RefundRequesterDTO(CamelModel):

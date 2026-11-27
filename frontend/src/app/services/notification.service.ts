@@ -1,23 +1,21 @@
-import { Injectable, Injector, computed, effect, inject, signal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Subscription, forkJoin, interval, of } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { Injectable, computed, effect, inject, signal } from '@angular/core';
+import { Subscription, interval, of } from 'rxjs';
+import { catchError, finalize } from 'rxjs/operators';
 
-import { MissionDTO, RefundRequestDTO, RefundStatus } from '../core/models';
+import { RefundNotificationDTO } from '../core/models';
 import { AuthService } from './auth.service';
-import { MissionService } from './mission.service';
 import { RefundService } from './refund.service';
 import { ToastService } from './toast.service';
 
 export interface DashboardNotification {
   key: string;
+  refundId: string;
+  missionId: string;
   variant: 'success' | 'danger';
   title: string;
   message: string;
   feedback: string | null;
   approvedAt: string;
-  mission: MissionDTO;
-  refundId: string;
 }
 
 const POLL_INTERVAL_MS = 30_000;
@@ -26,176 +24,149 @@ const POLL_INTERVAL_MS = 30_000;
   providedIn: 'root',
 })
 export class NotificationService {
-  private injector = inject(Injector);
-  private http = inject(HttpClient, { optional: true });
+  private authService = inject(AuthService);
+  private refundService = inject(RefundService);
   private toastService = inject(ToastService);
 
   private pollSub: Subscription | null = null;
+  private refreshSub: Subscription | null = null;
   private toastedKeys = new Set<string>();
+  private pendingSeenIds = new Set<string>();
   private activeUserId: string | null = null;
-  private isRefreshing = false;
+  private initialLoadDone = false;
 
   readonly notifications = signal<DashboardNotification[]>([]);
   readonly unreadCount = computed(() => this.notifications().length);
   readonly hasUnread = computed(() => this.unreadCount() > 0);
 
   constructor() {
-    if (!this.http) {
-      return;
-    }
-
-    const authService = this.injector.get(AuthService);
-
     effect(() => {
-      const user = authService.currentUser();
-      const isAdmin = authService.isAdmin();
+      const user = this.authService.currentUser();
+      const isAdmin = this.authService.isAdmin();
 
       if (!user || isAdmin) {
         this.stopPolling();
         this.activeUserId = null;
+        this.initialLoadDone = false;
         this.toastedKeys.clear();
+        this.pendingSeenIds.clear();
         this.notifications.set([]);
         return;
       }
 
       if (this.activeUserId !== user.id) {
+        this.stopPolling();
         this.activeUserId = user.id;
+        this.initialLoadDone = false;
         this.toastedKeys.clear();
+        this.pendingSeenIds.clear();
+        this.notifications.set([]);
         this.startPolling();
       }
     });
   }
 
   refresh(emitToastForNew = false): void {
-    if (!this.http || !this.activeUserId || this.isRefreshing) {
+    const userId = this.activeUserId;
+    if (!userId) {
       return;
     }
 
-    const userId = this.activeUserId;
-    const missionService = this.injector.get(MissionService);
-    const refundService = this.injector.get(RefundService);
+    this.refreshSub?.unsubscribe();
+    const shouldEmitToast = emitToastForNew && this.initialLoadDone;
 
-    this.isRefreshing = true;
-    missionService
-      .getMyCompletedMissions()
+    this.refreshSub = this.refundService
+      .getMyNotifications()
       .pipe(catchError(() => of(null)))
-      .subscribe((page) => {
-        if (this.activeUserId !== userId) {
-          this.isRefreshing = false;
+      .subscribe((items) => {
+        if (this.activeUserId !== userId || items === null) {
           return;
         }
 
-        const completedMissions = page?.content ?? [];
-        if (completedMissions.length === 0) {
-          this.notifications.set([]);
-          this.isRefreshing = false;
-          return;
+        const built = items
+          .filter((dto) => !this.pendingSeenIds.has(dto.refundId))
+          .map((dto) => this.buildRefundNotification(dto));
+        const previousKeys = new Set(this.notifications().map((n) => n.key));
+        this.notifications.set(built);
+        this.initialLoadDone = true;
+
+        if (shouldEmitToast) {
+          for (const item of built) {
+            if (!previousKeys.has(item.key) && !this.toastedKeys.has(item.key)) {
+              this.toastedKeys.add(item.key);
+              const detail = item.feedback ? `${item.message} Admin note: ${item.feedback}` : item.message;
+              if (item.variant === 'success') {
+                this.toastService.showSuccess(detail, item.title);
+              } else {
+                this.toastService.showError(detail, item.title);
+              }
+            }
+          }
+        } else {
+          for (const item of built) {
+            this.toastedKeys.add(item.key);
+          }
         }
-
-        forkJoin(
-          completedMissions.map((mission) =>
-            refundService.getByMissionId(mission.id).pipe(
-              catchError(() => of(null))
-            )
-          )
-        ).subscribe({
-          next: (refunds) => {
-            this.isRefreshing = false;
-            if (this.activeUserId !== userId) {
-              return;
-            }
-
-            const seenMap = this.loadSeenMap(userId);
-            const built: DashboardNotification[] = [];
-
-            completedMissions.forEach((mission, index) => {
-              const refund = refunds[index];
-              if (!refund || refund.status !== RefundStatus.APPROVED) {
-                return;
-              }
-              const notification = this.buildRefundNotification(mission, refund);
-              if (!seenMap[notification.key]) {
-                built.push(notification);
-              }
-            });
-
-            built.sort((a, b) => b.approvedAt.localeCompare(a.approvedAt));
-
-            const previousKeys = new Set(this.notifications().map((n) => n.key));
-            this.notifications.set(built);
-
-            if (emitToastForNew) {
-              for (const item of built) {
-                if (!previousKeys.has(item.key) && !this.toastedKeys.has(item.key)) {
-                  this.toastedKeys.add(item.key);
-                  if (item.variant === 'success') {
-                    this.toastService.showSuccess(item.message, item.title);
-                  } else {
-                    const detail = item.feedback ? `${item.message} ${item.feedback}` : item.message;
-                    this.toastService.showError(detail, item.title);
-                  }
-                }
-              }
-            } else {
-              for (const item of built) {
-                this.toastedKeys.add(item.key);
-              }
-            }
-          },
-          error: () => {
-            this.isRefreshing = false;
-          },
-        });
       });
   }
 
-  markAsSeen(key: string): void {
-    const userId = this.activeUserId;
-    if (userId) {
-      const seenMap = this.loadSeenMap(userId);
-      seenMap[key] = new Date().toISOString();
-      this.saveSeenMap(userId, seenMap);
-    }
-    this.notifications.update((list) => list.filter((item) => item.key !== key));
+  markAsSeen(refundId: string): void {
+    const user = this.authService.currentUser();
+    this.notifications.update((list) => list.filter((item) => item.refundId !== refundId));
+    if (!user || this.authService.isAdmin()) return;
+
+    this.pendingSeenIds.add(refundId);
+    this.refundService
+      .markNotificationsSeen([refundId])
+      .pipe(
+        catchError(() => of(undefined)),
+        finalize(() => this.pendingSeenIds.delete(refundId))
+      )
+      .subscribe();
   }
 
   markAllAsSeen(): void {
-    const userId = this.activeUserId;
-    const current = this.notifications();
-    if (userId && current.length > 0) {
-      const seenMap = this.loadSeenMap(userId);
-      const now = new Date().toISOString();
-      for (const item of current) {
-        seenMap[item.key] = now;
-      }
-      this.saveSeenMap(userId, seenMap);
-    }
+    const user = this.authService.currentUser();
+    const ids = this.notifications().map((item) => item.refundId);
     this.notifications.set([]);
+    if (!user || this.authService.isAdmin() || ids.length === 0) return;
+
+    ids.forEach((id) => this.pendingSeenIds.add(id));
+    this.refundService
+      .markNotificationsSeen(ids)
+      .pipe(
+        catchError(() => of(undefined)),
+        finalize(() => ids.forEach((id) => this.pendingSeenIds.delete(id)))
+      )
+      .subscribe();
+  }
+
+  markVisibleAsSeenOnLeave(): void {
+    this.markAllAsSeen();
   }
 
   private startPolling(): void {
     this.stopPolling();
     this.refresh(false);
     this.pollSub = interval(POLL_INTERVAL_MS).subscribe(() => {
-      this.refresh(true);
+      if (typeof document === 'undefined' || !document.hidden) {
+        this.refresh(true);
+      }
     });
   }
 
   private stopPolling(): void {
     this.pollSub?.unsubscribe();
     this.pollSub = null;
+    this.refreshSub?.unsubscribe();
+    this.refreshSub = null;
   }
 
-  private buildRefundNotification(mission: MissionDTO, refund: RefundRequestDTO): DashboardNotification {
-    const requested = Number(refund.totalRequestedAmount ?? 0);
-    const reimbursed = Number(refund.totalReimbursedAmount ?? 0);
-    const approvedAt = refund.approvedAt ?? refund.updatedAt;
-    const key = `refund:${refund.id}:${approvedAt}`;
-
-    const isFullRefund = reimbursed >= requested && requested > 0;
-    const notes = (refund.items ?? [])
-      .map((item) => item.adminNotes?.trim())
-      .filter((note): note is string => Boolean(note));
+  private buildRefundNotification(dto: RefundNotificationDTO): DashboardNotification {
+    const requested = Number(dto.totalRequestedAmount ?? 0);
+    const reimbursed = Number(dto.totalReimbursedAmount ?? 0);
+    const key = `refund:${dto.refundId}:${dto.approvedAt}`;
+    const notes = (dto.adminNotes ?? []).map((n) => n.trim()).filter(Boolean);
     const feedback = notes.length > 0 ? notes.join(' · ') : null;
 
     const fmt = (val: number) =>
@@ -204,65 +175,38 @@ export class NotificationService {
     if (reimbursed === 0) {
       return {
         key,
+        refundId: dto.refundId,
+        missionId: dto.missionId,
         variant: 'danger',
-        title: 'Refund Not Approved (€ 0.00)',
-        message: `€ ${fmt(reimbursed)} out of € ${fmt(requested)} requested was refunded for "${mission.subject}".`,
+        title: 'Refund Not Approved',
+        message: `€ ${fmt(reimbursed)} out of € ${fmt(requested)} requested was refunded for "${dto.missionSubject}".`,
         feedback,
-        approvedAt,
-        mission,
-        refundId: refund.id,
+        approvedAt: dto.approvedAt,
       };
     }
 
-    if (isFullRefund) {
+    if (reimbursed >= requested && requested > 0) {
       return {
         key,
+        refundId: dto.refundId,
+        missionId: dto.missionId,
         variant: 'success',
         title: 'Refund Approved',
-        message: `Your reimbursement of € ${fmt(reimbursed)} for "${mission.subject}" has been approved.`,
+        message: `Your reimbursement of € ${fmt(reimbursed)} for "${dto.missionSubject}" has been approved.`,
         feedback,
-        approvedAt,
-        mission,
-        refundId: refund.id,
+        approvedAt: dto.approvedAt,
       };
     }
 
     return {
       key,
+      refundId: dto.refundId,
+      missionId: dto.missionId,
       variant: 'success',
       title: 'Refund Partially Approved',
-      message: `€ ${fmt(reimbursed)} out of € ${fmt(requested)} requested was refunded for "${mission.subject}".`,
+      message: `€ ${fmt(reimbursed)} out of € ${fmt(requested)} requested was refunded for "${dto.missionSubject}".`,
       feedback,
-      approvedAt,
-      mission,
-      refundId: refund.id,
+      approvedAt: dto.approvedAt,
     };
-  }
-
-  private storageKey(userId: string): string {
-    return `mysol_seen_notifications_${userId}`;
-  }
-
-  private loadSeenMap(userId: string): Record<string, string> {
-    if (typeof localStorage === 'undefined') {
-      return {};
-    }
-    try {
-      const raw = localStorage.getItem(this.storageKey(userId));
-      return raw ? (JSON.parse(raw) as Record<string, string>) : {};
-    } catch {
-      return {};
-    }
-  }
-
-  private saveSeenMap(userId: string, map: Record<string, string>): void {
-    if (typeof localStorage === 'undefined') {
-      return;
-    }
-    try {
-      localStorage.setItem(this.storageKey(userId), JSON.stringify(map));
-    } catch {
-      // Ignore storage quota / privacy mode errors
-    }
   }
 }

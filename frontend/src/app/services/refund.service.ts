@@ -15,6 +15,7 @@ import {
   RefundItemDTO,
   RefundItemFilterPayload,
   RefundItemUpdatePayload,
+  RefundNotificationDTO,
   RefundReceiptUploadDTO,
   RefundRequestCreatePayload,
   RefundRequestDTO,
@@ -151,6 +152,21 @@ export class RefundService {
     return this.http.post<RefundOverviewDTO[]>(
       API_CONFIG.endpoints.refunds.filter,
       payload,
+      { withCredentials: true }
+    );
+  }
+
+  getMyNotifications(): Observable<RefundNotificationDTO[]> {
+    return this.http.get<RefundNotificationDTO[]>(
+      API_CONFIG.endpoints.refunds.myNotifications,
+      { withCredentials: true }
+    );
+  }
+
+  markNotificationsSeen(refundIds: string[]): Observable<void> {
+    return this.http.patch<void>(
+      API_CONFIG.endpoints.refunds.markNotificationsSeen,
+      { refundIds },
       { withCredentials: true }
     );
   }

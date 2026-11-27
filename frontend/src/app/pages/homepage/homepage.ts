@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { Topbar } from '../../components/topbar/topbar';
@@ -22,7 +22,7 @@ function toNaiveIso(date: Date): string {
   templateUrl: './homepage.html',
   styleUrl: './homepage.scss',
 })
-export class Homepage implements OnInit {
+export class Homepage implements OnInit, OnDestroy {
   private missionService = inject(MissionService);
   private authService = inject(AuthService);
   private notificationService = inject(NotificationService);
@@ -54,19 +54,24 @@ export class Homepage implements OnInit {
   }
 
   onOpenNotification(item: DashboardNotification): void {
-    this.notificationService.markAsSeen(item.key);
+    this.notificationService.markAsSeen(item.refundId);
     this.router.navigate(['/missionreview'], {
-      queryParams: { view: 'requester' },
-      state: { mission: item.mission },
+      queryParams: { view: 'requester', missionId: item.missionId },
     });
   }
 
-  onDismissNotification(key: string): void {
-    this.notificationService.markAsSeen(key);
+  onDismissNotification(refundId: string): void {
+    this.notificationService.markAsSeen(refundId);
   }
 
   onDismissAllNotifications(): void {
     this.notificationService.markAllAsSeen();
+  }
+
+  ngOnDestroy(): void {
+    if (!this.showMobileActiveFocus()) {
+      this.notificationService.markVisibleAsSeenOnLeave();
+    }
   }
 
   ngOnInit(): void {

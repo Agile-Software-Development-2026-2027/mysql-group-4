@@ -1,7 +1,7 @@
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -122,5 +122,42 @@ class RefundRepository:
 
         result = await session.execute(query)
         return list(result.scalars().unique().all())
+
+    async def find_unseen_approved_for_requester(
+        self, session: AsyncSession, user_id: UUID
+    ) -> list[RefundRequest]:
+        stmt = (
+            select(RefundRequest)
+            .join(Mission, RefundRequest.mission_id == Mission.id)
+            .where(
+                Mission.requester_id == user_id,
+                RefundRequest.status == RefundStatus.APPROVED,
+                RefundRequest.seen_by_requester.is_(False),
+            )
+            .options(
+                selectinload(RefundRequest.mission),
+                selectinload(RefundRequest.items),
+            )
+            .order_by(RefundRequest.approved_at.desc(), RefundRequest.updated_at.desc())
+        )
+        result = await session.execute(stmt)
+        return list(result.scalars().unique().all())
+
+    async def mark_seen_for_requester(
+        self, session: AsyncSession, user_id: UUID, refund_ids: list[UUID]
+    ) -> None:
+        if not refund_ids:
+            return
+        owned_mission_ids = select(Mission.id).where(Mission.requester_id == user_id)
+        stmt = (
+            update(RefundRequest)
+            .where(
+                RefundRequest.id.in_(refund_ids),
+                RefundRequest.mission_id.in_(owned_mission_ids),
+                RefundRequest.status == RefundStatus.APPROVED,
+            )
+            .values(seen_by_requester=True)
+        )
+        await session.execute(stmt)
 
 refund_repository = RefundRepository()
