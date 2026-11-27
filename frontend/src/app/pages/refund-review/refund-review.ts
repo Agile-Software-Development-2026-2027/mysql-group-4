@@ -24,12 +24,24 @@ export class RefundReview {
   readonly expandedId = signal<string | null>(null);
   readonly refundableInputs = signal<Record<string, string>>({});
   readonly refundableAmounts = signal<Record<string, number>>({});
+  readonly fullRefundIds = signal<Set<string>>(new Set());
   readonly notes = signal<Record<string, string>>({});
   readonly receipt = signal<{ itemId: string; url: SafeResourceUrl; fileURL: string; isPdf: boolean; filename: string } | null>(null);
   readonly confirmOpen = signal(false);
   readonly zoomed = signal(false);
 
   readonly isEditable = computed(() => this.refund()?.status === RefundStatus.SUBMITTED);
+
+  readonly allFullRefundSelected = computed(() => {
+    const items = this.refund()?.items ?? [];
+    return items.length > 0 && items.every((item) => this.fullRefundIds().has(item.id));
+  });
+
+  readonly someFullRefundSelected = computed(() => {
+    const items = this.refund()?.items ?? [];
+    if (items.length === 0 || this.allFullRefundSelected()) return false;
+    return items.some((item) => this.fullRefundIds().has(item.id) || this.isItemPartialRefund(item));
+  });
 
   readonly totalRequested = computed(() =>
     (this.refund()?.items ?? []).reduce((sum, item) => sum + Number(item.requestedAmount), 0)
@@ -115,6 +127,53 @@ export class RefundReview {
 
     this.refundableInputs.update((inputs) => ({ ...inputs, [id]: sanitized }));
     this.refundableAmounts.update((amounts) => ({ ...amounts, [id]: Number(sanitized) || 0 }));
+
+    const item = this.refund()?.items.find((i) => i.id === id);
+    const parsed = Number(sanitized);
+    const isFull = !!item && sanitized !== '' && !Number.isNaN(parsed) && parsed === Number(item.requestedAmount);
+    if (isFull !== this.fullRefundIds().has(id)) {
+      this.fullRefundIds.update((prev) => {
+        const next = new Set(prev);
+        if (isFull) next.add(id);
+        else next.delete(id);
+        return next;
+      });
+    }
+  }
+
+  isItemFullRefund(id: string): boolean {
+    return this.fullRefundIds().has(id);
+  }
+
+  isItemPartialRefund(item: RefundItemDTO): boolean {
+    const amount = this.refundableAmounts()[item.id] ?? 0;
+    return amount > 0 && amount < Number(item.requestedAmount);
+  }
+
+  toggleItemFullRefund(item: RefundItemDTO, checked: boolean): void {
+    this.applyFullRefund([item], checked);
+  }
+
+  toggleAllFullRefund(checked: boolean): void {
+    this.applyFullRefund(this.refund()?.items ?? [], checked);
+  }
+
+  private applyFullRefund(items: RefundItemDTO[], checked: boolean): void {
+    const nextSelected = new Set(this.fullRefundIds());
+    const nextInputs = { ...this.refundableInputs() };
+    const nextAmounts = { ...this.refundableAmounts() };
+
+    for (const item of items) {
+      const amount = checked ? Number(item.requestedAmount) : 0;
+      nextInputs[item.id] = checked ? amount.toFixed(2) : '';
+      nextAmounts[item.id] = amount;
+      if (checked) nextSelected.add(item.id);
+      else nextSelected.delete(item.id);
+    }
+
+    this.fullRefundIds.set(nextSelected);
+    this.refundableInputs.set(nextInputs);
+    this.refundableAmounts.set(nextAmounts);
   }
 
   setNote(id: string, value: string): void {
@@ -137,6 +196,7 @@ export class RefundReview {
     this.refundService.approve(refund.id, payload).subscribe({
       next: (updated) => {
         this.refund.set(updated);
+        this.fullRefundIds.set(new Set());
         this.expandedId.set(null);
       },
       error: (err) => {
