@@ -1,0 +1,67 @@
+@if (notifications().length > 0) {
+  <section class="notifications-section" aria-label="Refund status updates">
+    @if (notifications().length > 1) {
+      <div class="notifications-toolbar">
+        <span class="notifications-toolbar__count">
+          {{ notifications().length }} new refund updates
+        </span>
+        <button type="button" class="notifications-toolbar__clear" (click)="dismissAll.emit()">
+          Mark all as read
+        </button>
+      </div>
+    }
+
+    <ul class="notification-list">
+      @for (item of notifications(); track item.key) {
+        <li
+          class="card notification-banner"
+          [class.notification-banner--success]="item.variant === 'success'"
+          [class.notification-banner--danger]="item.variant === 'danger'"
+          role="status"
+          tabindex="0"
+          (click)="onCardClick(item)"
+          (keydown.enter)="onCardClick(item)"
+          (keydown.space)="onCardClick(item); $event.preventDefault()"
+        >
+          <span class="notification-banner__icon" aria-hidden="true">
+            @if (item.variant === 'success') {
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            } @else {
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            }
+          </span>
+
+          <div class="notification-banner__body">
+            <strong class="notification-banner__title">{{ item.title }}</strong>
+            <p class="notification-banner__message">{{ item.message }}</p>
+            @if (item.feedback) {
+              <p class="notification-banner__feedback">
+                <strong>Admin note:</strong> {{ item.feedback }}
+              </p>
+            }
+          </div>
+
+          <button
+            type="button"
+            class="notification-banner__close"
+            aria-label="Dismiss notification"
+            title="Dismiss notification"
+            (click)="onDismissClick(item.refundId, $event)"
+            (keydown.enter)="$event.stopPropagation()"
+            (keydown.space)="$event.stopPropagation()"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </li>
+      }
+    </ul>
+  </section>
+}

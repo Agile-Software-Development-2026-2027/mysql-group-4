@@ -13,11 +13,13 @@ from app.schemas.currency import CurrencyConversionDTO, MissionCurrencyProfileDT
 from app.schemas.page import Page, PageRequest
 from app.schemas.receipt_ai import BoundingBoxDTO, ReceiptAutocompleteDTO, ReceiptDetectionResponseDTO
 from app.schemas.refund import (
+    MarkNotificationsSeenDTO,
     RefundApproveDTO,
     RefundItemCreateDTO,
     RefundItemDTO,
     RefundItemFilterDTO,
     RefundItemUpdateDTO,
+    RefundNotificationDTO,
     RefundReceiptUploadDTO,
     RefundRequestCreateDTO,
     RefundRequestDTO,
@@ -51,6 +53,30 @@ Pagination = Annotated[PageRequest, Depends(get_page_request)]
 @refund_router.post("", response_model=RefundRequestDTO, status_code=status.HTTP_201_CREATED)
 async def create_refund_request(refund_request: RefundRequestCreateDTO, user: CurrentUser, service: RefundServiceDependency) -> RefundRequestDTO:
     return await service.create_refund_request(refund_request, user)
+
+
+@refund_router.get(
+    "/my/notifications",
+    response_model=list[RefundNotificationDTO],
+    summary="Get unseen approved refund notifications for the current user",
+)
+async def get_my_refund_notifications(
+    user: CurrentUser, service: RefundServiceDependency
+) -> list[RefundNotificationDTO]:
+    return await service.get_unseen_notifications(user)
+
+
+@refund_router.patch(
+    "/my/notifications/seen",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Mark approved refund notifications as seen for the current user",
+)
+async def mark_my_refund_notifications_seen(
+    payload: MarkNotificationsSeenDTO,
+    user: CurrentUser,
+    service: RefundServiceDependency,
+) -> None:
+    await service.mark_notifications_seen(user, payload)
 
 
 @refund_router.get("/by-mission/{mission_id}", response_model=RefundRequestDTO | None, summary="Get refund request associated with a mission")

@@ -1858,3 +1858,57 @@ async def test_batch_process_receipts_business_errors(
         data={"boxes": json.dumps([{"x": 10, "y": 10, "width": 50, "height": 50}])},
     )
     assert resp_submitted.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_my_refund_notifications_and_mark_seen(
+    client: AsyncClient, db_session: AsyncSession, requester: User, other_user: User
+):
+    mission = await create_mission(db_session, requester.id, ended=True)
+    refund = RefundRequest(
+        mission_id=mission.id,
+        status=RefundStatus.APPROVED,
+        total_requested_amount=Decimal("60.00"),
+        total_reimbursed_amount=Decimal("10.00"),
+        approved_at=datetime.now(),
+        created_by=requester.id,
+    )
+    db_session.add(refund)
+    await db_session.flush()
+    item = _make_test_item(refund.id, requester.id, Decimal("60.00"))
+    item.reimbursed_amount = Decimal("10.00")
+    item.admin_notes = "Only daily cap reimbursed"
+    db_session.add(item)
+    await db_session.commit()
+
+    # Another user must not see requester's notifications or mark them seen
+    app.dependency_overrides[current_active_user] = lambda: other_user
+    other_resp = await client.get("/api/v1/refunds/my/notifications")
+    assert other_resp.status_code == 200
+    assert other_resp.json() == []
+
+    await client.patch(
+        "/api/v1/refunds/my/notifications/seen",
+        json={"refundIds": [str(refund.id)]},
+    )
+
+    # Requester still sees the unseen approved refund
+    app.dependency_overrides[current_active_user] = lambda: requester
+    list_resp = await client.get("/api/v1/refunds/my/notifications")
+    assert list_resp.status_code == 200
+    data = list_resp.json()
+    assert len(data) == 1
+    assert data[0]["refundId"] == str(refund.id)
+    assert data[0]["totalReimbursedAmount"] == "10.00"
+    assert data[0]["adminNotes"] == ["Only daily cap reimbursed"]
+
+    # Requester marks it as seen -> no longer returned
+    seen_resp = await client.patch(
+        "/api/v1/refunds/my/notifications/seen",
+        json={"refundIds": [str(refund.id)]},
+    )
+    assert seen_resp.status_code == 204
+
+    empty_resp = await client.get("/api/v1/refunds/my/notifications")
+    assert empty_resp.status_code == 200
+    assert empty_resp.json() == []

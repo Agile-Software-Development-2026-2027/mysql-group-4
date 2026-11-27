@@ -68,6 +68,13 @@
     }
   </header>
 
+  <app-notification-banners
+    [notifications]="notifications()"
+    (open)="onOpenNotification($event)"
+    (dismiss)="onDismissNotification($event)"
+    (dismissAll)="onDismissAllNotifications()"
+  />
+
   <section aria-labelledby="new-mission-heading">
     <h2 id="new-mission-heading" class="section-title">Create a New Mission Request</h2>
     <div class="card hero-action">
