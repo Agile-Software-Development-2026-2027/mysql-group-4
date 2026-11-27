@@ -150,7 +150,8 @@ class RefundService:
 
             await self.session.flush()
             await self.session.refresh(refund)
-            result = RefundRequestDTO.model_validate(refund)
+            loaded = await self.refund_repository.find_by_id(self.session, refund_id)
+            result = RefundRequestDTO.model_validate(loaded)
 
         logger.info("Refund request %s submitted by user %s", refund_id, user.id)
         return result
