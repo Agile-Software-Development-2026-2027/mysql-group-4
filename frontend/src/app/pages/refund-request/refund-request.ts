@@ -91,7 +91,7 @@ export class RefundRequestComponent implements OnInit, OnDestroy {
     itineraryTo: [''],
     startsAt: ['', Validators.required],
     endsAt: [''],
-    requestedAmount: [null, [Validators.required, Validators.min(0.01), Validators.max(10000)]],
+    requestedAmount: [null, [Validators.required, Validators.min(0.01), Validators.max(1000000)]],
     isTraceable: [true],
     description: ['', [Validators.required, Validators.maxLength(255)]],
   }, { validators: [this.dateConsistencyValidator()] });

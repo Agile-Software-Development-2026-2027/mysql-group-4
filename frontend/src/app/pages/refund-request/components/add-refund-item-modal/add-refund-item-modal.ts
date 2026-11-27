@@ -102,7 +102,6 @@ export class AddRefundItemModal implements OnInit, OnChanges {
   ocrRawText = signal<string | null>(null);
   minDateTime = signal<string | null>(null);
   maxDateTime = signal<string | null>(null);
-  minIssuedDate = signal<string | null>(null);
   maxIssuedDate = signal<string | null>(null);
   missionPeriodLabel = signal<string>('');
   form!: FormGroup;
@@ -189,7 +188,6 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     if (!this.missionStartsAt || !this.missionEndsAt) {
       this.minDateTime.set(null);
       this.maxDateTime.set(null);
-      this.minIssuedDate.set(null);
       this.maxIssuedDate.set(null);
       this.missionPeriodLabel.set('');
       return;
@@ -199,14 +197,12 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
       this.minDateTime.set(null);
       this.maxDateTime.set(null);
-      this.minIssuedDate.set(null);
       this.maxIssuedDate.set(null);
       this.missionPeriodLabel.set('');
       return;
     }
     this.minDateTime.set(this.toDateTimeLocalString(start));
     this.maxDateTime.set(this.toDateTimeLocalString(end));
-    this.minIssuedDate.set(this.toDateTimeLocalString(start).slice(0, 10));
     this.maxIssuedDate.set(this.toDateTimeLocalString(end).slice(0, 10));
     const startStr = start.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
     const endStr = end.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
@@ -240,11 +236,9 @@ export class AddRefundItemModal implements OnInit, OnChanges {
       return false;
     }
 
-    const minIssuedDate = this.minIssuedDate();
     const maxIssuedDate = this.maxIssuedDate();
     return (
       issuedDate <= this.toDateInputString(new Date()) &&
-      (!minIssuedDate || issuedDate >= minIssuedDate) &&
       (!maxIssuedDate || issuedDate <= maxIssuedDate) &&
       !this.form.hasError('issuedInFuture') &&
       !this.form.hasError('issuedOutsideMission')
@@ -309,10 +303,8 @@ export class AddRefundItemModal implements OnInit, OnChanges {
         if (issuedDate > this.toDateInputString(now)) {
           errors['issuedInFuture'] = true;
         }
-        const minIssuedDate = this.minIssuedDate();
         const maxIssuedDate = this.maxIssuedDate();
         if (
-          (minIssuedDate && issuedDate < minIssuedDate) ||
           (maxIssuedDate && issuedDate > maxIssuedDate)
         ) {
           errors['issuedOutsideMission'] = true;

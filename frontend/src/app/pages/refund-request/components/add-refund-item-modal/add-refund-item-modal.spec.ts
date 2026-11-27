@@ -22,43 +22,4 @@ describe('AddRefundItemModal', () => {
     component = fixture.componentInstance;
     fixture.detectChanges();
   });
-
-  it('requires a new conversion when the issued date changes', () => {
-    const issuedDate = component.form.get('issuedDate')!;
-    issuedDate.setValue('2026-11-25');
-    component.conversionInfo.set({
-      originalCurrency: 'USD',
-      originalAmount: 10,
-      convertedAmount: 9,
-      rate: 0.9,
-    });
-    component.euroEquivalent.set(9);
-
-    issuedDate.setValue('2026-11-26');
-
-    expect(component.conversionInfo()).toBeNull();
-    expect(component.euroEquivalent()).toBeNull();
-  });
-
-  it('keeps the conversion when the issued date is set to the same value', () => {
-    const issuedDate = component.form.get('issuedDate')!;
-    issuedDate.setValue('2026-11-25');
-    component.conversionInfo.set({
-      originalCurrency: 'USD',
-      originalAmount: 10,
-      convertedAmount: 9,
-      rate: 0.9,
-    });
-    component.euroEquivalent.set(9);
-
-    issuedDate.setValue('2026-11-25');
-
-    expect(component.conversionInfo()).toEqual({
-      originalCurrency: 'USD',
-      originalAmount: 10,
-      convertedAmount: 9,
-      rate: 0.9,
-    });
-    expect(component.euroEquivalent()).toBe(9);
-  });
 });

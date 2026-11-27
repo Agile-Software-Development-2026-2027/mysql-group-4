@@ -152,7 +152,6 @@
               type="date"
               formControlName="issuedDate"
               class="form-control"
-              [min]="minIssuedDate()"
               [max]="maxIssuedDate()"
               [class.is-invalid]="
                 (form.get('issuedDate')?.invalid || form.hasError('issuedInFuture') || form.hasError('issuedOutsideMission')) &&
@@ -164,7 +163,7 @@
             } @else if (form.hasError('issuedInFuture') && form.get('issuedDate')?.touched) {
               <span class="form-error">Issued date cannot be in the future.</span>
             } @else if (form.hasError('issuedOutsideMission') && form.get('issuedDate')?.touched) {
-              <span class="form-error">Must be within the mission period ({{ missionPeriodLabel() }}).</span>
+              <span class="form-error">Issued date cannot be after the mission end ({{ missionPeriodLabel() }}).</span>
             }
           </div>
 
