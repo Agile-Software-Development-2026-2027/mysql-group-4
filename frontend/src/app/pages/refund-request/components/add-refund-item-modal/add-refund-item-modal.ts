@@ -36,6 +36,10 @@ import { MissionService } from '../../../../services/mission.service';
 import { RefundService } from '../../../../services/refund.service';
 import { ToastService } from '../../../../services/toast.service';
 
+// Matches backend MAX_EXPENSE_AMOUNT: the limit applies to the final amount in EUR,
+// not to the amount printed on the receipt (which may be in a foreign currency).
+const MAX_EXPENSE_AMOUNT_EUR = 10000;
+
 interface SubtypeOption {
   value: ExpenseSubtype;
   label: string;
@@ -248,6 +252,13 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
   }
 
+  readonly maxExpenseAmountEur = MAX_EXPENSE_AMOUNT_EUR;
+
+  isEuroAmountOverLimit(): boolean {
+    const eur = this.euroEquivalent();
+    return eur != null && eur > MAX_EXPENSE_AMOUNT_EUR;
+  }
+
   isReceiptIssuedDateValid(): boolean {
     const control = this.form?.get('issuedDate');
     const issuedDate = control?.value;
@@ -286,7 +297,7 @@ export class AddRefundItemModal implements OnInit, OnChanges {
         endsAt: ['', Validators.required],
         requestedAmount: [
           null,
-          [Validators.required, Validators.min(0.01), Validators.max(10000.0)],
+          [Validators.required, Validators.min(0.01)],
         ],
         currency: ['EUR', [Validators.required, Validators.minLength(3), Validators.maxLength(3)]],
         isTraceable: [true],
@@ -831,6 +842,14 @@ export class AddRefundItemModal implements OnInit, OnChanges {
       this.toastService.showError(
         'Convert the receipt amount to EUR before saving.',
         'Currency Conversion Required'
+      );
+      return;
+    }
+
+    if (this.isEuroAmountOverLimit()) {
+      this.toastService.showError(
+        `The final amount in EUR cannot exceed € ${MAX_EXPENSE_AMOUNT_EUR.toLocaleString('en-US')}.`,
+        'Amount Too High'
       );
       return;
     }

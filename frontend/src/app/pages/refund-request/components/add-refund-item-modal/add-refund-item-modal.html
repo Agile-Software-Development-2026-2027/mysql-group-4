@@ -282,7 +282,6 @@
                   type="number"
                   step="0.01"
                   min="0.01"
-                  max="10000.00"
                   formControlName="requestedAmount"
                   class="form-control"
                   placeholder="Amount on receipt"
@@ -290,7 +289,7 @@
                   [class.is-invalid]="form.get('requestedAmount')?.invalid && form.get('requestedAmount')?.touched"
                 />
                 @if (form.get('requestedAmount')?.invalid && form.get('requestedAmount')?.touched) {
-                  <span class="form-error">Please enter a valid amount (between 0.01 and 10,000.00).</span>
+                  <span class="form-error">Please enter a valid amount (at least 0.01).</span>
                 }
               </div>
               <div class="form-group currency-group">
@@ -324,6 +323,9 @@
                 <span class="eur-equivalent__label">Final amount in EUR</span>
                 @if (euroEquivalent() != null) {
                   <strong class="eur-equivalent__value">€ {{ euroEquivalent() | number:'1.2-2' }}</strong>
+                  @if (isEuroAmountOverLimit()) {
+                    <span class="form-error">Cannot exceed € {{ maxExpenseAmountEur | number:'1.2-2' }}.</span>
+                  }
                 } @else {
                   <span class="eur-equivalent__empty">
                     {{ foreignCurrency() === 'EUR' ? 'Enter the receipt amount' : 'Conversion required' }}
@@ -376,7 +378,7 @@
           class="btn btn-submit"
           type="button"
           (click)="submit()"
-          [disabled]="form.invalid || !uploadedReceipt() || isSubmitting() || isUploading() || (foreignCurrency() !== 'EUR' && euroEquivalent() == null)"
+          [disabled]="form.invalid || !uploadedReceipt() || isSubmitting() || isUploading() || (foreignCurrency() !== 'EUR' && euroEquivalent() == null) || isEuroAmountOverLimit()"
         >
           @if (isSubmitting()) {
             <span class="btn-spinner" aria-label="Saving..."></span>
