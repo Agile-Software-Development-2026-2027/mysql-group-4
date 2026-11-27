@@ -1,0 +1,179 @@
+<dialog
+  #dialogEl
+  class="quick-upload-dialog"
+  aria-labelledby="quickUploadModalTitle"
+  [attr.closedby]="isProcessing() ? 'none' : 'any'"
+  (cancel)="onDialogCancel($event)"
+  (close)="onDialogClose()"
+>
+  <header class="modal-header">
+    <div class="modal-title">
+      <h1 id="quickUploadModalTitle">Upload Receipt</h1>
+      @if (missionSubject) {
+        <p class="modal-subtitle">{{ missionSubject }}</p>
+      }
+    </div>
+    <button
+      class="close-btn"
+      type="button"
+      (click)="requestClose()"
+      [disabled]="isProcessing()"
+      aria-label="Close modal"
+    >
+      ✕
+    </button>
+  </header>
+
+  <div class="modal-body">
+    <section class="receipt-pane" aria-label="Receipt file upload">
+      <div class="pane-header">
+        <h2>Receipt / Invoice</h2>
+        <span
+          class="badge"
+          [class.badge--success]="selectedFile() && !isProcessing()"
+          [class.badge--loading]="isProcessing()"
+        >
+          @if (isProcessing()) {
+            <span class="spinner-badge" aria-label="Processing"></span>
+          } @else if (selectedFile()) {
+            ✓ Ready
+          } @else {
+            Required
+          }
+        </span>
+      </div>
+
+      @if (!selectedFile()) {
+        <div
+          class="dropzone"
+          [class.is-dragover]="isDragging()"
+          (dragover)="onDragOver($event)"
+          (dragleave)="onDragLeave($event)"
+          (drop)="onDrop($event)"
+          (click)="fileInput.click()"
+          (keydown.enter)="fileInput.click()"
+          (keydown.space)="$event.preventDefault(); fileInput.click()"
+          tabindex="0"
+          role="button"
+          aria-label="Select or drop a receipt file"
+        >
+          <div class="dropzone__content">
+            <svg
+              class="dropzone__icon"
+              width="48"
+              height="48"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="12" y1="18" x2="12" y2="12"></line>
+              <polyline points="9 15 12 12 15 15"></polyline>
+            </svg>
+            <p class="dropzone__title">Drag &amp; drop your receipt here, or <strong>browse files</strong></p>
+            <p class="dropzone__hint">Supported formats: PDF, JPG, PNG, WEBP (max 10MB)</p>
+          </div>
+          <input
+            #fileInput
+            type="file"
+            accept=".pdf,.png,.jpg,.jpeg,.webp"
+            class="hidden-input"
+            (change)="onFileInputChange($event)"
+          />
+        </div>
+      } @else {
+        <div class="preview-container">
+          <div class="preview-meta">
+            <div class="preview-meta__info">
+              <svg
+                class="paperclip-icon"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+              </svg>
+              <span class="preview-meta__filename" [title]="selectedFile()?.name">
+                {{ selectedFile()?.name }}
+              </span>
+              <span class="preview-meta__size">
+                ({{ ((selectedFile()?.size ?? 0) / 1024) | number:'1.1-1' }} KB)
+              </span>
+            </div>
+            <button
+              class="btn btn--outline btn--sm"
+              type="button"
+              (click)="removeReceipt()"
+              [disabled]="isProcessing()"
+            >
+              Replace
+            </button>
+          </div>
+
+          @if (isPdf() && safePdfUrl()) {
+            <div class="preview-frame-wrapper">
+              <iframe [src]="safePdfUrl()" class="pdf-iframe" title="PDF Receipt Preview"></iframe>
+            </div>
+          } @else if (!isPdf() && previewUrl()) {
+            <div class="preview-image-wrapper">
+              <img [src]="previewUrl()" alt="Receipt Preview" class="image-preview" />
+            </div>
+          }
+        </div>
+      }
+
+      @if (isProcessing()) {
+        <div class="processing-banner" role="status">
+          <span class="spinner-badge spinner-badge--blue" aria-hidden="true"></span>
+          <span>Uploading receipt and running OCR/AI extraction…</span>
+        </div>
+      }
+
+      @if (errorMessage()) {
+        <div class="upload-error-alert" role="alert">
+          ⚠ {{ errorMessage() }}
+        </div>
+      }
+    </section>
+  </div>
+
+  <footer class="modal-footer">
+    <div class="footer-hint">
+      <span class="hint-text">The receipt will be saved as a draft item waiting for your review.</span>
+    </div>
+    <div class="footer-actions">
+      <button
+        class="btn btn--outline"
+        type="button"
+        (click)="requestClose()"
+        [disabled]="isProcessing()"
+        autofocus
+      >
+        Cancel
+      </button>
+      <button
+        class="btn btn-submit"
+        type="button"
+        (click)="uploadAndProcess()"
+        [disabled]="!selectedFile() || isProcessing()"
+      >
+        @if (isProcessing()) {
+          <span class="btn-spinner" aria-label="Uploading..."></span>
+        } @else {
+          Upload Receipt
+        }
+      </button>
+    </div>
+  </footer>
+</dialog>

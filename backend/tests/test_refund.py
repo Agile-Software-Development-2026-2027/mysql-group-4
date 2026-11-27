@@ -1912,3 +1912,111 @@ async def test_my_refund_notifications_and_mark_seen(
     empty_resp = await client.get("/api/v1/refunds/my/notifications")
     assert empty_resp.status_code == 200
     assert empty_resp.json() == []
+
+
+# TEST endpoint POST /api/v1/refunds/{refund_id}/receipts/quick-upload
+@pytest.mark.asyncio
+async def test_quick_upload_receipt_happy_path_and_needs_review(client: AsyncClient, db_session: AsyncSession, requester: User):
+    mission = await create_mission(db_session, requester.id, started=True, ended=False)
+    refund_id = UUID((await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})).json()["id"])
+
+    ollama_output = {
+        "category": "MEALS",
+        "subtype": "MEALS_EXPENSE",
+        "amount": 18.50,
+        "currency": "EUR",
+        "starts_at": "2026-11-20T13:00",
+        "merchant": "Trattoria Roma",
+        "description": "Launch in Rome",
+    }
+
+    with (
+        patch("app.services.refund_service.minio_client") as mock_minio,
+        patch("app.services.receipt_ai_service.ReceiptAIService._sync_ocr", return_value=("OCR TEXT", ["OCR TEXT"], 0.9)),
+        patch("app.services.receipt_ai_service.ReceiptAIService._query_ollama", new=AsyncMock(return_value=ollama_output)),
+    ):
+        mock_minio.put_object.return_value = None
+        files = {"file": ("lunch_receipt.jpg", io.BytesIO(_make_jpeg_bytes()), "image/jpeg")}
+        response = await client.post(
+            f"/api/v1/refunds/{refund_id}/receipts/quick-upload",
+            files=files,
+        )
+
+    assert response.status_code == 201
+    item = response.json()
+    assert item["category"] == "MEALS"
+    assert item["subtype"] == "MEALS_EXPENSE"
+    assert item["requestedAmount"] == "18.50"
+    assert item["receiptOriginalFilename"] == "lunch_receipt.jpg"
+    assert item["needsReview"] is True
+    assert mock_minio.put_object.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_quick_upload_receipt_validation_errors(
+    client: AsyncClient, db_session: AsyncSession, requester: User
+):
+    mission = await create_mission(db_session, requester.id, started=True, ended=False)
+    refund_id = UUID((await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})).json()["id"])
+
+    resp_bad_ext = await client.post(
+        f"/api/v1/refunds/{refund_id}/receipts/quick-upload",
+        files={"file": ("notes.txt", io.BytesIO(b"hello"), "text/plain")},
+    )
+    assert resp_bad_ext.status_code == 400
+
+    resp_empty = await client.post(
+        f"/api/v1/refunds/{refund_id}/receipts/quick-upload",
+        files={"file": ("empty.jpg", io.BytesIO(b""), "image/jpeg")},
+    )
+    assert resp_empty.status_code == 400
+
+    resp_corrupt = await client.post(
+        f"/api/v1/refunds/{refund_id}/receipts/quick-upload",
+        files={"file": ("broken.jpg", io.BytesIO(b"not-a-valid-image"), "image/jpeg")},
+    )
+    assert resp_corrupt.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_quick_upload_receipt_security_unauthorized_and_forbidden(client: AsyncClient, db_session: AsyncSession, requester: User, other_user: User):
+    mission = await create_mission(db_session, requester.id, started=True, ended=False)
+    refund_id = UUID((await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})).json()["id"])
+
+    app.dependency_overrides.pop(current_active_user, None)
+    resp_401 = await client.post(
+        f"/api/v1/refunds/{refund_id}/receipts/quick-upload",
+        files={"file": ("receipt.jpg", io.BytesIO(_make_jpeg_bytes()), "image/jpeg")},
+    )
+    assert resp_401.status_code == 401
+
+    app.dependency_overrides[current_active_user] = lambda: other_user
+    resp_403 = await client.post(
+        f"/api/v1/refunds/{refund_id}/receipts/quick-upload",
+        files={"file": ("receipt.jpg", io.BytesIO(_make_jpeg_bytes()), "image/jpeg")},
+    )
+    assert resp_403.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_quick_upload_receipt_business_errors(
+    client: AsyncClient, db_session: AsyncSession, requester: User
+):
+    mission = await create_mission(db_session, requester.id, started=True, ended=False)
+    refund_id = UUID((await client.post("/api/v1/refunds", json={"missionId": str(mission.id)})).json()["id"])
+
+    resp_404 = await client.post(
+        f"/api/v1/refunds/{uuid4()}/receipts/quick-upload",
+        files={"file": ("receipt.jpg", io.BytesIO(_make_jpeg_bytes()), "image/jpeg")},
+    )
+    assert resp_404.status_code == 404
+
+    refund = (await db_session.execute(select(RefundRequest).where(RefundRequest.id == refund_id))).scalar_one()
+    refund.status = RefundStatus.SUBMITTED
+    await db_session.commit()
+
+    resp_submitted = await client.post(
+        f"/api/v1/refunds/{refund_id}/receipts/quick-upload",
+        files={"file": ("receipt.jpg", io.BytesIO(_make_jpeg_bytes()), "image/jpeg")},
+    )
+    assert resp_submitted.status_code == 400
