@@ -47,6 +47,26 @@
 .expense-row { cursor: pointer; }
 .expense-details td { background: #f5f8fb; }
 
+.checkbox-col {
+  width: 1%;
+  text-align: center;
+  vertical-align: middle;
+
+  input[type='checkbox'] {
+    margin: 0;
+    cursor: pointer;
+  }
+}
+
+thead .checkbox-col input[type='checkbox'] {
+  border-radius: 3px;
+
+  &:checked,
+  &:indeterminate {
+    box-shadow: 0 0 0 1.5px #fff;
+  }
+}
+
 .details-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
