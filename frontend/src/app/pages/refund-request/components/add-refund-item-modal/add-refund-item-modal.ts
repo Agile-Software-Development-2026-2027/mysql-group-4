@@ -20,7 +20,7 @@ import {
   Validators,
 } from '@angular/forms';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { map, of, switchMap } from 'rxjs';
+import { distinctUntilChanged, map, of, switchMap } from 'rxjs';
 
 import {
   CurrencyConversionDTO,
@@ -106,6 +106,7 @@ export class AddRefundItemModal implements OnInit, OnChanges {
   maxIssuedDate = signal<string | null>(null);
   missionPeriodLabel = signal<string>('');
   form!: FormGroup;
+  private currencyConversionRequestVersion = 0;
 
   readonly transportSubtypes: SubtypeOption[] = [
     { value: ExpenseSubtype.TRAIN, label: 'Train' },
@@ -132,6 +133,7 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     this.updateMissionBounds();
     this.initForm();
     this.setupCategoryChangeListener();
+    this.setupIssuedDateChangeListener();
     this.loadMissionBounds();
   }
 
@@ -365,6 +367,18 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     });
   }
 
+  private setupIssuedDateChangeListener(): void {
+    this.form
+      .get('issuedDate')
+      ?.valueChanges.pipe(distinctUntilChanged())
+      .subscribe(() => {
+        this.currencyConversionRequestVersion++;
+        this.isConvertingCurrency.set(false);
+        this.conversionInfo.set(null);
+        this.updateEuroEquivalent();
+      });
+  }
+
   private updateCategoryValidators(category: ExpenseCategory): void {
     const subtypeCtrl = this.form.get('subtype')!;
     const fromCtrl = this.form.get('itineraryFrom')!;
@@ -503,12 +517,14 @@ export class AddRefundItemModal implements OnInit, OnChanges {
 
   onForeignCurrencyChange(event: Event): void {
     const select = event.target as HTMLSelectElement;
+    this.currencyConversionRequestVersion++;
     this.foreignCurrency.set(select.value || 'EUR');
     this.conversionInfo.set(null);
     this.updateEuroEquivalent();
   }
 
   onReceiptAmountChange(): void {
+    this.currencyConversionRequestVersion++;
     this.conversionInfo.set(null);
     this.updateEuroEquivalent();
   }
@@ -556,8 +572,12 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     }
 
     this.isConvertingCurrency.set(true);
+    const requestVersion = ++this.currencyConversionRequestVersion;
     this.refundService.convertCurrencyToEur(rawAmount, curr, issuedDate).subscribe({
       next: (res) => {
+        if (requestVersion !== this.currencyConversionRequestVersion) {
+          return;
+        }
         this.isConvertingCurrency.set(false);
         this.conversionInfo.set(res);
         this.euroEquivalent.set(res.convertedAmount);
@@ -574,6 +594,9 @@ export class AddRefundItemModal implements OnInit, OnChanges {
         );
       },
       error: (err) => {
+        if (requestVersion !== this.currencyConversionRequestVersion) {
+          return;
+        }
         this.isConvertingCurrency.set(false);
         const body = err?.error;
         let msg = 'Unable to convert currency right now.';
