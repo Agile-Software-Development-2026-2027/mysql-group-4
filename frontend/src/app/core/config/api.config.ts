@@ -38,6 +38,8 @@ export const API_CONFIG = {
       detectReceipts: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/receipts/detect`,
       batchProcessReceipts: (refundId: string) =>
         `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/receipts/batch-process`,
+      quickUploadReceipt: (refundId: string) =>
+        `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/receipts/quick-upload`,
       items: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/items`,
       item: (refundId: string, itemId: string) =>
         `${environment.apiBaseUrl}/api/v1/refunds/${refundId}/items/${itemId}`,

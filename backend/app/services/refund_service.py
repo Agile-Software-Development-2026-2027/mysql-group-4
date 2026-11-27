@@ -749,3 +749,86 @@ class RefundService:
         except BaseException:
             await self._cleanup_minio_objects(uploaded_object_names)
             raise
+
+    async def process_single_receipt(self,refund_request_id: UUID, file: UploadFile, user: User,currency_service: CurrencyConversionService,receipt_ai_service: ReceiptAIService) -> RefundItemDTO:
+        content_type = (file.content_type or "").lower()
+        safe_original_filename = Path(file.filename).name if file.filename else f"receipt_{uuid4()}.jpg"
+        lower_name = safe_original_filename.lower()
+        is_pdf = content_type == "application/pdf" or lower_name.endswith(".pdf")
+        is_image = content_type.startswith("image/") or any(
+            lower_name.endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".webp")
+        )
+        if not is_image and not is_pdf:
+            raise RefundItemCreateError("Only PDF, JPEG, PNG, or WEBP receipt files are accepted.")
+
+        refund_request = await self.refund_repository.find_by_id(self.session, refund_request_id)
+        if not refund_request:
+            raise RefundNotFoundError(refund_request_id)
+        if refund_request.created_by != user.id:
+            raise AccessDeniedError("Only the requester can upload receipts to this refund request.")
+        if refund_request.status != RefundStatus.DRAFT:
+            raise RefundItemCreateError("Cannot add items to a non-draft refund request.")
+
+        raw_bytes = await file.read()
+        if not raw_bytes:
+            raise RefundItemCreateError("Receipt file cannot be empty.")
+        if len(raw_bytes) > MAX_RECEIPT_FILE_SIZE:
+            raise RefundItemCreateError("Receipt file exceeds the maximum allowed size of 10MB.")
+
+        if not is_pdf:
+            try:
+                with Image.open(io.BytesIO(raw_bytes)) as img:
+                    img.verify()
+            except Exception as exc:
+                logger.warning("Invalid or corrupted image during single receipt upload: %s", exc)
+                raise RefundItemCreateError("Uploaded image file is corrupted or unreadable.")
+
+        mission = await self.mission_repository.find_by_id(refund_request.mission_id)
+        destination = mission.destination if mission else None
+        hint_currency = await currency_service.resolve_currency_for_destination(destination)
+        fallback_start = mission.starts_at if mission else datetime.now().replace(second=0, microsecond=0)
+
+        uploaded_object_names: list[str] = []
+        try:
+            upload_dto = await self._upload_receipt_bytes(
+                refund_request_id=refund_request_id,
+                content=raw_bytes,
+                filename=safe_original_filename,
+                content_type=file.content_type or ("application/pdf" if is_pdf else "application/octet-stream"),
+            )
+            uploaded_object_names.append(upload_dto.receipt_file_path)
+
+            extracted = await receipt_ai_service.extract_receipt_from_bytes(
+                raw_bytes,
+                is_pdf=is_pdf,
+                hint_currency=hint_currency,
+                hint_country=destination,
+            )
+            item = self._build_batch_refund_item(
+                refund_request_id=refund_request_id,
+                user_id=user.id,
+                extracted=extracted,
+                upload_dto=upload_dto,
+                fallback_start=fallback_start,
+            )
+
+            async with self.transaction():
+                current_refund = await self.refund_repository.find_by_id(self.session, refund_request_id)
+                if not current_refund:
+                    raise RefundNotFoundError(refund_request_id)
+                if current_refund.created_by != user.id:
+                    raise AccessDeniedError("Only the requester can upload receipts to this refund request.")
+                if current_refund.status != RefundStatus.DRAFT:
+                    raise RefundItemCreateError("Cannot add items to a non-draft refund request.")
+
+                await self._ensure_within_estimate(
+                    current_refund, current_refund.total_requested_amount + item.requested_amount
+                )
+
+                saved = await self.refund_repository.save_item(self.session, item)
+                current_refund.total_requested_amount += item.requested_amount
+                await self.session.flush()
+                return RefundItemDTO.model_validate(saved)
+        except BaseException:
+            await self._cleanup_minio_objects(uploaded_object_names)
+            raise

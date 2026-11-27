@@ -217,6 +217,11 @@
   gap: 10px;
   cursor: pointer;
 
+  &.is-busy {
+    opacity: 0.7;
+    cursor: wait;
+  }
+
   svg { color: var(--color-text-muted); }
   &__cta { font-size: 1.15rem; font-weight: 700; }
   &__hint { font-size: 0.9rem; color: var(--color-text-muted); }

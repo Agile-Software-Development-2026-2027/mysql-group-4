@@ -128,6 +128,16 @@ export class RefundService {
     );
   }
 
+  quickUploadReceipt(refundId: string, file: File): Observable<RefundItemDTO> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<RefundItemDTO>(
+      API_CONFIG.endpoints.refunds.quickUploadReceipt(refundId),
+      formData,
+      { withCredentials: true }
+    );
+  }
+
   createRefundItem(refundId: string, payload: RefundItemCreatePayload): Observable<RefundItemDTO> {
     return this.http.post<RefundItemDTO>(
       API_CONFIG.endpoints.refunds.items(refundId),
