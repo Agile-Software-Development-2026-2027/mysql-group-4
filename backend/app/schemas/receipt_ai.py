@@ -15,7 +15,7 @@ class ReceiptAutocompleteDTO(BaseModel):
     currency: str | None = None
     converted_amount_eur: Decimal | None = None
     exchange_rate: Decimal | None = None
-    rate_date: str | None = None
+    issued_date: str | None = None
     starts_at: str | None = None
     ends_at: str | None = None
     merchant: str | None = None

@@ -82,6 +82,7 @@ Return ONLY valid JSON with these exact keys:
   "currency": "3-letter ISO code like EUR, USD, CNY, TWD, RUB, GBP, CHF, SGD, CAD, AED" | null,
   "starts_at": "YYYY-MM-DDTHH:MM" | null,
   "ends_at": "YYYY-MM-DDTHH:MM" | null,
+  "issued_date": "YYYY-MM-DD" | null,
   "merchant": string | null,
   "description": "short concise expense summary in English (max 80 chars)" | null,
   "itinerary_from": string | null,
@@ -89,6 +90,7 @@ Return ONLY valid JSON with these exact keys:
 }
 Rules:
 - Use the FINAL TOTAL paid amount (not subtotal or tax).
+- issued_date is the date printed on the receipt/invoice, formatted as YYYY-MM-DD; return null if it is not shown. Do not substitute a travel or service date for it.
 - TRANSPORT (flights, trains, buses, taxis): extract departure city/station in itinerary_from, arrival city/station in itinerary_to, departure datetime in starts_at, and arrival datetime in ends_at (null if not shown).
 - ACCOMMODATION (hotels, lodging): extract check-in datetime in starts_at and check-out datetime in ends_at; itinerary_from and itinerary_to MUST be null.
 - MEALS: subtype must be MEALS_EXPENSE or OTHER_MEALS_EXPENSE; extract receipt datetime in starts_at; ends_at, itinerary_from, and itinerary_to MUST be null.
@@ -187,14 +189,13 @@ def get_ocr_engine():
 
 
 def _normalize_currency(raw: Any, hint_currency: str | None) -> str | None:
+    del hint_currency
     if isinstance(raw, str):
         cleaned = raw.strip().upper()
         if cleaned in CURRENCY_ALIASES:
             return CURRENCY_ALIASES[cleaned]
         if re.fullmatch(r"[A-Z]{3}", cleaned):
             return cleaned
-    if hint_currency and re.fullmatch(r"[A-Z]{3}", hint_currency.strip().upper()):
-        return hint_currency.strip().upper()
     return None
 
 
@@ -222,8 +223,9 @@ def _normalize_date(raw: Any) -> str | None:
     text = raw.strip()
     for fmt in ("%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
         try:
-            dt = datetime.strptime(text[:16] if "T" in fmt or " " in fmt else text[:10], fmt)
-            return dt.strftime("%Y-%m-%dT%H:%M")
+            has_time = "T" in fmt or " " in fmt
+            dt = datetime.strptime(text[:16] if has_time else text[:10], fmt)
+            return dt.strftime("%Y-%m-%dT%H:%M") if has_time else dt.strftime("%Y-%m-%dT12:00")
         except ValueError:
             continue
     return None
@@ -542,6 +544,8 @@ class ReceiptAIService:
         currency = _normalize_currency(extracted.get("currency"), hint_currency)
         starts_at = _normalize_date(extracted.get("starts_at") or extracted.get("date_incurred"))
         ends_at = _normalize_date(extracted.get("ends_at"))
+        normalized_issued_date = _normalize_date(extracted.get("issued_date"))
+        issued_date = normalized_issued_date[:10] if normalized_issued_date else None
         merchant = extracted.get("merchant")
         description = extracted.get("description")
         itin_from = extracted.get("itinerary_from")
@@ -563,23 +567,26 @@ class ReceiptAIService:
 
         converted_amount_eur: Decimal | None = None
         exchange_rate: Decimal | None = None
-        rate_date = None
 
         if amount is not None and currency:
             if currency == "EUR":
                 converted_amount_eur = amount
                 exchange_rate = Decimal("1.0")
-            else:
+            elif issued_date:
                 conversion = await self.currency_service.convert_to_eur(
                     amount=amount,
                     currency=currency,
+                    issued_date=issued_date,
                 )
                 if conversion is not None:
                     converted_amount_eur = conversion.converted_amount
                     exchange_rate = conversion.rate
-                    rate_date = conversion.date
                 else:
                     warnings.append(f"Could not convert {currency} to EUR automatically.")
+            else:
+                warnings.append(
+                    f"Could not convert {currency} to EUR automatically without a receipt issue date."
+                )
 
         return ReceiptAutocompleteDTO(
             category=category,
@@ -588,9 +595,9 @@ class ReceiptAIService:
             currency=currency,
             converted_amount_eur=converted_amount_eur,
             exchange_rate=exchange_rate,
-            rate_date=rate_date,
             starts_at=starts_at,
             ends_at=ends_at,
+            issued_date=issued_date,
             merchant=merchant.strip()[:120] if isinstance(merchant, str) and merchant.strip() else None,
             description=description.strip()[:255] if isinstance(description, str) and description.strip() else None,
             itinerary_from=norm_from,

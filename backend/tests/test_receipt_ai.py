@@ -140,8 +140,6 @@ async def test_receipt_ai_extracts_and_converts_foreign_currency():
             original_amount=Decimal("420.00"),
             converted_amount=Decimal("4.62"),
             rate=Decimal("0.011"),
-            date="2026-11-14",
-            provider="Open Exchange Rates API",
         )
     )
     service = ReceiptAIService(currency_service=currency_service)
@@ -155,6 +153,7 @@ async def test_receipt_ai_extracts_and_converts_foreign_currency():
                 "subtype": "MEALS_EXPENSE",
                 "amount": 420.00,
                 "currency": "RUB",
+                "issued_date": "2019-07-29",
                 "starts_at": "2019-07-29T18:30",
                 "ends_at": "2019-07-29T19:00",
                 "itinerary_from": "Ignored",
@@ -181,12 +180,42 @@ async def test_receipt_ai_extracts_and_converts_foreign_currency():
     assert result.currency == "RUB"
     assert result.converted_amount_eur == Decimal("4.62")
     assert result.exchange_rate == Decimal("0.011")
+    currency_service.convert_to_eur.assert_awaited_once_with(
+        amount=Decimal("420.00"),
+        currency="RUB",
+        issued_date="2019-07-29",
+    )
     assert result.merchant == "Blinok"
     assert result.starts_at == "2019-07-29T18:30"
     # MEALS must strip disallowed ends_at and itinerary fields
     assert result.ends_at is None
     assert result.itinerary_from is None
     assert result.itinerary_to is None
+
+
+@pytest.mark.asyncio
+async def test_receipt_ai_skips_foreign_currency_conversion_without_issued_date():
+    currency_service = CurrencyConversionService()
+    currency_service.convert_to_eur = AsyncMock()
+    service = ReceiptAIService(currency_service=currency_service)
+
+    with (
+        patch.object(
+            service,
+            "_sync_ocr",
+            return_value=("TOTAL 12.50 USD", ["TOTAL 12.50 USD"], 0.95),
+        ),
+        patch.object(
+            service,
+            "_query_ollama",
+            new=AsyncMock(return_value={"amount": 12.50, "currency": "USD"}),
+        ),
+    ):
+        result = await service.extract_receipt(_make_upload_file())
+
+    currency_service.convert_to_eur.assert_not_awaited()
+    assert result.converted_amount_eur is None
+    assert any("without a receipt issue date" in warning for warning in result.warnings)
 
 
 @pytest.mark.asyncio

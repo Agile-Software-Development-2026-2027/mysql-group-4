@@ -53,7 +53,12 @@ class CurrencyConversionService:
 
         return "EUR"
 
-    async def convert_to_eur(self, amount: Decimal, currency: str, date: str | None = None) -> CurrencyConversionDTO | None:
+    async def convert_to_eur(
+        self,
+        amount: Decimal,
+        currency: str,
+        issued_date: str,
+    ) -> CurrencyConversionDTO | None:
         if not currency:
             currency = "EUR"
         curr_code = currency.strip().upper()
@@ -64,27 +69,25 @@ class CurrencyConversionService:
                 original_amount=amount,
                 converted_amount=amount,
                 rate=Decimal("1.0"),
-                date=date or "latest",
-                provider="None (already EUR)",
             )
 
         # 1. Try Frankfurter API
-        frankfurter_url = f"https://api.frankfurter.dev/v1/latest?base={curr_code}&symbols=EUR"
+        frankfurter_url = (
+            f"https://api.frankfurter.dev/v1/{issued_date}"
+            f"?base={curr_code}&symbols=EUR"
+        )
         try:
             async with httpx.AsyncClient(timeout=8.0) as client:
                 resp = await client.get(frankfurter_url)
                 if resp.status_code == 200:
                     data = resp.json()
                     rate = Decimal(str(data["rates"]["EUR"]))
-                    rate_date = data.get("date", "latest")
                     converted = round(amount * rate, 2)
                     return CurrencyConversionDTO(
                         original_currency=curr_code,
                         original_amount=amount,
                         converted_amount=converted,
                         rate=rate,
-                        date=rate_date,
-                        provider="Frankfurter API",
                     )
         except Exception as e:
             logger.warning("Frankfurter API query failed for %s: %s", curr_code, e)
@@ -92,22 +95,22 @@ class CurrencyConversionService:
         # 2. Peg fallback (e.g. AED pegged to USD at 3.6725)
         if curr_code == "AED":
             try:
-                usd_url = "https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR"
+                usd_url = (
+                    f"https://api.frankfurter.dev/v1/{issued_date}"
+                    "?base=USD&symbols=EUR"
+                )
                 async with httpx.AsyncClient(timeout=8.0) as client:
                     resp = await client.get(usd_url)
                     if resp.status_code == 200:
                         data = resp.json()
                         usd_to_eur = Decimal(str(data["rates"]["EUR"]))
                         rate = round(usd_to_eur / AED_USD_PEG, 6)
-                        rate_date = data.get("date", "latest")
                         converted = round(amount * rate, 2)
                         return CurrencyConversionDTO(
                             original_currency="AED",
                             original_amount=amount,
                             converted_amount=converted,
                             rate=rate,
-                            date=rate_date,
-                            provider="Frankfurter API (via USD peg 3.6725)",
                         )
             except Exception as e:
                 logger.warning("AED peg conversion failed: %s", e)
@@ -122,15 +125,12 @@ class CurrencyConversionService:
                     rate_val = data.get("rates", {}).get("EUR")
                     if rate_val:
                         rate = Decimal(str(rate_val))
-                        rate_date = data.get("time_last_update_utc", "latest")
                         converted = round(amount * rate, 2)
                         return CurrencyConversionDTO(
                             original_currency=curr_code,
                             original_amount=amount,
                             converted_amount=converted,
                             rate=rate,
-                            date=rate_date,
-                            provider="Open Exchange Rates API",
                         )
         except Exception as e:
             logger.warning("Fallback currency exchange API failed for %s: %s", curr_code, e)

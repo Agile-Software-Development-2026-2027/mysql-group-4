@@ -20,7 +20,7 @@ import {
   Validators,
 } from '@angular/forms';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { map, of, switchMap } from 'rxjs';
+import { distinctUntilChanged, map, of, switchMap } from 'rxjs';
 
 import {
   CurrencyConversionDTO,
@@ -35,6 +35,10 @@ import {
 import { MissionService } from '../../../../services/mission.service';
 import { RefundService } from '../../../../services/refund.service';
 import { ToastService } from '../../../../services/toast.service';
+
+// Matches backend MAX_EXPENSE_AMOUNT: the limit applies to the final amount in EUR,
+// not to the amount printed on the receipt (which may be in a foreign currency).
+const MAX_EXPENSE_AMOUNT_EUR = 10000;
 
 interface SubtypeOption {
   value: ExpenseSubtype;
@@ -89,14 +93,25 @@ export class AddRefundItemModal implements OnInit, OnChanges {
   isConvertingCurrency = signal(false);
   conversionInfo = signal<CurrencyConversionDTO | null>(null);
   foreignCurrency = signal<string>('EUR');
-  readonly availableCurrencies = ['EUR', 'USD', 'GBP', 'CHF', 'RUB', 'CNY', 'TWD', 'JPY', 'AED', 'CAD', 'AUD'];
+  euroEquivalent = signal<number | null>(null);
+  private defaultCurrency = 'EUR';
+  private hasExplicitCurrencySelection = false;
+  availableCurrencies = [
+    'EUR', 'USD', 'GBP', 'CHF', 'JPY', 'CNY', 'AUD', 'CAD', 'NZD', 'SEK', 'NOK',
+    'DKK', 'PLN', 'CZK', 'HUF', 'RON', 'BGN', 'TRY', 'RUB', 'UAH', 'AED',
+    'ARS', 'BRL', 'CLP', 'COP', 'MXN', 'PEN', 'EGP', 'MAD', 'NGN', 'ZAR',
+    'ILS', 'INR', 'IDR', 'MYR', 'PHP', 'QAR', 'SAR', 'SGD', 'THB', 'TWD', 'VND',
+    'KRW', 'HKD', 'ISK', 'RSD', 'BYN',
+  ];
   isOcrPrefilled = signal(false);
   isExtractingOcr = signal(false);
   ocrRawText = signal<string | null>(null);
   minDateTime = signal<string | null>(null);
   maxDateTime = signal<string | null>(null);
+  maxIssuedDate = signal<string | null>(null);
   missionPeriodLabel = signal<string>('');
   form!: FormGroup;
+  private currencyConversionRequestVersion = 0;
 
   readonly transportSubtypes: SubtypeOption[] = [
     { value: ExpenseSubtype.TRAIN, label: 'Train' },
@@ -123,8 +138,9 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     this.updateMissionBounds();
     this.initForm();
     this.setupCategoryChangeListener();
+    this.setupIssuedDateChangeListener();
     this.loadMissionBounds();
-    this.loadMissionCurrencyProfile();
+    this.loadCurrencyProfile();
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -175,10 +191,37 @@ export class AddRefundItemModal implements OnInit, OnChanges {
       });
   }
 
+  private loadCurrencyProfile(): void {
+    if (!this.refundId) {
+      return;
+    }
+    this.refundService.getCurrencyProfile(this.refundId).subscribe({
+      next: (profile) => {
+        const currency = profile.defaultCurrency?.trim().toUpperCase();
+        if (!currency) {
+          return;
+        }
+        if (!this.availableCurrencies.includes(currency)) {
+          this.availableCurrencies = [...this.availableCurrencies, currency].sort();
+        }
+        this.defaultCurrency = currency;
+        if (this.hasExplicitCurrencySelection) {
+          return;
+        }
+        this.foreignCurrency.set(currency);
+        this.updateEuroEquivalent();
+      },
+      error: (err) => {
+        console.error('Failed to load mission currency:', err);
+      },
+    });
+  }
+
   private updateMissionBounds(): void {
     if (!this.missionStartsAt || !this.missionEndsAt) {
       this.minDateTime.set(null);
       this.maxDateTime.set(null);
+      this.maxIssuedDate.set(null);
       this.missionPeriodLabel.set('');
       return;
     }
@@ -187,11 +230,13 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
       this.minDateTime.set(null);
       this.maxDateTime.set(null);
+      this.maxIssuedDate.set(null);
       this.missionPeriodLabel.set('');
       return;
     }
     this.minDateTime.set(this.toDateTimeLocalString(start));
     this.maxDateTime.set(this.toDateTimeLocalString(end));
+    this.maxIssuedDate.set(this.toDateTimeLocalString(end).slice(0, 10));
     const startStr = start.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
     const endStr = end.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
     this.missionPeriodLabel.set(`${startStr} – ${endStr}`);
@@ -202,18 +247,57 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
   }
 
+  private toDateInputString(date: Date): string {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  }
+
+  readonly maxExpenseAmountEur = MAX_EXPENSE_AMOUNT_EUR;
+
+  isEuroAmountOverLimit(): boolean {
+    const eur = this.euroEquivalent();
+    return eur != null && eur > MAX_EXPENSE_AMOUNT_EUR;
+  }
+
+  isReceiptIssuedDateValid(): boolean {
+    const control = this.form?.get('issuedDate');
+    const issuedDate = control?.value;
+    if (
+      !control ||
+      control.invalid ||
+      typeof issuedDate !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(issuedDate)
+    ) {
+      return false;
+    }
+
+    const parsedDate = new Date(`${issuedDate}T00:00:00`);
+    if (isNaN(parsedDate.getTime()) || this.toDateInputString(parsedDate) !== issuedDate) {
+      return false;
+    }
+
+    const maxIssuedDate = this.maxIssuedDate();
+    return (
+      issuedDate <= this.toDateInputString(new Date()) &&
+      (!maxIssuedDate || issuedDate <= maxIssuedDate) &&
+      !this.form.hasError('issuedInFuture') &&
+      !this.form.hasError('issuedOutsideMission')
+    );
+  }
+
   private initForm(): void {
     this.form = this.fb.group(
       {
         category: [ExpenseCategory.TRANSPORT, Validators.required],
         subtype: [ExpenseSubtype.TRAIN, Validators.required],
+        issuedDate: ['', Validators.required],
         itineraryFrom: ['', [Validators.required, noWhitespaceValidator(), Validators.maxLength(255)]],
         itineraryTo: ['', [Validators.required, noWhitespaceValidator(), Validators.maxLength(255)]],
         startsAt: ['', Validators.required],
         endsAt: ['', Validators.required],
         requestedAmount: [
           null,
-          [Validators.required, Validators.min(0.01), Validators.max(10000.0)],
+          [Validators.required, Validators.min(0.01)],
         ],
         currency: ['EUR', [Validators.required, Validators.minLength(3), Validators.maxLength(3)]],
         isTraceable: [true],
@@ -230,6 +314,7 @@ export class AddRefundItemModal implements OnInit, OnChanges {
       const category = group.get('category')?.value as ExpenseCategory;
       const startsAt = group.get('startsAt')?.value as string;
       const endsAt = group.get('endsAt')?.value as string;
+      const issuedDate = group.get('issuedDate')?.value as string;
       const from = (group.get('itineraryFrom')?.value as string | null)?.trim().toLowerCase();
       const to = (group.get('itineraryTo')?.value as string | null)?.trim().toLowerCase();
       const startDate = startsAt ? new Date(startsAt) : null;
@@ -252,6 +337,17 @@ export class AddRefundItemModal implements OnInit, OnChanges {
         }
         if (missionStart && missionEnd && (startDate < missionStart || startDate > missionEnd)) {
           errors['startOutsideMission'] = true;
+        }
+      }
+      if (issuedDate) {
+        if (issuedDate > this.toDateInputString(now)) {
+          errors['issuedInFuture'] = true;
+        }
+        const maxIssuedDate = this.maxIssuedDate();
+        if (
+          (maxIssuedDate && issuedDate > maxIssuedDate)
+        ) {
+          errors['issuedOutsideMission'] = true;
         }
       }
       if (
@@ -277,6 +373,16 @@ export class AddRefundItemModal implements OnInit, OnChanges {
   }
 
   populateFromOcr(data: Partial<RefundItemCreatePayload>): void {
+    if (data.currency) {
+      const currency = data.currency.toUpperCase();
+      if (!this.availableCurrencies.includes(currency)) {
+        this.availableCurrencies = [...this.availableCurrencies, currency].sort();
+      }
+      this.hasExplicitCurrencySelection = true;
+      this.foreignCurrency.set(currency);
+    } else if (!this.hasExplicitCurrencySelection) {
+      this.foreignCurrency.set(this.defaultCurrency);
+    }
     if (data.category) {
       this.form.get('category')?.setValue(data.category);
     }
@@ -286,8 +392,9 @@ export class AddRefundItemModal implements OnInit, OnChanges {
       itineraryTo: data.itineraryTo ?? '',
       startsAt: data.startsAt ?? '',
       endsAt: data.endsAt ?? '',
+      issuedDate: data.issuedDate ?? '',
       requestedAmount: data.requestedAmount ?? null,
-      currency: data.currency ?? 'EUR',
+      currency: 'EUR',
       isTraceable: data.isTraceable ?? true,
       description: data.description ?? '',
     });
@@ -300,6 +407,18 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     this.form.get('category')?.valueChanges.subscribe((category: ExpenseCategory) => {
       this.updateCategoryValidators(category);
     });
+  }
+
+  private setupIssuedDateChangeListener(): void {
+    this.form
+      .get('issuedDate')
+      ?.valueChanges.pipe(distinctUntilChanged())
+      .subscribe(() => {
+        this.currencyConversionRequestVersion++;
+        this.isConvertingCurrency.set(false);
+        this.conversionInfo.set(null);
+        this.updateEuroEquivalent();
+      });
   }
 
   private updateCategoryValidators(category: ExpenseCategory): void {
@@ -438,47 +557,74 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     this.triggerOcrExtraction(file);
   }
 
-  private loadMissionCurrencyProfile(): void {
-    if (!this.refundId) {
-      return;
-    }
-    this.refundService.getCurrencyProfile(this.refundId).subscribe({
-      next: (profile) => {
-        if (profile?.defaultCurrency) {
-          this.foreignCurrency.set(profile.defaultCurrency);
-        }
-      },
-      error: (err) => {
-        console.warn('Could not load mission currency profile:', err);
-      },
-    });
-  }
-
   onForeignCurrencyChange(event: Event): void {
     const select = event.target as HTMLSelectElement;
+    this.currencyConversionRequestVersion++;
+    this.hasExplicitCurrencySelection = true;
     this.foreignCurrency.set(select.value || 'EUR');
+    this.conversionInfo.set(null);
+    this.updateEuroEquivalent();
+  }
+
+  onReceiptAmountChange(): void {
+    this.currencyConversionRequestVersion++;
+    this.conversionInfo.set(null);
+    this.updateEuroEquivalent();
+  }
+
+  private updateEuroEquivalent(): void {
+    const amount = Number(this.form.get('requestedAmount')?.value);
+    if (!amount || amount <= 0) {
+      this.euroEquivalent.set(null);
+      return;
+    }
+    if (this.foreignCurrency() === 'EUR') {
+      this.euroEquivalent.set(Number(amount.toFixed(2)));
+    } else {
+      this.euroEquivalent.set(null);
+    }
   }
 
   convertToEur(): void {
+    if (!this.isReceiptIssuedDateValid()) {
+      this.form.get('issuedDate')?.markAsTouched();
+      this.form.updateValueAndValidity();
+      this.toastService.showError(
+        'Enter a valid receipt issue date within the mission period before converting.',
+        'Issued Date Required'
+      );
+      return;
+    }
+
     const rawAmount = Number(this.form.get('requestedAmount')?.value);
     const curr = this.foreignCurrency();
+    const issuedDate = this.form.get('issuedDate')?.value as string;
     if (!rawAmount || rawAmount <= 0) {
       this.toastService.showError('Enter a valid amount to convert.', 'Invalid Amount');
       return;
     }
     if (curr === 'EUR') {
+      this.euroEquivalent.set(Number(rawAmount.toFixed(2)));
+      this.conversionInfo.set({
+        originalCurrency: 'EUR',
+        originalAmount: rawAmount,
+        convertedAmount: Number(rawAmount.toFixed(2)),
+        rate: 1,
+      });
       return;
     }
 
     this.isConvertingCurrency.set(true);
-    this.refundService.convertCurrencyToEur(rawAmount, curr).subscribe({
+    const requestVersion = ++this.currencyConversionRequestVersion;
+    this.refundService.convertCurrencyToEur(rawAmount, curr, issuedDate).subscribe({
       next: (res) => {
+        if (requestVersion !== this.currencyConversionRequestVersion) {
+          return;
+        }
         this.isConvertingCurrency.set(false);
         this.conversionInfo.set(res);
-        this.form.patchValue({
-          requestedAmount: res.convertedAmount,
-          currency: 'EUR',
-        });
+        this.euroEquivalent.set(res.convertedAmount);
+        this.form.patchValue({ currency: 'EUR' });
         const currentDesc = (this.form.get('description')?.value || '').trim();
         const note = `[Converted from ${res.originalAmount} ${res.originalCurrency} @ ${res.rate}]`;
         if (!currentDesc.includes(note)) {
@@ -491,8 +637,23 @@ export class AddRefundItemModal implements OnInit, OnChanges {
         );
       },
       error: (err) => {
+        if (requestVersion !== this.currencyConversionRequestVersion) {
+          return;
+        }
         this.isConvertingCurrency.set(false);
-        const msg = err?.error?.detail ?? 'Unable to convert currency right now.';
+        const body = err?.error;
+        let msg = 'Unable to convert currency right now.';
+        if (typeof body?.detail === 'string') {
+          msg = body.detail;
+        } else if (Array.isArray(body?.detail)) {
+          msg = body.detail
+            .map((item: { msg?: string; loc?: (string | number)[] }) =>
+              item.msg ?? String(item.loc?.join('.') ?? 'Invalid request')
+            )
+            .join('; ');
+        } else if (typeof body?.message === 'string') {
+          msg = body.message;
+        }
         this.toastService.showError(msg, 'Conversion Failed');
       },
     });
@@ -517,8 +678,11 @@ export class AddRefundItemModal implements OnInit, OnChanges {
         if (dto.subtype) {
           patch.subtype = dto.subtype;
         }
+        if (dto.issuedDate) {
+          patch.issuedDate = dto.issuedDate;
+        }
         if (dto.amount != null) {
-          patch.requestedAmount = dto.convertedAmountEur ?? dto.amount;
+          patch.requestedAmount = dto.amount;
         }
         if (dto.startsAt) {
           patch.startsAt = dto.startsAt;
@@ -537,21 +701,27 @@ export class AddRefundItemModal implements OnInit, OnChanges {
           patch.description = parts.join(' - ').slice(0, 255);
         }
 
-        if (dto.convertedAmountEur && dto.currency && dto.currency !== 'EUR' && dto.exchangeRate) {
-          this.conversionInfo.set({
-            originalCurrency: dto.currency,
-            originalAmount: dto.amount ?? 0,
-            convertedAmount: dto.convertedAmountEur,
-            rate: dto.exchangeRate,
-            date: dto.rateDate ?? '',
-            provider: 'AI Auto-Conversion',
-          });
+        if (dto.currency) {
+          const currency = dto.currency.toUpperCase();
+          if (!this.availableCurrencies.includes(currency)) {
+            this.availableCurrencies = [...this.availableCurrencies, currency].sort();
+          }
+          this.hasExplicitCurrencySelection = true;
+          this.foreignCurrency.set(currency);
+          this.form.patchValue({ currency: 'EUR' });
+        } else {
+          this.foreignCurrency.set(this.defaultCurrency);
+          this.form.patchValue({ currency: 'EUR' });
         }
 
         const hasExtractedFields = Boolean(
           dto.category ||
+          dto.subtype ||
           dto.amount != null ||
+          dto.currency ||
           dto.startsAt ||
+          dto.endsAt ||
+          dto.issuedDate ||
           dto.merchant ||
           dto.description ||
           dto.itineraryFrom ||
@@ -562,14 +732,29 @@ export class AddRefundItemModal implements OnInit, OnChanges {
           if (dto.warnings?.length) {
             console.warn('AI receipt extraction returned warnings:', dto.warnings);
           }
+          const warningDetails = dto.warnings?.length ? ` ${dto.warnings.join(' ')}` : '';
           this.toastService.showWarning(
-            'Failed to extract data from the receipt. Please fill the fields manually.',
+            `Could not identify expense details on the receipt.${warningDetails} Please fill the fields manually.`,
             'AI Auto-Fill'
           );
           return;
         }
 
         this.populateFromOcr(patch);
+        if (dto.convertedAmountEur && dto.exchangeRate) {
+          const extractedCurrency = dto.currency?.toUpperCase() ?? 'EUR';
+          this.conversionInfo.set({
+            originalCurrency: extractedCurrency,
+            originalAmount: dto.amount ?? 0,
+            convertedAmount: dto.convertedAmountEur,
+            rate: dto.exchangeRate,
+          });
+          this.euroEquivalent.set(dto.convertedAmountEur);
+        } else if (this.foreignCurrency() === 'EUR' && dto.amount != null) {
+          this.euroEquivalent.set(dto.amount);
+        } else {
+          this.euroEquivalent.set(null);
+        }
         this.toastService.showSuccess(
           'Receipt analyzed with AI. Fields have been pre-filled.',
           'AI Auto-Fill'
@@ -578,8 +763,14 @@ export class AddRefundItemModal implements OnInit, OnChanges {
       error: (err) => {
         this.isExtractingOcr.set(false);
         console.warn('AI receipt extraction skipped/failed:', err);
+        const detail = err?.error?.detail;
+        const errorDetails = typeof detail === 'string'
+          ? ` ${detail}`
+          : typeof err?.message === 'string'
+            ? ` ${err.message}`
+            : '';
         this.toastService.showWarning(
-          'Failed to extract data from the receipt. Please fill the fields manually.',
+          `Receipt analysis failed.${errorDetails} Please fill the fields manually.`,
           'AI Auto-Fill'
         );
       },
@@ -613,6 +804,10 @@ export class AddRefundItemModal implements OnInit, OnChanges {
     this.ocrRawText.set(null);
     this.isConvertingCurrency.set(false);
     this.conversionInfo.set(null);
+    this.hasExplicitCurrencySelection = false;
+    this.foreignCurrency.set(this.defaultCurrency);
+    this.euroEquivalent.set(null);
+    this.form.patchValue({ requestedAmount: null, currency: 'EUR' });
   }
 
 
@@ -643,6 +838,22 @@ export class AddRefundItemModal implements OnInit, OnChanges {
       return;
     }
 
+    if (this.foreignCurrency() !== 'EUR' && this.euroEquivalent() == null) {
+      this.toastService.showError(
+        'Convert the receipt amount to EUR before saving.',
+        'Currency Conversion Required'
+      );
+      return;
+    }
+
+    if (this.isEuroAmountOverLimit()) {
+      this.toastService.showError(
+        `The final amount in EUR cannot exceed € ${MAX_EXPENSE_AMOUNT_EUR.toLocaleString('en-US')}.`,
+        'Amount Too High'
+      );
+      return;
+    }
+
     const val = this.form.value;
 
     const payload: RefundItemCreatePayload = {
@@ -655,7 +866,7 @@ export class AddRefundItemModal implements OnInit, OnChanges {
         val.category === ExpenseCategory.TRANSPORT || val.category === ExpenseCategory.ACCOMMODATION
           ? val.endsAt
           : null,
-      requestedAmount: Number(val.requestedAmount),
+      requestedAmount: Number(this.euroEquivalent() ?? val.requestedAmount),
       currency: val.currency || 'EUR',
       isTraceable: !!val.isTraceable,
       receiptFilePath: this.uploadedReceipt()!.receiptFilePath,
