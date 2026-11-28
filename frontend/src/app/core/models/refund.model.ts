@@ -209,3 +209,14 @@ export interface ReceiptDetectionResponseDTO {
   boxes: BoundingBoxDTO[];
   pages?: ReceiptPageDTO[];
 }
+
+export interface RefundNotificationDTO {
+  refundId: string;
+  missionId: string;
+  missionSubject: string;
+  missionDestination: string;
+  totalRequestedAmount: number | string;
+  totalReimbursedAmount: number | string;
+  approvedAt: string;
+  adminNotes: string[];
+}

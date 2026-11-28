@@ -23,6 +23,8 @@ export const API_CONFIG = {
     },
     refunds: {
       base: `${environment.apiBaseUrl}/api/v1/refunds`,
+      myNotifications: `${environment.apiBaseUrl}/api/v1/refunds/my/notifications`,
+      markNotificationsSeen: `${environment.apiBaseUrl}/api/v1/refunds/my/notifications/seen`,
       filter: `${environment.apiBaseUrl}/api/v1/refunds/filter`,
       byMission: (missionId: string) => `${environment.apiBaseUrl}/api/v1/refunds/by-mission/${missionId}`,
       byId: (refundId: string) => `${environment.apiBaseUrl}/api/v1/refunds/${refundId}`,
